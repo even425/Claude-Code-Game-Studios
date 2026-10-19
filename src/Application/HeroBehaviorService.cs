@@ -63,7 +63,13 @@ public sealed class HeroBehaviorService
         Bought = 4,
     }
 
-    /// <summary>单次调用的可观测结果（事件流用得上）。</summary>
+    /// <summary>单次调用的可观测结果（事件流 / 调试输出用得上）。</summary>
+    /// <remarks>
+    /// <see cref="Detail"/> 是第四阶段 M5 补的：<see cref="ShoppingOutcome.Skipped_PrecheckFailed"/>
+    /// 只说明「前置条件不满足」，不说明是哪一条。把具体原因挂在这里，
+    /// <c>--econlog</c> / <c>--shop</c> 才能回答「今天为什么没买」。
+    /// 它不是给玩家看的常规文本，<b>不进杂谈</b>。
+    /// </remarks>
     public readonly record struct ShoppingResult(
         ShoppingOutcome Outcome,
         HeroId? Buyer,
@@ -71,7 +77,11 @@ public sealed class HeroBehaviorService
         ItemId? ItemId,
         long? Quantity,
         long? SellerNet,
-        long? VillageCut);
+        long? VillageCut)
+    {
+        /// <summary>本结果的具体原因（调试用；可为 null）。</summary>
+        public string? Detail { get; init; }
+    }
 
     /// <param name="stall">摆摊/买摊应用层。</param>
     /// <param name="heroLookup">按 HeroId 找英雄（含 Personality / Diligence / LastShoppingDay / Bag / Wallet）。</param>
@@ -117,25 +127,37 @@ public sealed class HeroBehaviorService
     {
         if (string.IsNullOrEmpty(buyerId.Value))
         {
-            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, null, null, null, null, null);
+            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, null, null, null, null, null)
+            {
+                Detail = "买家 Id 为空",
+            };
         }
 
         var buyer = _heroLookup(buyerId);
         if (buyer is null)
         {
-            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, null, null, null, null, null);
+            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, null, null, null, null, null)
+            {
+                Detail = "找不到这位英雄",
+            };
         }
 
         // 1. 频率上限：今天已购过
         if (buyer.LastShoppingDay == today)
         {
-            return new ShoppingResult(ShoppingOutcome.Skipped_AlreadyShoppedToday, buyerId, null, null, null, null, null);
+            return new ShoppingResult(ShoppingOutcome.Skipped_AlreadyShoppedToday, buyerId, null, null, null, null, null)
+            {
+                Detail = $"今天已经买过（第 {today} 天）",
+            };
         }
 
         // 2. 在场 + 空闲（与 PlaceStall 同步 —— 摆摊前置的镜像）
         if (buyer.Away || buyer.ToSite)
         {
-            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, null, null, null, null, null);
+            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, null, null, null, null, null)
+            {
+                Detail = "不在场或正在忙（随队外出 / 在工地）",
+            };
         }
 
         // 3. 性格权重 + 随机
@@ -143,36 +165,62 @@ public sealed class HeroBehaviorService
         double r = _random();
         if (!(r < desire))   // 与 D-025 "随机 < 性格权重才买" 一致
         {
-            return new ShoppingResult(ShoppingOutcome.Skipped_NoDesire, buyerId, null, null, null, null, null);
+            return new ShoppingResult(ShoppingOutcome.Skipped_NoDesire, buyerId, null, null, null, null, null)
+            {
+                Detail = $"随机 {r:0.00} ≥ 意愿 {desire:0.00}",
+            };
         }
 
         // 4. 找 1 个 Open 摊位（v1 简单：随机抽；不写"自己开摊不能买"——同一英雄最多一个摊，但允许买别人的摊）
         var openStalls = ListOpenStalls();
         if (openStalls.Count == 0)
         {
-            return new ShoppingResult(ShoppingOutcome.Skipped_NoOpenStall, buyerId, null, null, null, null, null);
+            return new ShoppingResult(ShoppingOutcome.Skipped_NoOpenStall, buyerId, null, null, null, null, null)
+            {
+                Detail = "村里没有开着的摊位",
+            };
         }
         var pickIdx = (int)(_random() * openStalls.Count);
         if (pickIdx >= openStalls.Count) pickIdx = openStalls.Count - 1;   // 边界
         var stall = openStalls[pickIdx];
 
-        // 5. 选物品：摊位上的 ItemId，且 buyer 背包里数量 < 5
+        // 6. 摊主就是买家。v1 不改「随机抽一个 Open 摊位」的规则，但
+        //    BuyFromStall 会以 SameHero 拒绝 —— 必须在这里说清楚，
+        //    否则调试输出会把「抽到自己的摊」误报成「背包满 / 钱包不足」。
+        if (stall.Owner == buyerId)
+        {
+            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, stall.Owner, stall.ItemId, null, null, null)
+            {
+                Detail = "抽到了自己的摊位（同一个人不能自买自卖）",
+            };
+        }
+
+        // 7. 选物品：摊位上的 ItemId，且 buyer 背包里数量 < 5
         if (buyer.Bag.Count(stall.ItemId) >= 5)
         {
-            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, stall.Owner, stall.ItemId, null, null, null);
+            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, stall.Owner, stall.ItemId, null, null, null)
+            {
+                Detail = $"背包里已有 {buyer.Bag.Count(stall.ItemId)} 份{stall.ItemId.Value}（上限 5）",
+            };
         }
 
-        // 6. 钱够吗？一次买 1 份
-        if (buyer.Wallet.Amount(new ClaudeCodeGameStudios.Domain.Village.ResourceId("金币")) < stall.UnitPrice)
+        // 8. 钱够吗？一次买 1 份
+        if (buyer.Wallet.Amount(StallService.Gold) < stall.UnitPrice)
         {
-            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, stall.Owner, stall.ItemId, null, null, null);
+            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, stall.Owner, stall.ItemId, null, null, null)
+            {
+                Detail = $"金币不足：有 {buyer.Wallet.Amount(StallService.Gold)}，需 {stall.UnitPrice}",
+            };
         }
 
-        // 7. 真买
+        // 9. 真买
         var buyResult = _stall.BuyFromStall(stall.Owner, buyerId, stall.ItemId, 1, simTime);
         if (buyResult is null)
         {
-            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, stall.Owner, stall.ItemId, 1, null, null);
+            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, stall.Owner, stall.ItemId, 1, null, null)
+            {
+                Detail = "结算失败（摊位被抢空 / 背包满 / 钱包不足）",
+            };
         }
 
         // 频率上限：标记"今天已购"
@@ -185,7 +233,10 @@ public sealed class HeroBehaviorService
             stall.ItemId,
             1L,
             buyResult.SellerNet,
-            buyResult.VillageCut);
+            buyResult.VillageCut)
+        {
+            Detail = $"买了 {stall.ItemId.Value}×1，付 {buyResult.SellerNet + buyResult.VillageCut} 金币",
+        };
     }
 
     /// <summary>列出所有 Open 摊位（v1 简单实现 —— 顺序遍历）。</summary>

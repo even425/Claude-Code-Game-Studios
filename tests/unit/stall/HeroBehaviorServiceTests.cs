@@ -113,6 +113,7 @@ public class HeroBehaviorServiceTests
 
         var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
         Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Skipped_AlreadyShoppedToday);
+        Assertions.AssertThat((r.Detail ?? "").Contains("已经买过")).IsTrue();
     }
 
     // ── 在场 / 忙 镜像 ───────────────────────────────────────────────
@@ -125,6 +126,7 @@ public class HeroBehaviorServiceTests
         var hbs = new HeroBehaviorService(svc, id => heroes.TryGetValue(id, out var h) ? h : null, AlwaysZero);
         var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
         Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Skipped_PrecheckFailed);
+        Assertions.AssertThat((r.Detail ?? "").Contains("不在场")).IsTrue();
     }
 
     [TestCase]
@@ -135,6 +137,7 @@ public class HeroBehaviorServiceTests
         var hbs = new HeroBehaviorService(svc, id => heroes.TryGetValue(id, out var h) ? h : null, AlwaysZero);
         var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
         Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Skipped_PrecheckFailed);
+        Assertions.AssertThat((r.Detail ?? "").Contains("不在场")).IsTrue();
     }
 
     // ── 性格 + 随机 ───────────────────────────────────────────────────
@@ -148,6 +151,7 @@ public class HeroBehaviorServiceTests
         var hbs = new HeroBehaviorService(svc, id => heroes.TryGetValue(id, out var h) ? h : null, AlmostOne);
         var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
         Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Skipped_NoDesire);
+        Assertions.AssertThat((r.Detail ?? "").Contains("随机")).IsTrue();
     }
 
     [TestCase]
@@ -171,6 +175,7 @@ public class HeroBehaviorServiceTests
         var hbs = new HeroBehaviorService(svc, id => heroes.TryGetValue(id, out var h) ? h : null, AlwaysZero);
         var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
         Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Skipped_NoOpenStall);
+        Assertions.AssertThat((r.Detail ?? "").Contains("摊位")).IsTrue();
     }
 
     // ── 成功路径 ─────────────────────────────────────────────────────
@@ -184,6 +189,7 @@ public class HeroBehaviorServiceTests
 
         var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
         Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Bought);
+        Assertions.AssertThat((r.Detail ?? "").Contains("石料")).IsTrue();
         // Alice：钱包 -5，B：钱包 +5（残差归卖方），摊位 -1，村 +0（5% floor = 0）
         Assertions.AssertThat(heroes[Alice].Wallet.Amount(GoldResource)).IsEqual(95L);
         Assertions.AssertThat(heroes[Alice].Bag.Count(Stone)).IsEqual(1L);
@@ -209,6 +215,7 @@ public class HeroBehaviorServiceTests
 
         var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
         Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Skipped_PrecheckFailed);
+        Assertions.AssertThat((r.Detail ?? "").Contains("金币不足")).IsTrue();
     }
 
     // ── 背包够 5 → 不买 ──────────────────────────────────────────────
@@ -225,5 +232,26 @@ public class HeroBehaviorServiceTests
 
         var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
         Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Skipped_PrecheckFailed);
+        Assertions.AssertThat((r.Detail ?? "").Contains("背包里已有 5")).IsTrue();
+    }
+
+    // ── 抽到自己的摊位 ────────────────────────────────────────────────
+
+    /// <summary>
+    /// v1 不禁止「抽到自己的摊」，但结果不能被误报成「背包满 / 钱不够」。
+    /// 这条测试守的是 M5 的调试可读性：<c>SameHero</c> 必须有自己的原因。
+    /// </summary>
+    [TestCase]
+    public void SimulateShopping_OwnStall_ReportsSelfTrade()
+    {
+        var (heroes, _, svc) = MakeScene();
+        heroes[Alice].RestoreBag(new Inventory().TryAdd(Stone, 5)!);
+        svc.PlaceStall(Alice, Stone, 5, 10.0);
+
+        var hbs = new HeroBehaviorService(svc, id => heroes.TryGetValue(id, out var h) ? h : null, AlwaysZero);
+        var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
+
+        Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Skipped_PrecheckFailed);
+        Assertions.AssertThat((r.Detail ?? "").Contains("自己的摊位")).IsTrue();
     }
 }

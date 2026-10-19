@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -34,19 +35,33 @@ public static class Roster
     /// <b>不截断。</b>行序与 <paramref name="heroes"/> 严格一一对应 ——
     /// <c>Main.OnRosterItemActivated(index)</c> 直接拿行号当英雄下标用，
     /// 这里一旦过滤或重排，玩家点到的就是别人。由 <c>RosterTests</c> 守住。
+    /// <para>
+    /// <paramref name="detail"/> 是第四阶段 M5 加的行尾补充（经济摘要：
+    /// 金币 + 背包）。它是<b>可选的</b>；不传时行文本与旧版逐字相同。
+    /// 它只追加在名字后面，<b>不改变行数、行序与行首标记</b> ——
+    /// 这是点击索引仍然对得上人的前提。
+    /// </para>
     /// </remarks>
     /// <param name="heroes">全部英雄，顺序即显示顺序。</param>
     /// <param name="squad">当前队伍，用来决定行首标记。</param>
+    /// <param name="detail">可选的每行补充文本；返回 null / 空串表示这一行不补。</param>
     /// <returns>行文本；为空名册时返回只含 <see cref="EmptyRow"/> 的一行。</returns>
     public static List<string> Lines(
-        IReadOnlyList<HeroAgent> heroes, IReadOnlyCollection<HeroAgent> squad)
+        IReadOnlyList<HeroAgent> heroes,
+        IReadOnlyCollection<HeroAgent> squad,
+        Func<HeroAgent, string?>? detail = null)
     {
         var lines = new List<string>(heroes.Count + 1);
 
         foreach (var hero in heroes)
         {
             string mark = squad.Contains(hero) ? InSquadMark : NotInSquadMark;
-            lines.Add($"{mark} {hero.Name}");
+            string line = $"{mark} {hero.Name}";
+
+            string? extra = detail?.Invoke(hero);
+            if (!string.IsNullOrEmpty(extra)) line += $"  {extra}";
+
+            lines.Add(line);
         }
 
         if (lines.Count == 0) lines.Add(EmptyRow);

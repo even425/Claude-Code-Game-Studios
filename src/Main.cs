@@ -290,6 +290,17 @@ public partial class Main : Node2D
     /// <summary>当前材料量。<b>只读</b> —— 改动一律走 <see cref="Deposit"/> 或 <see cref="DomainVillage.TrySpend"/>。</summary>
     private long Mat => _villageModel.Get(MaterialsId);
 
+    /// <summary>
+    /// 村金库余额（M3 起由摆摊抽成建立）。<b>只读</b> —— 唯一写者是
+    /// <c>StallService.BuyFromStall</c> 的村抽结算。
+    /// </summary>
+    /// <remarks>
+    /// 顶部状态栏显示它，是 M5「经济变化可在现有 UI 中核对」的一半：
+    /// 买方/卖方的金币在花名册行尾，村金库在这里。
+    /// </remarks>
+    private long VillageGold =>
+        _villageModel.Get(ClaudeCodeGameStudios.Application.Stall.StallService.Gold);
+
     /// <summary>存入材料。非正增量<b>什么都不做</b>（<see cref="DomainVillage.Add"/> 要求增量为正）。</summary>
     private void Deposit(long amount)
     {
@@ -1520,8 +1531,8 @@ public partial class Main : Node2D
         int away = _squad.Count(h => h.Away);
 
         _stats.Text = _buildTarget >= 0
-            ? $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    在村 {on}/{_heroes.Count}    工地：{_village.BuildName}"
-            : $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    在村 {on}/{_heroes.Count}";
+            ? $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    村金 {VillageGold}    在村 {on}/{_heroes.Count}    工地：{_village.BuildName}"
+            : $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    村金 {VillageGold}    在村 {on}/{_heroes.Count}";
 
         RefreshRoster();
         RefreshRelationSummary();
@@ -1561,7 +1572,7 @@ public partial class Main : Node2D
     }
 
     /// <summary>
-    /// 把花名册同步到界面 —— <b>只有行文本真的变了才重建 <see cref="_roster"/></b>。
+    /// 把花名册同步到界面 —— <b>只有行文本真的变了才动 <see cref="_roster"/></b>。
     /// </summary>
     /// <remarks>
     /// <para><b>2026-10-19 的「37 人在村里，花名册只有 14 个名字、滚动条拖到底也没有更多人」
@@ -1571,19 +1582,37 @@ public partial class Main : Node2D
     /// <para>② 这里原本每帧都 <c>Clear()</c> 再逐条 <c>AddItem()</c>。即使去掉上限，
     /// <c>ItemList.Clear()</c> 也会把滚动位置复位 —— 玩家拖一下、下一帧就弹回顶部，
     /// 永远只能看到第一屏。所以重建前先比行文本，没变就<b>什么都不做</b>。</para>
-    /// <para>比较的是<b>渲染文本本身</b>而不是某个版本号：召唤、上下队、读档换整份名册，
-    /// 只要名字或标记变了一个字符就会重建，不会漏。</para>
+    /// <para><b>第四阶段 M5 的另一半</b>：行尾现在带经济摘要（金币 + 背包），
+    /// 金币/物品一变行文本就变。此时<b>不</b> <c>Clear()</c>，而是逐行
+    /// <c>SetItemText</c>：行数与顺序没变，滚动位置和选中项都保留。
+    /// 只有名册长度变了（召唤 / 读档换整份）才重建。</para>
+    /// <para>比较的是<b>渲染文本本身</b>而不是某个版本号：召唤、上下队、金币变化、
+    /// 背包变化、读档换整份名册，只要行文本变了一个字符就会更新，不会漏。</para>
     /// </remarks>
     private void RefreshRoster()
     {
-        var lines = Roster.Lines(_heroes, _squad);
+        var lines = Roster.Lines(
+            _heroes, _squad,
+            hero => EconomySummary.For(hero, ClaudeCodeGameStudios.Application.Stall.StallService.Gold));
+
         if (Roster.SameLines(lines, _rosterLines)) return;
+
+        if (lines.Count == _rosterLines.Count)
+        {
+            // 行数没变：原地改文本，别把滚动位置和选中项一起清掉。
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (lines[i] != _rosterLines[i]) _roster.SetItemText(i, lines[i]);
+            }
+        }
+        else
+        {
+            _roster.Clear();
+            foreach (var line in lines) _roster.AddItem(line);
+        }
 
         _rosterLines.Clear();
         _rosterLines.AddRange(lines);
-
-        _roster.Clear();
-        foreach (var line in lines) _roster.AddItem(line);
     }
 
     /// <summary>
@@ -1876,6 +1905,19 @@ public partial class Main : Node2D
 
     private bool _shopTestDone;
 
+    /// <summary>
+    /// <c>--econlog</c>：每次每日购物跑完后，把<b>逐人</b>结果（成交 / 跳过 / 失败及原因）
+    /// 打到控制台。第四阶段 M5 的「自主行为结果可调试验证」。
+    /// </summary>
+    private readonly bool _econLog = OS.GetCmdlineUserArgs().Contains("--econlog");
+
+    /// <summary>最近一次每日购物的逐人结果（<c>--shop</c> 明细输出用）。</summary>
+    private IReadOnlyList<ClaudeCodeGameStudios.Application.Stall.HeroBehaviorService.ShoppingResult>
+        _lastShoppingResults = Array.Empty<ClaudeCodeGameStudios.Application.Stall.HeroBehaviorService.ShoppingResult>();
+
+    /// <summary>最近一次每日购物对应的游戏日。</summary>
+    private int _lastShoppingDay;
+
     /// <summary>每日自主购物：按游戏日触发一次（服务内部有同日闸门）。</summary>
     private void RunDailyShoppingIfNeeded()
     {
@@ -1885,7 +1927,14 @@ public partial class Main : Node2D
         var ids = new List<HeroId>(_states.Count);
         foreach (var state in _states) ids.Add(state.Id);
 
-        PublishShoppingResults(_dailyShopping.RunDay(today, ids, _clock.Now));
+        var results = _dailyShopping.RunDay(today, ids, _clock.Now);
+        _lastShoppingResults = results;
+        _lastShoppingDay = today;
+
+        // 先输出可观测结果，再发事件 —— 输出失败原因不需要事件（反装饰规则）。
+        if (_econLog) PrintShoppingResults("ECONLOG", today, results);
+
+        PublishShoppingResults(results);
     }
 
     /// <summary>把「成交」结果转成领域事件；跳过/失败一律不发事件（反装饰规则）。</summary>
@@ -1901,6 +1950,35 @@ public partial class Main : Node2D
             }
 
             EmitTradeCompleted(result);
+        }
+    }
+
+    /// <summary>
+    /// 把一次每日购物的逐人结果打到控制台。<b>只给调试看，不进杂谈</b> ——
+    /// 37 个人每天各一条「今天没买」会立刻淹掉村庄杂谈。
+    /// </summary>
+    /// <param name="tag">日志前缀（<c>ECONLOG</c> / <c>SHOPTEST</c>）。</param>
+    /// <param name="day">这批结果对应的游戏日。</param>
+    /// <param name="results">逐人结果（顺序与英雄顺序一致）。</param>
+    private void PrintShoppingResults(
+        string tag, int day,
+        IReadOnlyList<ClaudeCodeGameStudios.Application.Stall.HeroBehaviorService.ShoppingResult> results)
+    {
+        int bought = 0;
+        foreach (var result in results)
+        {
+            if (result.Outcome ==
+                ClaudeCodeGameStudios.Application.Stall.HeroBehaviorService.ShoppingOutcome.Bought)
+            {
+                bought++;
+            }
+        }
+
+        GD.Print($"{tag} 第{day}天 尝试{results.Count}人，成交{bought}人");
+        foreach (var result in results)
+        {
+            string who = result.Buyer is { } id ? NameOfHero(id) : "?";
+            GD.Print($"  {who}: {ClaudeCodeGameStudios.Application.Stall.ShoppingFeedback.Describe(result)}");
         }
     }
 
@@ -1931,12 +2009,17 @@ public partial class Main : Node2D
             ["seller"] = sellerName,
             ["item"] = item,
             ["qty"] = qty.ToString(),
+            ["sellerNet"] = (result.SellerNet ?? 0).ToString(),
             ["amount"] = ((result.SellerNet ?? 0) + villageCut).ToString(),
             ["villageCut"] = villageCut.ToString(),
         };
 
+        // M5：成交条目要能核对钱去哪了 —— 付多少、摊主得多少、村抽多少。
+        // 文本规则住在 TradeFeedback 里（纯函数、可逐字测），这里只提供已发生的事实。
         Emit(EvTradeCompleted, buyerName, changed, payload,
-            ev => $"{buyerName}从{sellerName}的摊上买走了{item}×{qty}。");
+            ev => TradeFeedback.Line(
+                buyerName, sellerName, item, qty,
+                (result.SellerNet ?? 0) + villageCut, result.SellerNet ?? 0, villageCut));
     }
 
     /// <summary>按 HeroId 找显示名；找不到时回落为 Id。</summary>
@@ -2012,6 +2095,12 @@ public partial class Main : Node2D
         bool noRepeat = events1 == _events.Count
                         && buyer.Wallet.Amount(gold) == goldCheck
                         && (_stallService.GetStall(seller.Id)?.Stock ?? -1) == stockCheck;
+
+        // M5：把成交当天的逐人结果打出来 —— 谁买了、谁跳过了、为什么。
+        if (_lastShoppingResults.Count > 0)
+        {
+            PrintShoppingResults("SHOPTEST 明细", _lastShoppingDay, _lastShoppingResults);
+        }
 
         bool stateOk = bought && buyerGold1 < buyerGold0 && stock1 < stock0 && events1 > events0;
         GD.Print($"SHOPTEST 第{startDay}→{_clock.Day}天/尝试{days}天：成交={bought}，" +

@@ -86,6 +86,32 @@ public class RosterTests
         Assertions.AssertThat(lines[4].StartsWith(Roster.NotInSquadMark)).IsTrue();
     }
 
+    /// <summary>
+    /// M5 的经济摘要只追加在名字后面：行数、行序与行首标记都不变，
+    /// 否则「点名字」的索引会错位。
+    /// </summary>
+    [TestCase]
+    public void DetailSuffix_Appended_WithoutChangingRowsOrOrder()
+    {
+        var heroes = Heroes(3);
+        var lines = Roster.Lines(heroes, new List<HeroAgent>(), _ => "金0");
+
+        Assertions.AssertThat(lines.Count).IsEqual(3);
+        Assertions.AssertThat(lines[0]).IsEqual("  英雄00  金0");
+        Assertions.AssertThat(lines[1]).IsEqual("  英雄01  金0");
+        Assertions.AssertThat(lines[2]).IsEqual("  英雄02  金0");
+    }
+
+    [TestCase]
+    public void NullDetail_KeepsLegacyLines()
+    {
+        var heroes = Heroes(2);
+        var oldLines = Roster.Lines(heroes, new List<HeroAgent>());
+        var nullDetail = Roster.Lines(heroes, new List<HeroAgent>(), null);
+
+        Assertions.AssertThat(Roster.SameLines(oldLines, nullDetail)).IsTrue();
+    }
+
     [TestCase]
     public void SameLines_DetectsRealChanges()
     {

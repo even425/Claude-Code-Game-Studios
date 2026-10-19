@@ -124,6 +124,9 @@ public partial class Main : Node2D
     /// <summary>关系应用入口（社交 / 同队副本）—— 幂等键与双向规则在应用层。</summary>
     private ClaudeCodeGameStudios.Application.RelationshipService _relationships = null!;
 
+    /// <summary>物品发放的受控入口（第四阶段 M1）。当前只接 <c>--grant=</c> 调试入口。</summary>
+    private ClaudeCodeGameStudios.Application.ItemGrantService _itemGrant = null!;
+
     /// <summary>村庄日常循环。取代已删除的 <c>VillageLife</c>（见 07 的 D-012）。</summary>
     private DailyLife _life = null!;
     /// <summary>队伍（UI/渲染用）。<b>合法性由 <see cref="_squadRules"/> 判定</b>，不由它自己决定。</summary>
@@ -364,6 +367,12 @@ public partial class Main : Node2D
 
         // 关系应用入口：社交、同队副本都走它（幂等键与双向规则在应用层）。
         _relationships = new ClaudeCodeGameStudios.Application.RelationshipService(_relationship);
+
+        // 第四阶段 M1：物品发放入口。当前只用于 --grant 调试自检；
+        // 不接入正常游戏流程，也不接入副本结算（奖励归属规则未确认）。
+        _itemGrant = new ClaudeCodeGameStudios.Application.ItemGrantService(
+            id => _heroes.FirstOrDefault(h => h.Id == id),
+            ClaudeCodeGameStudios.Domain.Items.PriceBook.Default);
 
         // 结算器必须在这里造：它的两个委托是本类的方法组，
         // 字段初始化器引用不了（C# 的限制）。必须在 BuildScene 之后 ——
@@ -782,6 +791,8 @@ public partial class Main : Node2D
         if (OS.GetCmdlineUserArgs().Contains("--click") && !_clickTestDone) RunClickSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--economy") && !_economyTestDone) RunEconomySelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--relations") && !_relationsTestDone) RunRelationsSelfTest();
+        if (OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--grant=", StringComparison.Ordinal)) && !_grantTestDone)
+            RunGrantSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a is "--save" or "--load") && !_saveTestDone)
         {
             RunSaveSelfTest();
@@ -1763,6 +1774,58 @@ public partial class Main : Node2D
     }
 
     private bool _dungeonTestDone;
+    private bool _grantTestDone;
+
+    /// <summary>
+    /// <c>--grant=英雄Id:物品名:数量</c>：第四阶段 M1 的测试配给入口。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么是调试入口</b>：正式物品来源（副本战利品）的奖励归属规则尚未确认；
+    /// 先用受控入口验证「背包 → 摆摊 → 购买」链路。它<b>不</b>接入正常游戏流程。</para>
+    /// <para>自检同时验证非法发放（未知物品、数量 0）不会改变背包。</para>
+    /// </remarks>
+    private void RunGrantSelfTest()
+    {
+        _grantTestDone = true;
+
+        string? arg = OS.GetCmdlineUserArgs()
+            .FirstOrDefault(a => a.StartsWith("--grant=", StringComparison.Ordinal));
+        if (arg is null) return;
+
+        string spec = arg.Substring("--grant=".Length);
+        var parts = spec.Split(':');
+        if (parts.Length != 3 || !long.TryParse(parts[2], out long qty))
+        {
+            GD.Print($"GRANT FAIL 格式应为 --grant=英雄Id:物品名:数量（收到「{spec}」）");
+            return;
+        }
+
+        var heroId = new ClaudeCodeGameStudios.Domain.Heroes.HeroId(parts[0].Trim());
+        var item = new ClaudeCodeGameStudios.Domain.Items.ItemId(parts[1].Trim());
+        HeroAgent? hero = _heroes.FirstOrDefault(h => h.Id == heroId);
+        if (hero is null)
+        {
+            GD.Print($"GRANT FAIL 找不到英雄 {heroId.Value}");
+            return;
+        }
+
+        long before = hero.Bag.Count(item);
+        var result = _itemGrant.Grant(heroId, item, qty);
+        GD.Print($"GRANT {hero.Name} {item.Value} +{qty} → {result.Result}" +
+                 $"（背包 {before} → {hero.Bag.Count(item)}）");
+
+        long afterValid = hero.Bag.Count(item);
+        var badItem = _itemGrant.Grant(heroId, new ClaudeCodeGameStudios.Domain.Items.ItemId("不存在的东西"), 1);
+        var badQty = _itemGrant.Grant(heroId, item, 0);
+        bool unchanged = hero.Bag.Count(item) == afterValid;
+        GD.Print($"GRANT 非法用例：未知物品={badItem.Result}，数量0={badQty.Result}，背包不变={unchanged}");
+        GD.Print("GRANT 背包快照 = {" + string.Join("、",
+            hero.Bag.Snapshot().Select(kv => $"{kv.Key.Value}×{kv.Value}")) + "}");
+
+        bool pass = result.Granted && result.NewCount == before + qty && unchanged;
+        GD.Print(pass ? "GRANT PASS" : "GRANT FAIL");
+    }
+
     private bool _relationsTestDone;
 
     /// <summary>

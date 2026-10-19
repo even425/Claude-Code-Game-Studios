@@ -65,6 +65,26 @@ public partial class Main : Node2D
     private static readonly ulong BootSeed =
         unchecked((ulong)System.Environment.TickCount * 2654435761UL) + 1UL;
 
+    /// <summary>
+    /// 本次会话的令牌 —— 参与副本实例标识的构造。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么副本标识要带会话令牌</b>：原来的标识是 <c>d{小时}</c>，
+    /// 同一小时内跑第二次副本会得到<b>同一个</b>标识，
+    /// 于是结算的幂等键（<c>RunId#BattleResultId</c>）也相同 ——
+    /// 第二次会被判成「这个键已经结算过」，<b>奖励被静默跳过</b>：
+    /// 不发放，也不报错，玩家只看到「副本打赢了却什么也没拿到」。</para>
+    ///
+    /// <para>加上会话令牌后<b>跨会话也不会撞</b>：上一局留下的结算键
+    /// 永远不会误伤这一局的新副本。副本实例本身不落盘，
+    /// 所以「同一个副本被结算两次」只可能发生在<b>一次会话内</b> ——
+    /// 而会话内由递增序号保证逐个不同。</para>
+    /// </remarks>
+    private static readonly string SessionToken = BootSeed.ToString("x16");
+
+    /// <summary>本次会话内的副本序号。副本实例标识必须逐个不同。</summary>
+    private int _dungeonRunSeq;
+
     /// <summary>[0, bound) 内的一个整数。</summary>
     private int NextInt(int bound) => (int)_rng.NextDouble(bound);
 
@@ -127,8 +147,26 @@ public partial class Main : Node2D
     /// <summary>关系应用入口（社交 / 同队副本）—— 幂等键与双向规则在应用层。</summary>
     private ClaudeCodeGameStudios.Application.RelationshipService _relationships = null!;
 
-    /// <summary>物品发放的受控入口（第四阶段 M1）。当前只接 <c>--grant=</c> 调试入口。</summary>
+    /// <summary>物品发放的受控入口（第四阶段 M1）。单笔发放供 <c>--grant=</c> 调试自检用；
+    /// <b>批量发放是 R-01 的正式路径</b> —— 副本战利品走它进英雄个人背包。</summary>
     private ClaudeCodeGameStudios.Application.ItemGrantService _itemGrant = null!;
+
+    /// <summary>
+    /// 副本战利品的<b>内容来源</b>（R-01）。注入点：T-007 拍板后只换实现。
+    /// </summary>
+    private ClaudeCodeGameStudios.Domain.Settlement.ILootProvider _lootProvider = null!;
+
+    /// <summary>
+    /// 最近一次副本的<b>战利品分配</b>（R-01）。<b>只读用途</b>：事件渲染与自检输出。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么结算不读它</b>：结算的奖励委托是<b>注入</b>的，本次副本的战利品
+    /// 通过 <c>Apply(..., rewardsOverride)</c> <b>随调用带进去</b>。
+    /// 若让委托反过来读这个字段，任何一次与副本无关的结算都可能把上一场的战利品
+    /// 当成自己的奖励再发一遍 —— 那是「状态留在全局、靠调用方记得清」的老毛病。
+    /// </remarks>
+    private ClaudeCodeGameStudios.Domain.Settlement.LootAllocation _lastDungeonLoot =
+        ClaudeCodeGameStudios.Domain.Settlement.LootAllocation.Empty;
 
     /// <summary>村庄日常循环。取代已删除的 <c>VillageLife</c>（见 07 的 D-012）。</summary>
     private DailyLife _life = null!;
@@ -190,7 +228,28 @@ public partial class Main : Node2D
     private long _pendingRewardAmount;
 
     /// <summary>副本胜利时发什么。<b>失败一律发空</b>（D-010 Q1「失败不给奖励」）。</summary>
+    /// <remarks>
+    /// <b>这是默认奖励</b>：<b>不含个人物品</b>。与副本无关的结算走它 ——
+    /// 那里本来就没有战利品可发。
+    /// 副本的结算走 <see cref="RewardsFor(bool, ClaudeCodeGameStudios.Domain.Settlement.LootAllocation)"/>，
+    /// 把本次的战利品<b>随调用带进去</b>。
+    /// </remarks>
     private ClaudeCodeGameStudios.Domain.Settlement.SettlementDelta RewardsFor(bool heroesWon)
+        => RewardsFor(heroesWon, ClaudeCodeGameStudios.Domain.Settlement.LootAllocation.Empty);
+
+    /// <summary>
+    /// 本次结算的奖励：村庄资源 + <paramref name="loot"/> 里的个人战利品。
+    /// </summary>
+    /// <param name="heroesWon">战斗是否胜利。</param>
+    /// <param name="loot">本次副本的战利品分配（由调用方随这次结算带进来）。</param>
+    /// <remarks>
+    /// <b>两半奖励，一次结算</b>（R-01）：村庄资源（既有行为）与英雄个人物品
+    /// （D04「不设公共奖励池，物品直接归个人」）被放进<b>同一个增量</b>，
+    /// 于是 <c>Settlement.Apply</c> 能用<b>同一把幂等锁</b>把它们一起落下去 ——
+    /// 中间任何一步失败都不会留下「村庄拿到了、英雄没拿到」的半笔账。
+    /// </remarks>
+    private ClaudeCodeGameStudios.Domain.Settlement.SettlementDelta RewardsFor(
+        bool heroesWon, ClaudeCodeGameStudios.Domain.Settlement.LootAllocation loot)
     {
         var delta = new ClaudeCodeGameStudios.Domain.Settlement.SettlementDelta();
 
@@ -199,12 +258,19 @@ public partial class Main : Node2D
         // 同一次远征被重放就会重复发放胜利奖励。
         if (!heroesWon) return delta;
 
-        if (string.IsNullOrEmpty(_pendingRewardResource) || _pendingRewardAmount <= 0)
+        // ── 村庄侧：材料（既有行为，数值无出处这一点不变）──
+        if (!string.IsNullOrEmpty(_pendingRewardResource) && _pendingRewardAmount > 0)
         {
-            return delta;
+            delta.AddResource(_pendingRewardResource, _pendingRewardAmount);
         }
 
-        return delta.AddResource(_pendingRewardResource, _pendingRewardAmount);
+        // ── 英雄个人：战利品（R-01 · D01–D04）──
+        foreach (var grant in loot.Grants)
+        {
+            delta.AddItemGrant(grant.Hero, grant.Item, grant.Quantity);
+        }
+
+        return delta;
     }
 
     /// <summary>
@@ -382,17 +448,25 @@ public partial class Main : Node2D
         // 关系应用入口：社交、同队副本都走它（幂等键与双向规则在应用层）。
         _relationships = new ClaudeCodeGameStudios.Application.RelationshipService(_relationship);
 
-        // 第四阶段 M1：物品发放入口。当前只用于 --grant 调试自检；
-        // 不接入正常游戏流程，也不接入副本结算（奖励归属规则未确认）。
+        // 第四阶段 M1：物品发放入口。单笔发放供 --grant 调试自检；
+        // **批量发放是 R-01 的正式路径** —— 副本战利品走它进英雄个人背包，
+        // 不另建一套平行的物品系统。
         _itemGrant = new ClaudeCodeGameStudios.Application.ItemGrantService(
             id => _heroes.FirstOrDefault(h => h.Id == id),
             ClaudeCodeGameStudios.Domain.Items.PriceBook.Default);
 
+        // R-01：副本战利品的**占位**内容来源。T-007 拍板后只换这一处实现，
+        // 分配规则（LootSplit）一行都不用改。
+        _lootProvider = new ClaudeCodeGameStudios.Application.PlaceholderDungeonLootProvider();
+
         // 结算器必须在这里造：它的两个委托是本类的方法组，
         // 字段初始化器引用不了（C# 的限制）。必须在 BuildScene 之后 ——
         // ApplyWrites 要用 _villageModel。
+        //
+        // 第四个参数是**个人物品的写入入口**（R-01）：村庄资源与英雄个人物品
+        // 因此进的是同一次结算、共用同一把幂等锁（I15：要么完整应用，要么不应用）。
         _settlement = new ClaudeCodeGameStudios.Domain.Settlement.Settlement(
-            RewardsFor, ApplyWrites);
+            RewardsFor, ApplyWrites, itemWriter: _itemGrant);
 
         // 战斗模块与本类其余随机同源 —— 否则只有战斗可复现，
         // 而「战斗可复现、抽任务不可复现」是最坏的一种半成品。
@@ -1109,17 +1183,87 @@ public partial class Main : Node2D
     /// 清空由调用方做，这样自检路径能在调用后仍读到任务的真实状态，
     /// 而不必在生产代码里为测试留后门。
     /// </remarks>
+    /// <summary>
+    /// 生成下一个副本实例标识。
+    /// </summary>
+    /// <returns>本次副本的实例标识。</returns>
+    /// <remarks>
+    /// <b>必须逐个不同</b>：它的一半是结算的幂等键
+    /// （<c>SettlementKey(RunId, BattleResultId)</c>）。
+    /// 两个副本若拿到同一个标识，第二个会被判成「已经结算过」，
+    /// <b>奖励被静默跳过</b> —— 玩家看到的是「打赢了却什么也没拿到」。
+    /// <para>
+    /// 构成 = <b>小时 + 会话内序号 + 会话令牌</b>。前两项保证同一局内不重复；
+    /// 会话令牌保证<b>跨局</b>也不重复（上一局留下的结算键不会误伤这一局）。
+    /// </para>
+    /// </remarks>
+    private string NextDungeonRunId()
+    {
+        _dungeonRunSeq++;
+        return $"d{_clock.AbsoluteHour:0}.{_dungeonRunSeq}.{SessionToken}";
+    }
+
+    /// <summary>
+    /// 算出本次副本的战利品分配（R-01）。
+    /// </summary>
+    /// <param name="outcome">副本结果。</param>
+    /// <param name="job">本次任务（提供奖励规模）。</param>
+    /// <returns>分配结果。失败时是空分配。</returns>
+    /// <remarks>
+    /// <para><b>参战名单取自副本实例的快照</b>（<c>DungeonRun.Participants</c>），
+    /// 不是当前队伍 —— 这正是 D02「实际参加该次副本的队伍成员」，
+    /// 也是 E03「以本次副本实际参战快照为准」的实现。</para>
+    ///
+    /// <para><b>随机用独立派生的子流</b>：种子由<b>副本实例标识</b>派生
+    /// （<see cref="LootSplit.DeriveSeed"/>），所以
+    /// 「同一个副本 → 同一份分配」永远成立，
+    /// 而掉落<b>不会插队</b>进战斗与日常共用的那条全局随机流。</para>
+    /// </remarks>
+    private ClaudeCodeGameStudios.Domain.Settlement.LootAllocation ComputeLoot(
+        ClaudeCodeGameStudios.Application.DungeonFlowOutcome outcome, Job job)
+    {
+        // 失败不给战利品（D-010 Q1 / R01-D05）。
+        if (!outcome.Succeeded) return ClaudeCodeGameStudios.Domain.Settlement.LootAllocation.Empty;
+
+        var participants = outcome.Run.Participants
+            .Select(id => new ClaudeCodeGameStudios.Domain.Heroes.HeroId(id))
+            .ToArray();
+
+        // E01 / E02：没有可靠的参战名单就不发放 —— 绝不退化成「全村都有份」。
+        if (participants.Length == 0)
+        {
+            GD.Print($"LOOT 副本 {outcome.Run.Id} 没有参战名单，不发放战利品（记录结算异常）。");
+            return ClaudeCodeGameStudios.Domain.Settlement.LootAllocation.Empty;
+        }
+
+        var loot = _lootProvider.LootFor(DungeonName, job.Amt);
+        if (loot is null || loot.Count == 0)
+        {
+            return ClaudeCodeGameStudios.Domain.Settlement.LootAllocation.Empty;
+        }
+
+        var rng = new ClaudeCodeGameStudios.Domain.Heroes.DecisionFlow.SeededRandom(
+            ClaudeCodeGameStudios.Domain.Settlement.LootSplit.DeriveSeed(outcome.Run.Id.Value));
+
+        return ClaudeCodeGameStudios.Domain.Settlement.LootSplit.Split(loot, participants, rng);
+    }
+
     private ClaudeCodeGameStudios.Application.DungeonFlowOutcome ResolveDungeon(
         Job job, List<HeroAgent> crew)
     {
         // 参与者标识取自**任务自己的成员名单** —— 那是领域层的记录，
         // 不必在这里靠 _states/_heroes 的下标对齐反推。
+        //
+        // 【R-01 修掉的坑】回退分支原来取的是 h.**Name**（显示名），
+        // 而主分支取的是 m.Id.**Value**（英雄标识）。奖励资格要按**标识**判定
+        // （背包查找、关系幂等键都用标识），显示名会与其它地方对不上 ——
+        // 同一个英雄在两条路径上是两个不同的「人」。
         var ids = _mission is not null
             ? _mission.Members.Select(m => m.Id.Value).ToArray()
-            : crew.Select(h => h.Name).ToArray();
+            : crew.Select(h => h.Id.Value).ToArray();
 
         var flow = ClaudeCodeGameStudios.Application.DungeonFlow.Begin(
-            new ClaudeCodeGameStudios.Domain.Dungeon.DungeonRunId($"d{_clock.AbsoluteHour:0}"),
+            new ClaudeCodeGameStudios.Domain.Dungeon.DungeonRunId(NextDungeonRunId()),
             DungeonName, ids, _combat, _combat);
 
         var outcome = flow.RunToCompletion();
@@ -1187,10 +1331,38 @@ public partial class Main : Node2D
         _pendingRewardResource = MaterialsId.Value;
         _pendingRewardAmount = job.Amt;
 
+        // ── R-01：战利品分配（成功才有；失败一律不发）──
+        // 分配在结算**之前**算好：参战名单取自副本实例的快照（D02 / E03），
+        // 随机用由副本标识派生的独立子流（同一个副本 → 同一份分配）。
+        //
+        // **战利品随这次结算带进去**（rewardsOverride），而不是放进会话级共享状态：
+        // 否则任何一次与副本无关的结算都可能把这一场的战利品再发一遍。
+        var loot = ComputeLoot(outcome, job);
+        _lastDungeonLoot = loot;
+
         var key = new ClaudeCodeGameStudios.Domain.Settlement.SettlementKey(
             outcome.Run.Id.Value, outcome.Run.BattleResultId);
 
-        bool granted = _settlement.Apply(key, outcome.Succeeded);
+        bool granted;
+        try
+        {
+            granted = _settlement.Apply(key, outcome.Succeeded, won => RewardsFor(won, loot));
+        }
+        catch (InvalidOperationException ex)
+        {
+            // 结算被拒（背包装不下、物品未登记、余额不足……）：整笔未应用，
+            // 幂等键**没有**落下 —— 状态保持不变，可以重试。
+            //
+            // 这里不能静默当作「发过了」（E04 / E07：不得静默吞掉奖励），
+            // 也不能让异常一路冒到游戏循环里把画面打断。
+            // 失败没有改变任何状态，所以它**不是**一个领域事件
+            // （反装饰规则：事件必须声明它改了什么）——
+            // 因此记进杂谈与日志，而不是走 Emit。
+            granted = false;
+            GD.Print($"SETTLEMENT 副本 {outcome.Run.Id} 的结算被拒：{ex.Message}");
+            Add(new Chronicle.Entry(
+                (int)_clock.Day, $"这次副本的奖励没能发下来（{ex.Message}）。", null));
+        }
 
         if (granted && outcome.Succeeded)
         {
@@ -1222,6 +1394,25 @@ public partial class Main : Node2D
                 },
                 ev => Chronicle.SquadBack((int)_clock.Day, ev.Payload["names"],
                     ev.Payload["res"], int.Parse(ev.Payload["qty"])).Text);
+
+            // ── R-01：个人战利品入包 → 一条可追溯的事件 ──
+            // 物品进了英雄的背包（<c>StHeroBag</c>），这是<b>真的状态变化</b>，
+            // 所以它配得上一个事件；而事件必须说清「谁拿到了什么」。
+            if (!loot.IsEmpty)
+            {
+                var lootLines = loot.Grants
+                    .Select(g => $"{NameOfHero(g.Hero)} {g.Item.Value}×{g.Quantity}")
+                    .ToArray();
+                Emit(EvDungeonSettled, string.Join("、", names),
+                    new[] { StHeroBag, StSettlement },
+                    new Dictionary<string, string>
+                    {
+                        ["place"] = DungeonName,
+                        ["names"] = string.Join("、", names),
+                        ["loot"] = string.Join("、", lootLines),
+                    },
+                    ev => $"{ev.Payload["names"]}从{ev.Payload["place"]}带回了战利品：{ev.Payload["loot"]}。");
+            }
         }
         else if (!outcome.Succeeded)
         {
@@ -2899,6 +3090,19 @@ public partial class Main : Node2D
 
         // 真的走一遍派单 —— 换成副本任务（Glory == true），那是走 DungeonFlow 的那条路。
         _pendingJob = Jobs.First(j => j.Glory);
+
+        // 队伍是玩家点花名册组出来的（开局**不预编**），而自检没有人点 ——
+        // 所以这里走**同一个入口**组一支队伍出来，不绕过领域规则：
+        // 加入与出发合法性仍然由 SquadRules 判定。
+        if (_squad.Count == 0)
+        {
+            for (int i = 0; i < _heroes.Count && _squad.Count < 2; i++)
+            {
+                OnRosterItemActivated(i);
+            }
+            GD.Print($"DUNGEONTEST 自检组队：{_squad.Count} 人（与玩家同一入口）");
+        }
+
         var crew = ReadySquad;
         if (crew.Count == 0) { GD.Print("DUNGEONTEST 无人在场，跑不了。"); return; }
 
@@ -2920,6 +3124,11 @@ public partial class Main : Node2D
 
         long matBefore = Mat;
         int notesBefore = _chronicle.Count;
+
+        // ── R-01：发放**之前**的背包快照（对照用）──
+        var bagBefore = crew.ToDictionary(
+            h => h.Id.Value,
+            h => h.Bag.Snapshot().ToDictionary(kv => kv.Key.Value, kv => kv.Value));
 
         var outcome = ResolveDungeon(_pendingJob, crew);
 
@@ -2958,6 +3167,95 @@ public partial class Main : Node2D
         GD.Print($"DUNGEONTEST 重放同一结算键 → Apply 返回 {appliedAgain}，" +
                  $"材料 {beforeReplay} → {Mat}" +
                  $"（材料必须不变、Apply 必须返回 false：I4 已完成事件不会重复应用）");
+
+        // ── R-01：战利品分配与入包 ──
+        // 单测验的是分配规则与发放入口，验不了「游戏有没有真的把战利品
+        // 落到参战者的个人背包里」—— 那正是 D-018「奖励进错桶」的同一类风险。
+        var loot = _lastDungeonLoot;
+        GD.Print($"DUNGEONTEST 战利品分配 = {loot.Grants.Count} 条（副本 {outcome.Run.Id}）：" +
+                 (loot.Grants.Count == 0 ? "（无）" :
+                  string.Join("、", loot.Grants.Select(g => $"{g.Hero.Value} {g.Item.Value}×{g.Quantity}"))));
+
+        bool lootInBags = true;
+        long lootTotal = 0;
+        foreach (var g in loot.Grants)
+        {
+            var hero = _heroes.FirstOrDefault(h => h.Id == g.Hero);
+            if (hero is null) { lootInBags = false; continue; }
+
+            long before = bagBefore.TryGetValue(g.Hero.Value, out var snap)
+                && snap.TryGetValue(g.Item.Value, out var n) ? n : 0;
+            long after = hero.Bag.Count(g.Item);
+            lootTotal += g.Quantity;
+
+            if (after - before != g.Quantity) lootInBags = false;
+            GD.Print($"  {hero.Name}：{g.Item.Value} {before} → {after}（应 +{g.Quantity}）");
+        }
+
+        // 参战者之外的英雄：一件都不能多（未参战者不参与分配）。
+        bool nobodyElseGotLoot = true;
+        foreach (var hero in _heroes)
+        {
+            if (loot.Grants.Any(g => g.Hero == hero.Id)) continue;
+            foreach (var g in loot.Grants)
+            {
+                long before = bagBefore.TryGetValue(hero.Id.Value, out var snap)
+                    && snap.TryGetValue(g.Item.Value, out var n) ? n : 0;
+                if (hero.Bag.Count(g.Item) - before != 0) nobodyElseGotLoot = false;
+            }
+        }
+
+        GD.Print($"DUNGEONTEST 战利品入包 = {lootInBags}，未参战者没拿到 = {nobodyElseGotLoot}" +
+                 $"（失败时两人都必须是 true：D-010 Q1 失败不给奖励）");
+
+        // ── R-01 M4：拿到的物品要能真的开摊、被另一位英雄买走 ──
+        if (loot.Grants.Count > 0 && _heroes.Count >= 2)
+        {
+            var firstGrant = loot.Grants[0];
+            var seller = _heroes.FirstOrDefault(h => h.Id == firstGrant.Hero);
+            var buyer = _heroes.FirstOrDefault(h => h.Id != firstGrant.Hero);
+            var item = firstGrant.Item;
+            var gold = ClaudeCodeGameStudios.Application.Stall.StallService.Gold;
+
+            if (seller is not null && buyer is not null)
+            {
+                long stock = Math.Min(3, seller.Bag.Count(item));
+                long buyerGold0 = buyer.Wallet.Amount(gold);
+                long buyerBag0 = buyer.Bag.Count(item);
+
+                var placed = stock > 0
+                    ? _stallService.PlaceStall(seller.Id, item, stock, _clock.Now)
+                    : null;
+
+                var bought = placed is null
+                    ? default
+                    : _stallService.TryBuy(seller.Id, buyer.Id, item, 1, _clock.Now, "dungeonrun-1");
+
+                bool chainOk = placed is not null
+                              && bought.Bought
+                              && buyer.Bag.Count(item) == buyerBag0 + 1
+                              && buyer.Wallet.Amount(gold) == buyerGold0 - 5;   // 石料单价 5
+
+                GD.Print($"DUNGEONTEST 战利品开摊={(placed is null ? "FAIL" : $"OK（{seller.Name} 摆 {stock} 份）")}，" +
+                         $"他人购买={bought.Outcome}，买家背包 {buyerBag0} → {buyer.Bag.Count(item)}，" +
+                         $"买家金 {buyerGold0} → {buyer.Wallet.Amount(gold)} → {chainOk}");
+            }
+        }
+
+        // ── R-01 M3：奖励要能存进档、读档后仍属于正确的人 ──
+        var saveWithLoot = BuildSave();
+        bool lootPersisted = true;
+        foreach (var g in loot.Grants)
+        {
+            var heroSave = saveWithLoot.Heroes.FirstOrDefault(h => h.Id == g.Hero.Value);
+            long saved = heroSave?.Bag
+                .Where(b => b.ItemId == g.Item.Value)
+                .Sum(b => b.Count) ?? 0;
+            if (saved <= 0) lootPersisted = false;
+        }
+        GD.Print($"DUNGEONTEST 战利品已入档 = {lootPersisted}，" +
+                 $"已结算键 {saveWithLoot.AppliedSettlementKeys.Count} 个" +
+                 $"（存档版本 {saveWithLoot.Version}，R-01 未新增字段）");
 
         foreach (string note in _chronicle.Recent(_chronicle.Count - notesBefore))
         {

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ClaudeCodeGameStudios.Domain.Heroes;
+using ClaudeCodeGameStudios.Domain.Items;
 using DomainTrade = ClaudeCodeGameStudios.Domain.Trade.Trade;
 using DomainTradeId = ClaudeCodeGameStudios.Domain.Trade.TradeId;
 
@@ -25,21 +27,49 @@ public readonly record struct SettlementKey(string RunId, string BattleResultId)
 /// <param name="Amount">数量；为负表示扣减。</param>
 public readonly record struct ResourceDelta(string ResourceId, long Amount);
 
+/// <summary>
+/// 一次结算对<b>某个英雄个人背包</b>的物品发放（R-01 D04：无公共奖励池，物品直接归个人）。
+/// </summary>
+/// <param name="Hero">接收者。</param>
+/// <param name="Item">物品。</param>
+/// <param name="Quantity">数量，必须为正。</param>
+public readonly record struct ItemGrant(HeroId Hero, ItemId Item, long Quantity);
+
 /// <summary>一次结算对村庄的全部影响。计算得出，尚未应用。</summary>
 public sealed class SettlementDelta
 {
     private readonly List<ResourceDelta> _resources = new();
+    private readonly List<ItemGrant> _itemGrants = new();
 
     /// <summary>村庄侧的资源增量。</summary>
     public IReadOnlyList<ResourceDelta> Resources => _resources;
+
+    /// <summary>
+    /// 个人物品发放（R-01）。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么物品也进结算增量，而不是另开一条发放路径</b>：
+    /// 副本成功时<b>村庄资源</b>与<b>英雄个人物品</b>是同一笔奖励的两半。
+    /// 分两次发，中间任何一步失败都会留下「村庄拿到了、英雄没拿到」或反之的
+    /// 半笔账 —— 那正是<b>不变量 I15</b>（要么完整应用，要么不应用）要禁止的状态。
+    /// 放进同一个增量，<see cref="Settlement.Apply"/> 才能用<b>同一把幂等锁</b>、
+    /// 在<b>同一次提交</b>里把两半一起落下去。
+    /// </remarks>
+    public IReadOnlyList<ItemGrant> ItemGrants => _itemGrants;
 
     /// <summary>本次结算是否改变任何东西。</summary>
     /// <remarks>
     /// <b>零增量是合法的</b>：副本失败不给奖励、也不额外惩罚（<c>07</c> **D-010 Q1**），
     /// 那次结算就是零增量 —— 但它<b>仍然必须被结算一次</b>，
     /// 否则副本会永远停在「待结算」状态。
+    /// <para>
+    /// <b>物品发放也算「改变了东西」</b>：一次什么都没发的村庄资源结算，
+    /// 只要带了个人物品，就不是零增量。
+    /// </para>
     /// </remarks>
-    public bool IsEmpty => _resources.Count == 0 || _resources.All(r => r.Amount == 0);
+    public bool IsEmpty =>
+        (_resources.Count == 0 || _resources.All(r => r.Amount == 0))
+        && _itemGrants.Count == 0;
 
     /// <summary>追加一条资源增量。</summary>
     /// <param name="resourceId">资源种类。</param>
@@ -53,6 +83,34 @@ public sealed class SettlementDelta
         }
 
         _resources.Add(new ResourceDelta(resourceId, amount));
+        return this;
+    }
+
+    /// <summary>追加一条个人物品发放（R-01）。</summary>
+    /// <param name="hero">接收者。</param>
+    /// <param name="item">物品。</param>
+    /// <param name="quantity">数量，必须为正。</param>
+    /// <exception cref="ArgumentException">英雄标识或物品标识为空。</exception>
+    /// <exception cref="ArgumentOutOfRangeException">数量不是正数。</exception>
+    public SettlementDelta AddItemGrant(HeroId hero, ItemId item, long quantity)
+    {
+        if (string.IsNullOrEmpty(hero.Value))
+        {
+            throw new ArgumentException("接收者标识不能为空。", nameof(hero));
+        }
+
+        if (string.IsNullOrEmpty(item.Value))
+        {
+            throw new ArgumentException("物品标识不能为空。", nameof(item));
+        }
+
+        if (quantity <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(quantity), quantity, "发放数量必须为正数。");
+        }
+
+        _itemGrants.Add(new ItemGrant(hero, item, quantity));
         return this;
     }
 }
@@ -84,19 +142,29 @@ public sealed class Settlement
     /// 资源写入委托，必须<b>接到村庄模块的写入口</b>（不变量 I10）。
     /// 返回 <c>false</c> 表示余额不足、写入被拒。
     /// </param>
+    /// <param name="tradeSettler">交易结算写入委托（可选）。</param>
+    /// <param name="itemWriter">
+    /// 个人物品发放的写入入口（可选，R-01）。
+    /// <b>没有它就发不了物品</b>：结算增量里若含物品发放而本项为 null，
+    /// <see cref="Apply"/> 会<b>整笔拒绝</b>并抛异常 ——
+    /// 绝不把物品悄悄丢掉，那会让「奖励发出去了」成为一句谎话。
+    /// </param>
     public Settlement(
         Func<bool, SettlementDelta> rewards,
         Func<ResourceDelta[], bool> resourceWriter,
-        ITradeSettler? tradeSettler = null)
+        ITradeSettler? tradeSettler = null,
+        IItemGrantWriter? itemWriter = null)
     {
         _rewards = rewards ?? throw new ArgumentNullException(nameof(rewards));
         _resourceWriter = resourceWriter ?? throw new ArgumentNullException(nameof(resourceWriter));
         _tradeSettler = tradeSettler;   // 可选：M6 引入；null = 旧行为
+        _itemWriter = itemWriter;       // 可选：R-01 引入；null = 不发物品
     }
 
     private readonly Func<bool, SettlementDelta> _rewards;
     private readonly Func<ResourceDelta[], bool> _resourceWriter;
     private readonly ITradeSettler? _tradeSettler;
+    private readonly IItemGrantWriter? _itemWriter;
 
     /// <summary>已应用的结算键。</summary>
     public IReadOnlyCollection<string> AppliedKeys => _applied;
@@ -146,22 +214,66 @@ public sealed class Settlement
     /// </summary>
     /// <param name="key">结算键。</param>
     /// <param name="heroesWon">战斗是否胜利。</param>
+    /// <param name="rewardsOverride">
+    /// 本次结算专用的奖励内容提供者。<b>null</b> 时用构造时注入的那个。
+    /// <para>
+    /// <b>为什么需要它</b>：副本奖励的「村庄资源」与「个人物品」必须<b>属于同一次结算</b>。
+    /// 若把战利品放进某个会话级的共享状态里由奖励委托去读，
+    /// 任何一次<b>与副本无关</b>的结算都可能把它当成自己的奖励再发一遍。
+    /// 让调用方把本次的战利品<b>随调用带进来</b>，这条路径就不存在了。
+    /// </para>
+    /// </param>
     /// <returns>
     /// <c>true</c> 表示本次已应用；<c>false</c> 表示该键<b>之前已结算过</b>，本次被忽略。
     /// </returns>
     /// <exception cref="InvalidOperationException">
-    /// 写入被拒（余额不足等）—— 结算<b>整体未应用</b>，状态保持不变（I15）。
+    /// 写入被拒（余额不足、背包装不下等）—— 结算<b>整体未应用</b>，状态保持不变（I15）。
     /// </exception>
-    public bool Apply(SettlementKey key, bool heroesWon)
+    /// <remarks>
+    /// <para><b>三步，顺序不能换</b>：</para>
+    /// <list type="number">
+    /// <item><b>先算全量</b>（资源增量 + 个人物品发放）。失败在这里抛出 —— 此时什么都没写。</item>
+    /// <item><b>再预检物品</b>：背包装不下 → <b>整笔拒绝</b>。
+    /// 这一步必须在资源写入<b>之前</b>，否则会出现「村庄拿到了、英雄没拿到」的半笔账。</item>
+    /// <item><b>最后一次性提交</b>：先写资源，再写物品；两者都成功才记幂等标志。</item>
+    /// </list>
+    /// <para>
+    /// <b>为什么物品的预检与提交是分开的两个调用</b>：<see cref="IItemGrantWriter"/> 要能
+    /// <b>先算清楚每个英雄的新背包再动手</b>——背包是不可变的（<c>Inventory</c>），
+    /// 所以「算出全部新背包 → 一次性换上」天然就是原子的。
+    /// 预检通过后提交不再有失败路径，因此提交阶段不会产生半笔账。
+    /// </para>
+    /// </remarks>
+    public bool Apply(
+        SettlementKey key,
+        bool heroesWon,
+        Func<bool, SettlementDelta>? rewardsOverride = null)
     {
         var id = key.ToString();
         if (_applied.Contains(id)) return false;
 
         // 1. 先算全量。失败在这里抛出 —— 此时什么都没写。
-        var delta = _rewards(heroesWon) ?? new SettlementDelta();
+        var delta = (rewardsOverride ?? _rewards)(heroesWon) ?? new SettlementDelta();
         var writes = delta.Resources.Where(r => r.Amount != 0).ToArray();
+        var grants = delta.ItemGrants.ToArray();
 
-        // 2. 一次性提交。写入函数自身必须保证全成功或全不成功（不变量 I15）。
+        // 2. 个人物品：没有写入能力就整笔拒绝（绝不静默丢弃）。
+        if (grants.Length > 0 && _itemWriter is null)
+        {
+            throw new InvalidOperationException(
+                $"结算 {id} 含 {grants.Length} 条个人物品发放，但未注入 IItemGrantWriter —— "
+                + "本次结算**整体未应用**，状态保持不变。");
+        }
+
+        // 3. 预检物品：背包装不下 → 整笔不应用（I15）。幂等键不落，可重试。
+        if (grants.Length > 0 && !_itemWriter!.CanGrant(grants))
+        {
+            throw new InvalidOperationException(
+                $"结算 {id} 的个人物品发放不可行（背包容量不足、英雄不存在或物品未登记），"
+                + "本次结算**整体未应用** —— 状态保持不变。幂等键未记录，可重试。");
+        }
+
+        // 4. 一次性提交。写入函数自身必须保证全成功或全不成功（不变量 I15）。
         if (writes.Length > 0 && !_resourceWriter(writes))
         {
             throw new InvalidOperationException(
@@ -169,7 +281,10 @@ public sealed class Settlement
                 + "不变量 I15：要么完整应用，要么不应用，绝不部分入账。");
         }
 
-        // 3. 只有提交成功才记幂等标志。顺序反了会导致「记了但没写」。
+        // 5. 物品提交。预检已通过，实现必须保证这一步不再失败。
+        if (grants.Length > 0) _itemWriter!.Grant(grants);
+
+        // 6. 只有提交成功才记幂等标志。顺序反了会导致「记了但没写」。
         _applied.Add(id);
         return true;
     }
@@ -205,4 +320,35 @@ public interface ITradeSettler
 {
     /// <summary>应用一次交易（写回 4 个新引用）。<b>幂等性</b>由 <see cref="Settlement"/> 守门，本方法可假定"不重复"。</summary>
     void Settle(DomainTradeId tradeId);
+}
+
+/// <summary>
+/// 个人物品发放的写入入口（R-01）。
+/// </summary>
+/// <remarks>
+/// <para><b>为什么是「预检 + 提交」两步，而不是一个 <c>bool Apply(...)</c></b>：
+/// 结算的原子性要求是「<b>要么全都发出去，要么一个都不发</b>」。
+/// 物品要发给<b>多个</b>英雄，其中任何一个人装不下，整笔就该不发。
+/// 而「能不能装下」必须在动手之前就知道 —— 于是拆成两步：
+/// <see cref="CanGrant"/> 只回答「行不行」，
+/// <see cref="Grant"/> 在<b>已知可行</b>的前提下把东西一次性发完。</para>
+///
+/// <para><b>实现方必须保证</b>：<see cref="Grant"/> 在 <see cref="CanGrant"/> 返回 true 之后
+/// <b>不会失败、不会抛</b>。背包（<c>Inventory</c>）是不可变的，
+/// 因此「先算出每个英雄的新背包，再一次性换上」天然满足这一条。</para>
+/// </remarks>
+public interface IItemGrantWriter
+{
+    /// <summary>
+    /// 预检：这批发放是否<b>全部</b>可行。<b>不改变任何状态。</b>
+    /// </summary>
+    /// <param name="grants">发放明细。</param>
+    /// <returns>全部可行返回 true；任何一条不可行返回 false（此时整笔结算都不该应用）。</returns>
+    bool CanGrant(IReadOnlyList<ItemGrant> grants);
+
+    /// <summary>
+    /// 提交：把东西发出去。<b>调用前必须已通过 <see cref="CanGrant"/>。</b>
+    /// </summary>
+    /// <param name="grants">发放明细。</param>
+    void Grant(IReadOnlyList<ItemGrant> grants);
 }

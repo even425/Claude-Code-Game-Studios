@@ -95,6 +95,14 @@ public sealed class HeroSave
     public string CurrentActivity { get; set; } = "";
     /// <summary>行动剩余时长（模拟秒）。</summary>
     public double RemainingActionSeconds { get; set; }
+    /// <summary>
+    /// 当前行动的目标英雄（第三阶段 M2；空串 = 非目标活动）。
+    /// </summary>
+    /// <remarks>
+    /// 与 <see cref="CurrentActivity"/> 一起恢复：社交进行中存档，读档后仍要记得「和谁」。
+    /// <b>0,3 增补字段</b>（R-03 修复）：旧 0,3 存档缺此字段时按空串处理，不破坏加载。
+    /// </remarks>
+    public string TargetId { get; set; } = "";
     /// <summary>是否已完成首个副本。</summary>
     public bool HasCompletedFirstDungeon { get; set; }
 
@@ -339,6 +347,14 @@ public static class SaveValidator
             errors.Add(new SaveError("village.id", "村庄标识为空。"));
         }
 
+        // 先收集全部英雄 ID：目标/引用校验是「前向引用」，不能边遍历边建集合
+        // （否则 TargetId 指向列表里排在自己后面的人会被误判为断引用）。
+        var allHeroIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var hero in save.Heroes)
+        {
+            if (!string.IsNullOrEmpty(hero.Id)) allHeroIds.Add(hero.Id);
+        }
+
         var heroIds = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < save.Heroes.Count; i++)
         {
@@ -358,6 +374,49 @@ public static class SaveValidator
             {
                 errors.Add(new SaveError(
                     $"{path}", $"属性为负（力 {h.Power} / 速 {h.Speed} / 韧 {h.Grit}）。"));
+            }
+
+            // 在场性与行动状态（R-03）：读档要恢复「在村/随队」与「正在做什么」，
+            // 非法值不能静默当成默认值 —— 那会读出一个规则解释不了的人。
+            if (h.Presence != "InVillage" && h.Presence != "OnMission")
+            {
+                errors.Add(new SaveError(
+                    $"{path}.presence", $"在场性「{h.Presence}」无法识别（只允许 InVillage / OnMission）。"));
+            }
+
+            if (!double.IsFinite(h.RemainingActionSeconds) || h.RemainingActionSeconds < 0.0)
+            {
+                errors.Add(new SaveError(
+                    $"{path}.remainingActionSeconds",
+                    $"行动剩余时长 {h.RemainingActionSeconds} 必须是非负有限数。"));
+            }
+
+            // 随队的人不应同时挂着日常行动（SetOnMission 会释放行动）。
+            if (h.Presence == "OnMission" && !string.IsNullOrEmpty(h.CurrentActivity))
+            {
+                errors.Add(new SaveError(
+                    $"{path}.currentActivity", "随队英雄不应同时有进行中的日常行动。"));
+            }
+
+            // 目标型行动（社交）：目标必须存在，且不能是自己。
+            if (!string.IsNullOrEmpty(h.TargetId))
+            {
+                if (string.IsNullOrEmpty(h.CurrentActivity))
+                {
+                    errors.Add(new SaveError(
+                        $"{path}.targetId", "没有进行中的行动，却记录了行动目标。"));
+                }
+
+                if (!allHeroIds.Contains(h.TargetId))
+                {
+                    errors.Add(new SaveError(
+                        $"{path}.targetId", $"行动目标「{h.TargetId}」在英雄列表中不存在 —— 引用断了。"));
+                }
+
+                if (h.TargetId == h.Id)
+                {
+                    errors.Add(new SaveError($"{path}.targetId", "行动目标不能是英雄自己。"));
+                }
             }
 
             // CR-1：性格修正与偏好权重必须严格为正，否则

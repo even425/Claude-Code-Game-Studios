@@ -2024,6 +2024,7 @@ public partial class Main : Node2D
                 Presence = s.Presence.ToString(),
                 CurrentActivity = s.CurrentActivity.Value,
                 RemainingActionSeconds = s.RemainingActionSeconds,
+                TargetId = s.CurrentTarget.Value,
                 HasCompletedFirstDungeon = s.HasCompletedFirstDungeon,
                 Personality = h.Personality,
                 Diligence = h.Diligence,
@@ -2151,6 +2152,28 @@ public partial class Main : Node2D
                 new ClaudeCodeGameStudios.Domain.Heroes.HeroId(hs.Id),
                 hs.Name, hs.Origin,
                 hs.TraitModifiers, hs.PreferenceWeights)));
+
+            // ── R-03：恢复英雄的在场性 / 进行中的行动 / 目标 / 首通标记 ──
+            // 以前这里只造了空状态：读档后随队的人会变回在村、行动凭空消失，
+            // 而「读档前后世界一致」正是第三阶段 M6 的验收项之一。
+            var restoredState = _states[^1];
+            if (hs.HasCompletedFirstDungeon) restoredState.MarkFirstDungeonCompleted();
+
+            if (hs.Presence == "OnMission")
+            {
+                restoredState.SetOnMission();          // 随队：不参与日常决策、不持有日常行动
+            }
+            else
+            {
+                restoredState.SetInVillage();
+                if (!string.IsNullOrEmpty(hs.CurrentActivity))
+                {
+                    restoredState.BeginAction(
+                        new ActivityId(hs.CurrentActivity),
+                        hs.RemainingActionSeconds,
+                        new HeroId(hs.TargetId));
+                }
+            }
         }
 
         // ── 结算幂等键：M6 与 M7 的接缝。不恢复就会重复发放 ──
@@ -2210,6 +2233,19 @@ public partial class Main : Node2D
     {
         _saveTestDone = true;
 
+        // ── R-03：先摆出三种「必须被读档恢复」的英雄状态 ──
+        // ① 在村、正在采集（有剩余时长）② 随队远征中 ③ 已完成首个副本
+        if (_states.Count >= 3)
+        {
+            var acting = _states[0];
+            acting.SetOnMission();       // 先释放可能已存在的行动（测试夹具）
+            acting.SetInVillage();
+            acting.BeginAction(new ActivityId("采集"), 3.5);
+
+            _states[1].SetOnMission();
+            _states[2].MarkFirstDungeonCompleted();
+        }
+
         var save = BuildSave();
         GD.Print($"SAVETEST 存档路径 = {_saves.FilePath}");
         GD.Print($"SAVETEST 将写入：版本 {save.Version} 模拟时间 {save.SimTime:0.###}" +
@@ -2256,6 +2292,25 @@ public partial class Main : Node2D
         GD.Print($"SAVETEST 读档后队伍「{string.Join("、", _squad.Select(h => h.Name))}」" +
                  $"（应为「{squadBefore}」——编成必须按存档恢复，不能「取前 N 个」重建）");
         GD.Print($"SAVETEST 已恢复的结算键 {string.Join(" | ", _settlement.AppliedKeys)}");
+
+        // ── R-03：在场性 / 行动 / 目标 / 首通标记是否真的恢复 ──
+        if (_states.Count >= 3)
+        {
+            var acting = _states[0];
+            var away = _states[1];
+            var firstDungeon = _states[2];
+
+            bool actingOk = acting.CurrentActivity.Value == "采集"
+                            && Math.Abs(acting.RemainingActionSeconds - 3.5) < 1e-6;
+            bool awayOk = away.Presence == Presence.OnMission;
+            bool firstOk = firstDungeon.HasCompletedFirstDungeon;
+
+            GD.Print($"SAVETEST R-03 行动 {acting.CurrentActivity.Value}" +
+                     $"/{acting.RemainingActionSeconds:0.###}（应为 采集/3.5）→ {actingOk}；" +
+                     $"随队 {away.Presence}（应为 OnMission）→ {awayOk}；" +
+                     $"首通 {firstDungeon.HasCompletedFirstDungeon}（应为 True）→ {firstOk}");
+            GD.Print(actingOk && awayOk && firstOk ? "SAVETEST R-03 PASS" : "SAVETEST R-03 FAIL");
+        }
 
         // ── M6 与 M7 的接缝真正生效了吗 ──
         // 键存回来只说明「写进去了、读出来了」；真正的性质是

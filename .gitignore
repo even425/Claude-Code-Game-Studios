@@ -185,3 +185,4 @@ tests/_spike*
 !/*.csproj
 !/*.sln
 !/tests/*.csproj
+tests/_spike.csproj

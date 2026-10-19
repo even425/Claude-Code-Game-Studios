@@ -154,6 +154,18 @@ public sealed class StallService
         public required long TotalAmount { get; init; }
         public required long SellerNet { get; init; }
         public required long VillageCut { get; init; }
+
+        /// <summary>
+        /// 买了几份（R-02 补）。
+        /// </summary>
+        /// <remarks>
+        /// <b>为什么以前没有</b>：结果里只有金额，而金额 = 单价 × 份数 ——
+        /// 单价为 0（白送摊，合法）时<b>除回去</b>会除以 0。
+        /// 于是「到底买了几份」这件事只能由调用方自己记着，
+        /// 而调用方记的那份<b>可能和实际成交的那份对不上</b>。
+        /// 成交结果自己带份数，谁都不用猜。
+        /// </remarks>
+        public required long Quantity { get; init; }
     }
 
     /// <summary>一次购买请求的结果分类（3A：把“为什么失败”说清楚）。</summary>
@@ -299,6 +311,7 @@ public sealed class StallService
             TotalAmount = totalAmount,
             SellerNet = sellerNet,
             VillageCut = villageCut,
+            Quantity = qty,
         });
     }
 

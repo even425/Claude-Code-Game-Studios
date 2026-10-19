@@ -83,7 +83,16 @@ public static class UiLayout
         + 3f * VBoxSeparation;
 
     public const float ButtonMinHeight = 31f;
-    public const int ButtonCount = 6;
+
+    /// <summary>
+    /// 左栏按钮个数。R-02 增加了「看摊位」，6 → 7。
+    /// </summary>
+    /// <remarks>
+    /// <b>这个数字要跟着按钮一起改</b>：<see cref="LeftContentMinHeight"/> 用它算
+    /// 左栏内容的高度，加了按钮不改这里，内容就会溢出面板、底部按钮被挤出屏幕。
+    /// <c>UiLayoutTests.LeftPanel_ContentFitsItsHeight</c> 守着这条。
+    /// </remarks>
+    public const int ButtonCount = 7;
 
     /// <summary>
     /// 左栏内容的最小高度。两个标题 + 花名册 + 队伍文字 + 6 个按钮 + 9 个间隔。

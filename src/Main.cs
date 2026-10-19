@@ -118,11 +118,18 @@ public partial class Main : Node2D
     private Button _btnUpgrade = null!;
     private Button _btnSummon = null!;
     private Button _btnStall = null!;   // M7：摆摊按钮
+    private Button _btnMarket = null!;  // R-02：看摊位（正式购买 UI + 摊位库存面板）
     private Button _btnSave = null!;    // M7：存盘按钮
     private Button _btnLoad = null!;    // M7：读盘按钮
 
     /// <summary>M7 摆摊服务（持摊位目录 + 5% 入村金库）。</summary>
     private ClaudeCodeGameStudios.Application.Stall.StallService _stallService = null!;
+
+    /// <summary>R-02 摊位面板（两跳：点摊位 → 点买家）。</summary>
+    private ClaudeCodeGameStudios.Presentation.StallMarketPanel _stallPanel = null!;
+
+    /// <summary>R-02 摊位市场（候选买家 + 买尽可能多；结算仍走 StallService）。</summary>
+    private ClaudeCodeGameStudios.Application.Stall.StallMarketService _market = null!;
 
     /// <summary>M4 英雄自主经济行为（"每英雄每天 ≤ 1 次" 决策的 DI 入口）。</summary>
     private ClaudeCodeGameStudios.Application.Stall.HeroBehaviorService _heroBehavior = null!;
@@ -580,6 +587,7 @@ public partial class Main : Node2D
         _btnUpgrade = MakeButton("升级村庄", left, OnUpgrade);
         _btnSummon = MakeButton("招募一个人", left, OnSummon);
         _btnStall = MakeButton("摆摊", left, OnStall);
+        _btnMarket = MakeButton("看摊位", left, OnMarket);
         _btnSave = MakeButton("存盘", left, OnSave);
         _btnLoad = MakeButton("读盘", left, OnLoad);
         // 修 Phase 1 自检写盘 bug：user:// → 本地路径
@@ -604,6 +612,21 @@ public partial class Main : Node2D
             () => _rng.NextDouble(1.0));
         // 第四阶段 3B：按游戏日调度一次自主购物（同日重复调用由服务内部闸门挡住）。
         _dailyShopping = new ClaudeCodeGameStudios.Application.Stall.DailyShoppingService(_heroBehavior);
+
+        // 第四阶段 R-02：摊位市场 + 摊位面板（正式购买 UI + 摊位库存面板 R-04）。
+        // 面板只做「玩家点了什么 → 调哪个服务」；结算一律走 StallService.TryBuy
+        // （唯一结算入口，I15 四步提交）。成交后发交易事件 + 刷新花名册。
+        _market = new ClaudeCodeGameStudios.Application.Stall.StallMarketService(
+            _stallService,
+            ClaudeCodeGameStudios.Application.Stall.StallService.Gold,
+            id => _heroes.FirstOrDefault(h => h.Id == id));
+
+        _stallPanel = new ClaudeCodeGameStudios.Presentation.StallMarketPanel(
+            this,
+            () => _heroes,
+            _market,
+            () => _clock.Day * 24.0,
+            OnManualTradeCompleted);
 
         // === 右栏：杂谈滚动 ===
         var right = new VBoxContainer
@@ -888,6 +911,7 @@ public partial class Main : Node2D
         if (OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--grant=", StringComparison.Ordinal)) && !_grantTestDone)
             RunGrantSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--trade") && !_tradeTestDone) RunTradeSelfTest();
+        if (OS.GetCmdlineUserArgs().Contains("--market") && !_marketTestDone) RunMarketSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--shop") && !_shopTestDone) RunShoppingSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a is "--save" or "--load") && !_saveTestDone)
         {
@@ -1556,6 +1580,34 @@ public partial class Main : Node2D
     }
 
     /// <summary>
+    /// R-02：打开摊位面板（正式购买 UI + 摊位库存面板 R-04）。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么是一个按钮而不是右栏常驻区</b>：左栏已经排满，右栏的杂谈是主体 ——
+    /// 挤出一个常驻列表区会牺牲杂谈。弹窗零布局成本，与既有「摆摊」弹窗同构。
+    /// </remarks>
+    private void OnMarket()
+    {
+        _stallPanel.Open();
+    }
+
+    /// <summary>
+    /// 玩家手动成交之后：发一条交易事件 + 刷新花名册。
+    /// </summary>
+    /// <param name="result">成交结果。</param>
+    /// <remarks>
+    /// <b>成交必须进杂谈</b>：这次交易真的改了钱和货（<c>hero.wallet</c> / <c>hero.bag</c>），
+    /// 属于基线 §7.2 里"该被记下来的事"。<b>失败不进</b> —— 失败什么都没改，
+    /// 由面板内回执承担（见 <c>StallMarketText.Rejected</c>）。
+    /// </remarks>
+    private void OnManualTradeCompleted(
+        ClaudeCodeGameStudios.Application.Stall.StallService.BuyStallResult result)
+    {
+        EmitTradeCompleted(result);
+        Refresh();
+    }
+
+    /// <summary>
     /// M7 存盘 —— 把当前村庄 + 英雄的 0,2 状态写到 <c>user://village-save.json</c>。
     /// </summary>
     /// <remarks>
@@ -2010,6 +2062,7 @@ public partial class Main : Node2D
 
     private bool _dungeonTestDone;
     private bool _tradeTestDone;
+    private bool _marketTestDone;
 
     /// <summary>
     /// <c>--trade</c>：第四阶段 3A 真机自检 —— 发物品 → 开摊 → 手动购买 → 失败场景。
@@ -2092,6 +2145,108 @@ public partial class Main : Node2D
 
         GD.Print($"TRADETEST 库存不足={shortStock.Outcome}/{stockOk}，余额不足={poor.Outcome}/{poorOk}");
         GD.Print(buyOk && dupOk && stockOk && poorOk ? "TRADETEST PASS" : "TRADETEST FAIL");
+    }
+
+    /// <summary>
+    /// <c>--market</c>：R-02 真机自检 —— 摊位面板背后的那条路。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>验的是"面板点下去会发生什么"</b>：候选买家怎么算、
+    /// 「尽可能多」买多少、成交后双方的钱和货对不对、失败时状态动不动。
+    /// 走的是生产代码路径（<see cref="ClaudeCodeGameStudios.Application.Stall.StallMarketService"/>
+    /// → <see cref="ClaudeCodeGameStudios.Application.Stall.StallService.TryBuy"/>），不是复制品。</para>
+    ///
+    /// <para><b>为什么不用鼠标点</b>：自检跑在 headless 里，没有指针。
+    /// 面板的「点摊位 → 点买家」两跳，等价于「取摊位 → 取候选 → 买」——
+    /// 面板只是把玩家的点击翻译成这三步。验这三步，就验了面板的语义。</para>
+    /// </remarks>
+    private void RunMarketSelfTest()
+    {
+        _marketTestDone = true;
+
+        if (_states.Count < 2)
+        {
+            GD.Print("MARKETTEST FAIL 英雄不足 2 人，无法验证买卖。");
+            return;
+        }
+
+        var seller = _heroes[0];
+        var buyer = _heroes[1];
+        var item = new ClaudeCodeGameStudios.Domain.Items.ItemId("石料");
+        var gold = ClaudeCodeGameStudios.Application.Stall.StallService.Gold;
+
+        long sellerGold0 = seller.Wallet.Amount(gold);
+        long buyerGold0 = buyer.Wallet.Amount(gold);
+        long villageGold0 = _villageModel.Get(gold);
+
+        // 1. 配给 + 开摊：摊主有 5 份石料，摊上摆 5 份。
+        var grant = _itemGrant.Grant(seller.Id, item, 5);
+        var placed = _stallService.PlaceStall(seller.Id, item, 5, _clock.Now);
+        if (!grant.Granted || placed is null)
+        {
+            GD.Print("MARKETTEST FAIL 无法准备交易场景");
+            return;
+        }
+
+        var stall = _stallService.GetStall(seller.Id);
+        if (stall is null)
+        {
+            GD.Print("MARKETTEST FAIL 摊位丢失");
+            return;
+        }
+
+        // 2. 候选买家：摊主本人不在列表里（在列表里就是"点了必然失败"）。
+        var offers = _market.Offers(stall, _heroes);
+        bool sellerNotCandidate = !offers.Any(o => o.Id == seller.Id);
+        bool buyerIsCandidate = offers.Any(o => o.Id == buyer.Id);
+        var buyerOffer = offers.FirstOrDefault(o => o.Id == buyer.Id);
+        GD.Print($"MARKETTEST 摊位={ClaudeCodeGameStudios.Presentation.StallMarketText.StallLine(seller.Name, stall)}");
+        GD.Print($"MARKETTEST 候选 {offers.Count} 人：摊主不在={sellerNotCandidate}，买家在={buyerIsCandidate}，" +
+                 $"买家可买={buyerOffer.MaxQty} 份");
+
+        // 3. 走面板：打开 → 点摊位 → 点买家 → 成交。
+        //    这一段刻意**经过面板**，而不是直接调服务 ——
+        //    「玩家点下去会发生什么」正是本轮要验的东西。
+        //    面板内部最终调的就是 _market.BuyAsMuchAsPossible（唯一结算入口 TryBuy）。
+        _stallPanel.Open();
+        bool pickedStall = _stallPanel.SelectStall(0);
+        int buyerIndex = offers.ToList().FindIndex(o => o.Id == buyer.Id);
+        int buyerRows = _stallPanel.BuyerRowCount;
+        bool pickedBuyer = buyerIndex >= 0 && _stallPanel.SelectBuyer(buyerIndex);
+        GD.Print($"MARKETTEST 面板：选中摊位={pickedStall}，候选行数={buyerRows}，" +
+                 $"选中买家={pickedBuyer}，回执=「{_stallPanel.ResultText}」");
+
+        long stockAfter = _stallService.GetStall(seller.Id)?.Stock ?? -1;
+        long sellerGold1 = seller.Wallet.Amount(gold);
+        long buyerGold1 = buyer.Wallet.Amount(gold);
+        long villageGold1 = _villageModel.Get(gold);
+
+        // 5 份 × 5 金 = 25：村抽 floor(25×5/100) = 1，卖家净得 24。
+        bool buyOk = pickedStall && pickedBuyer && buyerRows >= 1
+                     && buyerGold0 - buyerGold1 == 25
+                     && sellerGold1 - sellerGold0 == 24
+                     && villageGold1 - villageGold0 == 1
+                     && buyer.Bag.Count(item) == 5
+                     && stockAfter == 0;
+        GD.Print($"MARKETTEST 购买后：买家金 {buyerGold0}→{buyerGold1}，" +
+                 $"摊主金 {sellerGold0}→{sellerGold1}，村金 {villageGold0}→{villageGold1}，" +
+                 $"买家背包={buyer.Bag.Count(item)}，摊位库存={stockAfter} → {buyOk}");
+
+        // 4. 售罄后再买：摊位不再是 Open → 拒绝，且状态不变。
+        var afterSoldOut = _market.BuyAsMuchAsPossible(stall, buyer.Id, _clock.Now);
+        bool soldOutOk = !afterSoldOut.Bought
+                         && buyer.Wallet.Amount(gold) == buyerGold1
+                         && buyer.Bag.Count(item) == 5;
+        GD.Print($"MARKETTEST 售罄后再买={afterSoldOut.Outcome}，状态不变={soldOutOk}");
+
+        // 5. 面板文案：R-04 的库存/单价确实上界面了。
+        string line = ClaudeCodeGameStudios.Presentation.StallMarketText.StallLine(seller.Name, stall);
+        bool lineOk = line.Contains("石料") && line.Contains("单价");
+        GD.Print($"MARKETTEST 摊位行=「{line}」含物品与单价={lineOk}");
+
+        GD.Print(sellerNotCandidate && buyerIsCandidate && buyOk && soldOutOk && lineOk
+            ? "MARKETTEST PASS"
+            : "MARKETTEST FAIL");
     }
 
     private bool _shopTestDone;
@@ -2211,6 +2366,50 @@ public partial class Main : Node2D
             ev => TradeFeedback.Line(
                 buyerName, sellerName, item, qty,
                 (result.SellerNet ?? 0) + villageCut, result.SellerNet ?? 0, villageCut));
+    }
+
+    /// <summary>
+    /// 玩家<b>手动</b>成交 → 一个可追溯事件（R-02）。
+    /// </summary>
+    /// <param name="result">买摊结果。</param>
+    /// <remarks>
+    /// <para><b>与自主购物走同一条事件</b>：两者改的是同一样东西（钱、货、摊位库存），
+    /// 就不该有两种记法 —— 玩家在杂谈里看到「谁买了什么」时，
+    /// 不该还得分辨这一笔是英雄自己买的还是他点的。</para>
+    ///
+    /// <para><b>份数直接取结果里的 <c>Quantity</c></b>，不拿金额除单价 ——
+    /// 单价可以是 0（白送摊），除法会炸。</para>
+    /// </remarks>
+    private void EmitTradeCompleted(
+        ClaudeCodeGameStudios.Application.Stall.StallService.BuyStallResult result)
+    {
+        string buyerName = NameOfHero(result.Buyer);
+        string sellerName = NameOfHero(result.Seller);
+        string item = result.NewStall.ItemId.Value;
+        long qty = result.Quantity;
+
+        var changed = new List<ClaudeCodeGameStudios.Domain.Events.StateKey>
+        {
+            StHeroWallet,
+            StHeroBag,
+        };
+        if (result.VillageCut > 0) changed.Add(StVillageResource);
+
+        var payload = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["buyer"] = buyerName,
+            ["seller"] = sellerName,
+            ["item"] = item,
+            ["qty"] = qty.ToString(),
+            ["sellerNet"] = result.SellerNet.ToString(),
+            ["amount"] = result.TotalAmount.ToString(),
+            ["villageCut"] = result.VillageCut.ToString(),
+        };
+
+        Emit(EvTradeCompleted, buyerName, changed, payload,
+            ev => TradeFeedback.Line(
+                buyerName, sellerName, item, qty,
+                result.TotalAmount, result.SellerNet, result.VillageCut));
     }
 
     /// <summary>按 HeroId 找显示名；找不到时回落为 Id。</summary>

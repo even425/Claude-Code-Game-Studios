@@ -319,4 +319,69 @@ public sealed class StallService
         if (string.IsNullOrEmpty(owner.Value)) return null;
         return _stalls.TryGetValue(owner, out var s) ? s : null;
     }
+
+    /// <summary>
+    /// 导出全部摊位（顺序确定：按摊主 Id 排序），供存档与测试比对。
+    /// </summary>
+    /// <returns>摊位的快照列表。</returns>
+    public IReadOnlyList<DomainStall> Snapshot()
+    {
+        var list = new List<DomainStall>(_stalls.Count);
+        list.AddRange(_stalls.Values);
+        list.Sort(static (a, b) => string.CompareOrdinal(a.Owner.Value, b.Owner.Value));
+        return list;
+    }
+
+    /// <summary>
+    /// 用快照<b>整份替换</b>摊位目录与已处理购买请求键 —— <b>全有或全无</b>（读档用）。
+    /// </summary>
+    /// <remarks>
+    /// 先完整校验到临时表，再一次性替换：任何一条非法输入都不会留下半份摊位目录，
+    /// 也不会让旧的幂等键与新摊位错配。
+    /// </remarks>
+    /// <param name="stalls">摊位列表（一人一摊）。</param>
+    /// <param name="appliedRequestIds">已处理的购买请求键。</param>
+    /// <exception cref="ArgumentNullException">任一参数为 null。</exception>
+    /// <exception cref="ArgumentException">摊位为 null、摊主为空、摊主重复、请求键为空。</exception>
+    public void Restore(
+        IReadOnlyList<DomainStall> stalls,
+        IEnumerable<string> appliedRequestIds)
+    {
+        if (stalls is null) throw new ArgumentNullException(nameof(stalls));
+        if (appliedRequestIds is null) throw new ArgumentNullException(nameof(appliedRequestIds));
+
+        var newStalls = new Dictionary<HeroId, DomainStall>(stalls.Count);
+        foreach (var stall in stalls)
+        {
+            if (stall is null) throw new ArgumentException("摊位不能为 null。", nameof(stalls));
+            if (string.IsNullOrEmpty(stall.Owner.Value))
+            {
+                throw new ArgumentException("摊主不能为空。", nameof(stalls));
+            }
+
+            if (!newStalls.TryAdd(stall.Owner, stall))
+            {
+                throw new ArgumentException(
+                    $"同一摊主出现多个摊位：{stall.Owner.Value}（一人一摊）。", nameof(stalls));
+            }
+        }
+
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var key in appliedRequestIds)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                throw new ArgumentException(
+                    "已处理购买请求键不能为空 —— 它不能作为幂等依据。", nameof(appliedRequestIds));
+            }
+
+            keys.Add(key);
+        }
+
+        _stalls.Clear();
+        foreach (var (owner, stall) in newStalls) _stalls[owner] = stall;
+
+        _appliedRequestIds.Clear();
+        foreach (var key in keys) _appliedRequestIds.Add(key);
+    }
 }

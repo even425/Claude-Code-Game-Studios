@@ -103,6 +103,23 @@ public sealed class Stall
         GridY = gridY;
     }
 
+    /// <summary>
+    /// 用存档里的字段重建摊位 —— <b>仅供读档</b>。
+    /// </summary>
+    /// <remarks>
+    /// <para>与公开构造的唯一区别：<b>允许 <see cref="Stock"/> = 0</b>。
+    /// 售罄 / 已收摊是派生状态，库存归 0 是合法结果；公开构造拒 0，
+    /// 因为「开新摊」必有货。读档走这条路，<b>不</b>为外部开一条“随便 0 库存”的缝。</para>
+    /// <para>其余防线与公开构造相同：Owner / ItemId 不得为空、UnitPrice ≥ 0、
+    /// SimTime 非负有限、Status 只能是三种之一。</para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">Owner / ItemId 空；Status 越界。</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Stock 负；UnitPrice 负；SimTime 越界。</exception>
+    public static Stall Restore(
+        HeroId owner, ItemId itemId, long stock, long unitPrice,
+        StallStatus status, double simTime, int gridX = 0, int gridY = 0)
+        => CreateInternal(owner, itemId, stock, unitPrice, status, simTime, gridX, gridY);
+
     /// <summary>售出 <paramref name="qty"/> 份后，<b>返新 Stall</b>；售罄时自动变 SoldOut。</summary>
     /// <remarks>
     /// <b>纯函数</b>：不持任何引用，只算新值。售罄 = <c>Stock - qty ≤ 0</c> → 新摊位 <see cref="StallStatus.SoldOut"/>。

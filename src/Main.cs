@@ -877,11 +877,15 @@ public partial class Main : Node2D
     private void OnSummon()
     {
         var s = HeroFactory.Summon();
-        // M7 / D-030：把 HeroId 同步到 HeroAgent（M2 挂账兑现）
-        s.Hero.AssignId(new HeroId($"h-{_heroes.Count}"));
+        // M7 / D-030：把 HeroId 同步到 HeroAgent（M2 挂账兑现）。
+        // **同一个 id 必须在 Add 之前算好**：原来 Agent 用 Add 前的 Count、Definition 用
+        // Add 后的 Count，于是两边恒差 1（h-0 vs h-1）。M4 之前没有任何东西同时引用两边，
+        // 直到摊位的 OwnerId（Agent）要去 heroes[]（Definition Id）里找引用才暴露。
+        string id = $"h-{_heroes.Count}";
+        s.Hero.AssignId(new HeroId(id));
         _heroes.Add(s.Hero);
         _states.Add(new HeroState(new HeroDefinition(
-            new HeroId($"h-{_heroes.Count}"), s.Hero.Name, s.WorldName,
+            new HeroId(id), s.Hero.Name, s.WorldName,
             preferenceWeights: new Dictionary<string, double>(StringComparer.Ordinal)
             {
                 // 【待定 / P3-D05】性格影响「社交」活动权重；采集/建屋仍取恒等 1。
@@ -2346,6 +2350,8 @@ public partial class Main : Node2D
                 // M7 / D-030：金币 + 背包
                 CoinAmount = h.Wallet.Amount(new ClaudeCodeGameStudios.Domain.Village.ResourceId("金币")),
                 Bag = BuildBagSave(h.Bag),
+                // 第四阶段 M4：自主购物的每日频率状态（0 = 从未购过）
+                LastShoppingDay = h.LastShoppingDay,
                 Origin = s.Definition.Origin,
                 TraitModifiers = new Dictionary<string, double>(s.Definition.TraitModifiers),
                 PreferenceWeights = new Dictionary<string, double>(s.Definition.PreferenceWeights),
@@ -2380,6 +2386,22 @@ public partial class Main : Node2D
             }).ToList(),
         AppliedRelationKeys = _relationship.AppliedKeys
             .OrderBy(k => k, StringComparer.Ordinal).ToList(),
+        // 第四阶段 M4：摊位（库存是从英雄背包挪走的货）、购买幂等键、每日购物闸门。
+        // 三者缺一，读档都会造出「存档前没发生过的世界」。
+        Stalls = _stallService.Snapshot().Select(s => new ClaudeCodeGameStudios.Data.StallSave
+        {
+            OwnerId = s.Owner.Value,
+            ItemId = s.ItemId.Value,
+            Stock = s.Stock,
+            UnitPrice = s.UnitPrice,
+            Status = s.Status.ToString(),
+            SimTime = s.SimTime,
+            GridX = s.GridX,
+            GridY = s.GridY,
+        }).ToList(),
+        AppliedPurchaseKeys = _stallService.AppliedRequestIds
+            .OrderBy(k => k, StringComparer.Ordinal).ToList(),
+        DailyShoppingLastRunDay = _dailyShopping.LastRunDay,
     };
 
     /// <summary>
@@ -2456,6 +2478,8 @@ public partial class Main : Node2D
             var bagDict = new Dictionary<ClaudeCodeGameStudios.Domain.Items.ItemId, long>();
             foreach (var be in hs.Bag) bagDict[new ClaudeCodeGameStudios.Domain.Items.ItemId(be.ItemId)] = be.Count;
             agent.RestoreBag(new ClaudeCodeGameStudios.Domain.Items.Inventory(bagDict));
+            // 第四阶段 M4：自主购物的每日频率状态（0 = 从未购过）
+            agent.LastShoppingDay = hs.LastShoppingDay;
             _heroes.Add(agent);
             _village.AddHero(agent);
             _village.HasPeople = true;
@@ -2504,6 +2528,30 @@ public partial class Main : Node2D
 
         _relationship.Restore(relationRecords, save.AppliedRelationKeys);
 
+        // ── 第四阶段 M4：摊位 / 购买幂等键 / 每日购物闸门 ──
+        // 摊位必须先于“英雄重建”之后恢复：Restore 本身只存目录，
+        // 但读档后的购买要通过 _heroLookup 找到新 Agent —— 那个委托每次调用都重新查
+        // _heroes，所以这里恢复目录即可，不持有旧 Agent 引用。
+        // 库存是「已经从背包挪走的货」：不恢复，这些货会既不在背包也不在摊位。
+        var stallRecords = new List<ClaudeCodeGameStudios.Domain.Stall.Stall>(save.Stalls.Count);
+        foreach (var s in save.Stalls)
+        {
+            stallRecords.Add(ClaudeCodeGameStudios.Domain.Stall.Stall.Restore(
+                new HeroId(s.OwnerId),
+                new ClaudeCodeGameStudios.Domain.Items.ItemId(s.ItemId),
+                s.Stock,
+                s.UnitPrice,
+                ParseStallStatus(s.Status),
+                s.SimTime,
+                s.GridX,
+                s.GridY));
+        }
+
+        _stallService.Restore(stallRecords, save.AppliedPurchaseKeys);
+
+        // 每日购物闸门：读档回到存档那天，同一天不应再跑一遍尝试。
+        _dailyShopping.RestoreLastRunDay(save.DailyShoppingLastRunDay);
+
         // ── 事件管道重置（M0 审计 R-04）──
         // 读档是换一个世界：旧事件/旧杂谈继续参与去重，会让跨档复用的事件 ID
         // 被 EventLog 静默丢弃（「关系发生了，但杂谈里没有」）。这里整体换新。
@@ -2530,6 +2578,23 @@ public partial class Main : Node2D
 
         Refresh();
     }
+
+    /// <summary>
+    /// 存档里的摊位状态串 → 领域枚举。<b>只接受 <c>SaveValidator</c> 已放行的三种</b>。
+    /// </summary>
+    /// <remarks>
+    /// 校验器已经拒绝了未知状态；走到这里的未知值只可能是“校验器与解析器不同步”，
+    /// 那是应当炸掉的编程错误 —— 兜底成 Open 会读出一个比存档更“乐观”的世界。
+    /// </remarks>
+    private static ClaudeCodeGameStudios.Domain.Stall.StallStatus ParseStallStatus(string status)
+        => status switch
+        {
+            "Open" => ClaudeCodeGameStudios.Domain.Stall.StallStatus.Open,
+            "SoldOut" => ClaudeCodeGameStudios.Domain.Stall.StallStatus.SoldOut,
+            "Closed" => ClaudeCodeGameStudios.Domain.Stall.StallStatus.Closed,
+            _ => throw new InvalidOperationException(
+                $"存档校验通过却出现未知摊位状态「{status}」—— 这是应当炸掉的编程错误，不是可兜底的状况。"),
+        };
 
     private bool _saveTestDone;
 
@@ -2558,6 +2623,48 @@ public partial class Main : Node2D
             _states[2].MarkFirstDungeonCompleted();
         }
 
+        // ── M4：先摆出「必须被读档恢复」的经济状态 ──
+        // 开一个摊（货从背包挪进 Stall.Stock），用固定请求键买一次，
+        // 再把买家的 LastShoppingDay 设成今天（模拟“今天已经自主购物过”）。
+        string? stallItemId = null;
+        long stallStockBefore = 0;
+        bool stallPrepared = false;
+        if (_heroes.Count >= 2)
+        {
+            var seller = _heroes[0];
+            var buyer = _heroes[1];
+            var stallItem = new ClaudeCodeGameStudios.Domain.Items.ItemId("石料");
+
+            _itemGrant.Grant(seller.Id, stallItem, 10);
+            var placed = _stallService.PlaceStall(seller.Id, stallItem, 10, _clock.Now);
+            if (placed is not null)
+            {
+                var buy = _stallService.TryBuy(
+                    seller.Id, buyer.Id, stallItem, 2, _clock.Now, "saverun-1");
+                buyer.LastShoppingDay = (int)_clock.Day;   // 模拟“今天已经自主购物过”
+                stallItemId = stallItem.Value;
+                stallStockBefore = _stallService.GetStall(seller.Id)?.Stock ?? -1;
+                stallPrepared = buy.Bought;
+            }
+
+            GD.Print($"SAVETEST M4 准备：开摊={(placed is null ? "FAIL" : "OK")}，" +
+                     $"购买={(stallPrepared ? "Bought" : "FAIL")}，摊位库存={stallStockBefore}，" +
+                     $"每日购物日={_dailyShopping.LastRunDay}，" +
+                     $"买家LastShoppingDay={buyer.LastShoppingDay}");
+        }
+
+        // 英雄两套描述（HeroAgent / HeroState.Definition）的 id 必须一致 ——
+        // 摊位 OwnerId 来自 Agent，存档引用校验查的是 Definition。M4 之前两者差 1 却没东西引用。
+        bool idsAligned = _heroes.Count == _states.Count;
+        for (int i = 0; idsAligned && i < _heroes.Count; i++)
+        {
+            idsAligned = _heroes[i].Id.Value == _states[i].Definition.Id.Value;
+        }
+
+        GD.Print($"SAVETEST 英雄 Id 对齐（Agent ↔ Definition）= {idsAligned}" +
+                 (idsAligned ? "" :
+                     $"：{string.Join("、", _heroes.Select((h, i) => $"{h.Name} {h.Id.Value}/{_states[i].Definition.Id.Value}"))}"));
+
         var save = BuildSave();
         GD.Print($"SAVETEST 存档路径 = {_saves.FilePath}");
         GD.Print($"SAVETEST 将写入：版本 {save.Version} 模拟时间 {save.SimTime:0.###}" +
@@ -2566,6 +2673,11 @@ public partial class Main : Node2D
                  $"（{string.Join("、", save.Heroes.Select(h => h.Name))}）" +
                  $" 资源 {{{string.Join(", ", save.Village.Resources.Select(kv => kv.Key + ":" + kv.Value))}}}" +
                  $" 已结算键 {save.AppliedSettlementKeys.Count} 个");
+        GD.Print($"SAVETEST 将写入：摊位 {save.Stalls.Count} 个" +
+                 $"（{string.Join("、", save.Stalls.Select(s => $"{s.OwnerId}:{s.ItemId}×{s.Stock}@{s.Status}"))}），" +
+                 $"购买幂等键 {save.AppliedPurchaseKeys.Count} 个" +
+                 $"（{string.Join("、", save.AppliedPurchaseKeys)}），" +
+                 $"每日购物日 {save.DailyShoppingLastRunDay}");
 
         try
         {
@@ -2586,7 +2698,15 @@ public partial class Main : Node2D
         _villageModel.TrySpend(MaterialsId, matBefore);
         _clock.SetSimTime(_clock.Now + 500);
         ulong rngBefore = _rng.State;
-        GD.Print($"SAVETEST 故意搅乱：材料 {matBefore} → {Mat}，队伍「{squadBefore}」已拆散，随机状态已推进");
+        // M4：把摊位 / 幂等键 / 每日购物状态也搅乱 ——
+        // 它们必须是被读档「找回来」的，而不是本来就在内存里。
+        _stallService.Restore(
+            Array.Empty<ClaudeCodeGameStudios.Domain.Stall.Stall>(),
+            Array.Empty<string>());
+        _dailyShopping.RestoreLastRunDay(int.MinValue);
+        if (_heroes.Count >= 2) _heroes[1].LastShoppingDay = 0;
+        GD.Print($"SAVETEST 故意搅乱：材料 {matBefore} → {Mat}，队伍「{squadBefore}」已拆散，" +
+                 $"摊位已清空、每日购物闸门与 LastShoppingDay 已清零，随机状态已推进");
 
         // ── 读档 ──
         var loaded = _saves.Read();
@@ -2622,6 +2742,43 @@ public partial class Main : Node2D
                      $"随队 {away.Presence}（应为 OnMission）→ {awayOk}；" +
                      $"首通 {firstDungeon.HasCompletedFirstDungeon}（应为 True）→ {firstOk}");
             GD.Print(actingOk && awayOk && firstOk ? "SAVETEST R-03 PASS" : "SAVETEST R-03 FAIL");
+        }
+
+        // ── M4：摊位 / 购买幂等键 / 每日购物状态是否真的恢复 ──
+        // 只断「字段读回来了」不够：真正的性质是**读档后重放同一请求键不会再次扣款/发货**。
+        if (stallPrepared && stallItemId is not null)
+        {
+            var seller = _heroes[0];
+            var buyer = _heroes[1];
+            var restoredStall = _stallService.GetStall(seller.Id);
+
+            bool stallOk = restoredStall is not null
+                           && restoredStall.ItemId.Value == stallItemId
+                           && restoredStall.Stock == stallStockBefore
+                           && restoredStall.Status
+                              == ClaudeCodeGameStudios.Domain.Stall.StallStatus.Open;
+            bool keyOk = _stallService.AppliedRequestIds.Contains("saverun-1");
+            bool lastShoppingOk = buyer.LastShoppingDay == (int)_clock.Day;
+            bool gateOk = _dailyShopping.LastRunDay == save.DailyShoppingLastRunDay;
+
+            long stockBeforeReplay = restoredStall?.Stock ?? -1;
+            var replay = _stallService.TryBuy(
+                seller.Id, buyer.Id,
+                new ClaudeCodeGameStudios.Domain.Items.ItemId(stallItemId),
+                2, _clock.Now, "saverun-1");
+            long stockAfterReplay = _stallService.GetStall(seller.Id)?.Stock ?? -1;
+            bool replayOk = replay.Outcome
+                                == ClaudeCodeGameStudios.Application.Stall.StallService.BuyOutcome.DuplicateRequest
+                            && stockAfterReplay == stockBeforeReplay;
+
+            GD.Print($"SAVETEST M4 摊位 库存={restoredStall?.Stock}（应为 {stallStockBefore}），" +
+                     $"状态={restoredStall?.Status}（应为 Open），商品={restoredStall?.ItemId.Value}（应为 {stallItemId}）→ {stallOk}；" +
+                     $"幂等键={keyOk}；每日购物日={_dailyShopping.LastRunDay}（应为 {save.DailyShoppingLastRunDay}）→ {gateOk}；" +
+                     $"买家LastShoppingDay={buyer.LastShoppingDay}（应为 {(int)_clock.Day}）→ {lastShoppingOk}");
+            GD.Print($"SAVETEST M4 读档后重放购买键 {replay.Outcome}" +
+                     $"（必须 DuplicateRequest），库存 {stockBeforeReplay} → {stockAfterReplay}（必须不变）→ {replayOk}");
+            GD.Print(idsAligned && stallOk && keyOk && lastShoppingOk && gateOk && replayOk
+                ? "SAVETEST M4 PASS" : "SAVETEST M4 FAIL");
         }
 
         // ── M6 与 M7 的接缝真正生效了吗 ──

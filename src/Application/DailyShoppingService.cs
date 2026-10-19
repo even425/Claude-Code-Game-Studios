@@ -36,6 +36,27 @@ public sealed class DailyShoppingService
     public int LastRunDay => _lastRunDay;
 
     /// <summary>
+    /// 恢复「上一次已尝试的游戏日」——<b>仅供读档</b>。
+    /// </summary>
+    /// <remarks>
+    /// 不恢复它，读档后同一天会再跑一遍「每人最多买一次」的尝试：
+    /// 已经成交的人会被 <c>LastShoppingDay</c> 挡住，但当天还没成交的人会多一次机会，
+    /// 读档前后世界不一致。走本方法而不是公开 setter，让“只有一个入口”保持可见。
+    /// </remarks>
+    /// <param name="day">游戏日号（第 1 天起）；<see cref="int.MinValue"/> = 从未运行。</param>
+    /// <exception cref="ArgumentOutOfRangeException">日号既不是 int.MinValue，也不是 ≥ 1 的合法日号。</exception>
+    public void RestoreLastRunDay(int day)
+    {
+        if (day != int.MinValue && day < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(day), day, "日号必须 ≥ 1（第一天），或 int.MinValue 表示从未运行。");
+        }
+
+        _lastRunDay = day;
+    }
+
+    /// <summary>
     /// 跑一个游戏日的自主购物；<b>同一游戏日第二次调用返回空列表</b>。
     /// </summary>
     /// <param name="today">游戏日序号（<c>VillageClock.Day</c>）。</param>

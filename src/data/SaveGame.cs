@@ -8,13 +8,14 @@ namespace ClaudeCodeGameStudios.Data;
 /// <summary>存档格式版本。基线 §13.7 要求存档带版本号并有迁移入口。</summary>
 public readonly record struct SaveVersion(int Major, int Minor)
 {
-    /// <summary>当前版本。<b>【已确认】</b>(0,3) —— 第三阶段 M6 升。</summary>
+    /// <summary>当前版本。<b>【已确认】</b>(0,4) —— 第四阶段 M4 升。</summary>
     /// <remarks>
-    /// <b>0,2 → 0,3</b>（`07` D-036 / P3-D10）：存档里增
-    /// <see cref="SaveGame.Relationships"/> 与 <see cref="SaveGame.AppliedRelationKeys"/>。
-    /// 旧档<b>整份拒绝</b>（I11 + D-021/D-029 先例），<b>不</b>写迁移器。
+    /// <b>0,3 → 0,4</b>（`07` D-044 / 第四阶段 M4）：存档里增
+    /// <see cref="SaveGame.Stalls"/>、<see cref="SaveGame.AppliedPurchaseKeys"/>、
+    /// <see cref="SaveGame.DailyShoppingLastRunDay"/> 与 <see cref="HeroSave.LastShoppingDay"/>。
+    /// 旧档<b>整份拒绝</b>（I11 + D-021/D-029/D-036 先例），<b>不</b>写迁移器。
     /// </remarks>
-    public static SaveVersion Current => new(0, 3);
+    public static SaveVersion Current => new(0, 4);
 
     /// <inheritdoc />
     public override string ToString() => $"{Major}.{Minor}";
@@ -149,6 +150,15 @@ public sealed class HeroSave
     /// 空列表 = 背包空。
     /// </remarks>
     public List<BagEntrySave> Bag { get; set; } = new();
+
+    /// <summary>
+    /// 该英雄上次<b>自主购物成交</b>的游戏日号（0 = 从未购过）。<b>0,4 新增</b>（D-044）。
+    /// </summary>
+    /// <remarks>
+    /// 不存它，读档后 <c>HeroBehaviorService</c> 就不知道「这个人今天已经买过」，
+    /// 同一名英雄会在同一天再成交一次 —— 钱和货都会被重复搬运（D-025 每英雄每天 ≤ 1 次）。
+    /// </remarks>
+    public int LastShoppingDay { get; set; }
 }
 
 /// <summary>
@@ -184,6 +194,44 @@ public sealed class RelationshipSave
 
     /// <summary>关系值，范围与 <see cref="Relationship"/> 相同（[-100, +100]）。</summary>
     public int Value { get; set; }
+}
+
+/// <summary>
+/// 存档里的一个摊位（<b>0,4 新增</b>，第四阶段 M4 / D-044）。
+/// </summary>
+/// <remarks>
+/// <para><b>为什么必须存摊位</b>：摆摊时货已经从英雄背包<b>挪进</b> <c>Stall.Stock</c>
+/// （P2-D06）。不存摊位，读档后这些货既不在背包、也不在摊位 —— 凭空蒸发，
+/// 而玩家只看到「东西没了」。</para>
+/// <para><b>一人一摊</b>（D-023 / P2-D04）：<see cref="OwnerId"/> 在整个列表中唯一，
+/// 由 <see cref="SaveValidator"/> 守。</para>
+/// <para>扁平字段而非字典，理由与 <see cref="BagEntrySave"/> 相同：字段名稳定、可读。</para>
+/// </remarks>
+public sealed class StallSave
+{
+    /// <summary>摊主英雄 ID。必须能在 <see cref="SaveGame.Heroes"/> 中找到，且唯一。</summary>
+    public string OwnerId { get; set; } = "";
+
+    /// <summary>摊位商品 Id（一摊一物）。</summary>
+    public string ItemId { get; set; } = "";
+
+    /// <summary>摊位库存。<b>必须 ≥ 0</b>（0 = 已售罄或已收摊）。</summary>
+    public long Stock { get; set; }
+
+    /// <summary>单价（开摊时锁定）。<b>必须 ≥ 0</b>（0 = 白送，合法）。</summary>
+    public long UnitPrice { get; set; }
+
+    /// <summary>状态字符串：<c>Open</c> / <c>SoldOut</c> / <c>Closed</c>。</summary>
+    public string Status { get; set; } = "Open";
+
+    /// <summary>开摊时间（模拟秒）。<b>必须是非负有限数。</b></summary>
+    public double SimTime { get; set; }
+
+    /// <summary>摊位所在格位 X（M5 / D-033，v1 为 1×1 占用）。</summary>
+    public int GridX { get; set; }
+
+    /// <summary>摊位所在格位 Y。</summary>
+    public int GridY { get; set; }
 }
 
 /// <summary>存档里的一个任务。</summary>
@@ -276,6 +324,39 @@ public sealed class SaveGame
     /// 旧档缺此字段 → 整份拒绝（I11 + D-021）。
     /// </remarks>
     public List<string> AppliedTradeKeys { get; set; } = new();
+
+    /// <summary>
+    /// 已应用的购买业务请求键（<b>0,4 新增</b>，第四阶段 M4 / D-044）。
+    /// </summary>
+    /// <remarks>
+    /// <para>对应 <c>StallService.TryBuy(..., requestId)</c> 的幂等键。
+    /// <b>必须落盘</b>：读档后同一请求键必须仍被识别为重复，
+    /// 否则一次「读档 → 重放」就会再扣一次款、再发一次货。</para>
+    /// <para><b>不是</b> <see cref="AppliedTradeKeys"/>：后者是 <c>TradeId</c> 空间，
+    /// 留给尚未接线的英雄↔英雄直接交易（D-038 的 R-01/R-02），当前恒为空。
+    /// 把 requestId 塞进那个字段会让两个键空间混在一起、以后无法区分。</para>
+    /// </remarks>
+    public List<string> AppliedPurchaseKeys { get; set; } = new();
+
+    /// <summary>
+    /// 每日自主购物最近一次尝试的游戏日（<b>0,4 新增</b>，D-044）。
+    /// </summary>
+    /// <remarks>
+    /// <c>DailyShoppingService</c> 的同日闸门：<see cref="int.MinValue"/> = 从未运行。
+    /// 不存它，读档后<b>同一天</b>会再跑一遍「每人最多买一次」的尝试 ——
+    /// 已经成交的人由 <see cref="HeroSave.LastShoppingDay"/> 挡住，但当天还没成交的人
+    /// 会多一次机会，读档前后世界不一致。
+    /// </remarks>
+    public int DailyShoppingLastRunDay { get; set; } = int.MinValue;
+
+    /// <summary>
+    /// 摊位列表（<b>0,4 新增</b>，D-044）。
+    /// </summary>
+    /// <remarks>
+    /// 每个英雄<b>至多一个</b>摊位（按 <see cref="StallSave.OwnerId"/> 唯一）。
+    /// 空列表 = 村里没有摊位。
+    /// </remarks>
+    public List<StallSave> Stalls { get; set; } = new();
 
     /// <summary>
     /// 英雄之间的有向关系（0,3 新增，第三阶段 / P3-D10）。
@@ -389,6 +470,14 @@ public static class SaveValidator
                 errors.Add(new SaveError(
                     $"{path}.remainingActionSeconds",
                     $"行动剩余时长 {h.RemainingActionSeconds} 必须是非负有限数。"));
+            }
+
+            // 自主购物的每日频率状态（0,4 新增，D-044）：日号不能为负。
+            // 0 = 从未购过；负数不是任何合法日号，只可能是损坏。
+            if (h.LastShoppingDay < 0)
+            {
+                errors.Add(new SaveError(
+                    $"{path}.lastShoppingDay", $"上次自主购物日 {h.LastShoppingDay} 为负（0 = 从未购过）。"));
             }
 
             // 随队的人不应同时挂着日常行动（SetOnMission 会释放行动）。
@@ -525,6 +614,83 @@ public static class SaveValidator
             {
                 errors.Add(new SaveError(
                     $"appliedRelationKeys[{i}]", "已应用关系键为空 —— 它不能作为幂等依据。"));
+            }
+        }
+
+        // 购买幂等键（0,4 新增，D-044）：与关系键同一规矩 —— 空串不是幂等依据。
+        for (var i = 0; i < save.AppliedPurchaseKeys.Count; i++)
+        {
+            if (string.IsNullOrWhiteSpace(save.AppliedPurchaseKeys[i]))
+            {
+                errors.Add(new SaveError(
+                    $"appliedPurchaseKeys[{i}]", "已应用购买请求键为空 —— 它不能作为幂等依据。"));
+            }
+        }
+
+        // 每日购物闸门（0,4 新增，D-044）：int.MinValue = 从未运行；其余必须是第 1 天起的日号。
+        if (save.DailyShoppingLastRunDay != int.MinValue && save.DailyShoppingLastRunDay < 1)
+        {
+            errors.Add(new SaveError(
+                "dailyShoppingLastRunDay",
+                $"每日购物最近运行日 {save.DailyShoppingLastRunDay} 非法"
+                + $"（应为第 1 天起的日号，或 {int.MinValue} = 从未运行）。"));
+        }
+
+        // 摊位（0,4 新增，D-044）
+        var stallOwners = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < save.Stalls.Count; i++)
+        {
+            var s = save.Stalls[i];
+            var path = $"stalls[{i}]";
+
+            if (string.IsNullOrEmpty(s.OwnerId))
+            {
+                errors.Add(new SaveError($"{path}.ownerId", "摊主标识为空。"));
+            }
+            else if (!heroIds.Contains(s.OwnerId))
+            {
+                errors.Add(new SaveError(
+                    $"{path}.ownerId", $"摊主「{s.OwnerId}」在英雄列表中不存在 —— 引用断了。"));
+            }
+            else if (!stallOwners.Add(s.OwnerId))
+            {
+                errors.Add(new SaveError(
+                    $"{path}.ownerId", $"同一摊主出现多个摊位：{s.OwnerId}（一人一摊）。"));
+            }
+
+            if (string.IsNullOrEmpty(s.ItemId))
+            {
+                errors.Add(new SaveError($"{path}.itemId", "摊位商品标识为空。"));
+            }
+
+            if (s.Stock < 0)
+            {
+                errors.Add(new SaveError($"{path}.stock", $"摊位库存 {s.Stock} 为负。"));
+            }
+            else if (s.Status == "Open" && s.Stock < 1)
+            {
+                // 营业中却无货 = 状态与库存自相矛盾。合法路径在售罄那一刻就转 SoldOut。
+                errors.Add(new SaveError(
+                    $"{path}.stock", "营业中的摊位库存必须 ≥ 1（售罄应改为 SoldOut）。"));
+            }
+
+            if (s.UnitPrice < 0)
+            {
+                errors.Add(new SaveError(
+                    $"{path}.unitPrice", $"摊位单价 {s.UnitPrice} 为负（0 = 白送，合法）。"));
+            }
+
+            if (s.Status != "Open" && s.Status != "SoldOut" && s.Status != "Closed")
+            {
+                errors.Add(new SaveError(
+                    $"{path}.status",
+                    $"摊位状态「{s.Status}」无法识别（只允许 Open / SoldOut / Closed）。"));
+            }
+
+            if (!double.IsFinite(s.SimTime) || s.SimTime < 0.0)
+            {
+                errors.Add(new SaveError(
+                    $"{path}.simTime", $"开摊时间 {s.SimTime} 必须是非负有限数。"));
             }
         }
 

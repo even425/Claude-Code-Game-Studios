@@ -52,6 +52,17 @@ public sealed class StallService
     private readonly PriceBook _book;
     private readonly Func<HeroId, HeroAgent?> _heroLookup;
 
+    /// <summary>
+    /// 已处理的购买业务键（幂等依据，第四阶段 3A；持久化在 M4 接）。
+    /// </summary>
+    /// <remarks>
+    /// 同一业务请求键第二次调用不会再次扣款/发货。键为空 = 调用方不要求幂等（旧行为）。
+    /// </remarks>
+    private readonly HashSet<string> _appliedRequestIds = new(StringComparer.Ordinal);
+
+    /// <summary>已处理的购买业务键（只读，供测试与 M4 持久化使用）。</summary>
+    public IReadOnlyCollection<string> AppliedRequestIds => _appliedRequestIds;
+
     /// <summary>摊位目录（只读）。</summary>
     public IReadOnlyDictionary<HeroId, DomainStall> Stalls => _stalls;
 
@@ -145,6 +156,42 @@ public sealed class StallService
         public required long VillageCut { get; init; }
     }
 
+    /// <summary>一次购买请求的结果分类（3A：把“为什么失败”说清楚）。</summary>
+    public enum BuyOutcome
+    {
+        /// <summary>成交，状态已更新。</summary>
+        Bought = 0,
+        /// <summary>同一业务请求键之前已处理（幂等拒绝）。</summary>
+        DuplicateRequest = 1,
+        /// <summary>入参非法（空 ID、数量 &lt;1、时间非法、英雄不存在等）。</summary>
+        InvalidRequest = 2,
+        /// <summary>买卖双方相同。</summary>
+        SameHero = 3,
+        /// <summary>卖方没有摊位。</summary>
+        NoStall = 4,
+        /// <summary>摊位不在 Open 状态。</summary>
+        StallNotOpen = 5,
+        /// <summary>买的商品与摊位商品不一致。</summary>
+        WrongItem = 6,
+        /// <summary>摊位库存不足。</summary>
+        InsufficientStock = 7,
+        /// <summary>买方金币不足。</summary>
+        CannotAfford = 8,
+        /// <summary>买方背包拒收（容量等）。</summary>
+        BagRejected = 9,
+        /// <summary>卖方钱包拒收（溢出等）。</summary>
+        WalletRejected = 10,
+    }
+
+    /// <summary>一次购买尝试：结果分类 + 成功时的数据（失败为 null）。</summary>
+    /// <param name="Outcome">结果分类。</param>
+    /// <param name="Result">成交时的结果；失败为 null。</param>
+    public readonly record struct BuyAttempt(BuyOutcome Outcome, BuyStallResult? Result)
+    {
+        /// <summary>是否成交。</summary>
+        public bool Bought => Outcome == BuyOutcome.Bought;
+    }
+
     /// <summary>买摊（I15：预检 → 算 → 一次性提交）。</summary>
     /// <remarks>
     /// <para><b>不</b>走 <see cref="DomainTrade.Trade.Apply"/>：<c>Trade.Apply</c> 假设
@@ -153,69 +200,98 @@ public sealed class StallService
     /// <c>Precheck</c> 的"卖方库存够"假拒。摊位的"卖方库存"是 <c>stall.Stock</c>，
     /// 单独走 I15 守门。</para>
     ///
-    /// <para><b>四步提交</b>：</para>
+    /// <para><b>四步提交</b>（顺序为“先无法失败的、后可能失败的”，失败回滚面最小）：</para>
     /// <list type="number">
+    /// <item>村金库入账：<c>Village.Add(金币, villageCut)</c>（villageCut &gt; 0 才调；可能抛溢出）</item>
     /// <item>卖方收钱：<c>Wallet.TryAdd(金币, sellerNet)</c></item>
     /// <item>买方付钱：<c>Wallet.TrySpend(金币, totalAmount)</c></item>
-    /// <item>买方收货：<c>Bag.TryAdd(itemId, qty)</c></item>
-    /// <item>村金库入账：<c>Village.Add(金币, villageCut)</c>（villageCut &gt; 0 才调）</item>
+    /// <item>买方收货：<c>Bag.TryAdd(itemId, qty)</c> + 摊位库存递减</item>
     /// </list>
-    /// <para>任一 null → 全部不变 + 返 null。</para>
+    /// <para>任何一步失败 → 不提交；提交阶段只剩不可失败的赋值。</para>
     /// </remarks>
     /// <param name="seller">摊主。</param>
     /// <param name="buyer">买方英雄。</param>
     /// <param name="itemId">商品（与摊位一致）。</param>
     /// <param name="qty">买几份（≥ 1）。</param>
-    /// <param name="simTime">成交时间（模拟秒）。<b>不再需要 runId</b>（不走 TradeId 幂等）。</param>
+    /// <param name="simTime">成交时间（模拟秒）。</param>
+    /// <returns>成功三件套；失败 null。</returns>
     public BuyStallResult? BuyFromStall(
         HeroId seller, HeroId buyer, ItemId itemId, long qty, double simTime)
+        => TryBuy(seller, buyer, itemId, qty, simTime, requestId: "").Result;
+
+    /// <summary>
+    /// 买摊（带结果分类与可选业务幂等键）。
+    /// </summary>
+    /// <param name="seller">摊主。</param>
+    /// <param name="buyer">买方英雄。</param>
+    /// <param name="itemId">商品（与摊位一致）。</param>
+    /// <param name="qty">买几份（≥ 1）。</param>
+    /// <param name="simTime">成交时间（模拟秒）。</param>
+    /// <param name="requestId">
+    /// 业务请求键。非空时同一键只成交一次（幂等）；空串/空白 = 不做幂等（旧行为）。
+    /// <b>不是</b> <c>TradeId</c>：摊位购买走本方法，不伪造 TradeId。
+    /// </param>
+    /// <returns>结果分类；失败时状态不变。</returns>
+    public BuyAttempt TryBuy(
+        HeroId seller, HeroId buyer, ItemId itemId, long qty, double simTime,
+        string requestId = "")
     {
-        // 入参防线
-        if (string.IsNullOrEmpty(seller.Value)) return null;
-        if (string.IsNullOrEmpty(buyer.Value)) return null;
-        if (seller == buyer) return null;
-        if (string.IsNullOrEmpty(itemId.Value)) return null;
-        if (qty < 1) return null;
-        if (simTime < 0.0 || double.IsNaN(simTime) || double.IsInfinity(simTime)) return null;
+        // ── 入参防线 ──
+        if (string.IsNullOrEmpty(seller.Value)) return new(BuyOutcome.InvalidRequest, null);
+        if (string.IsNullOrEmpty(buyer.Value)) return new(BuyOutcome.InvalidRequest, null);
+        if (seller == buyer) return new(BuyOutcome.SameHero, null);
+        if (string.IsNullOrEmpty(itemId.Value)) return new(BuyOutcome.InvalidRequest, null);
+        if (qty < 1) return new(BuyOutcome.InvalidRequest, null);
+        if (simTime < 0.0 || double.IsNaN(simTime) || double.IsInfinity(simTime))
+            return new(BuyOutcome.InvalidRequest, null);
 
-        // 摊位 + 状态
-        if (!_stalls.TryGetValue(seller, out var stall)) return null;
-        if (stall.Status != DomainStallStatus.Open) return null;
-        if (stall.ItemId != itemId) return null;
-        if (stall.Stock < qty) return null;
+        bool useRequestKey = !string.IsNullOrWhiteSpace(requestId);
+        if (useRequestKey && _appliedRequestIds.Contains(requestId))
+        {
+            return new(BuyOutcome.DuplicateRequest, null);
+        }
 
-        // 双方英雄
+        // ── 摊位 + 状态 ──
+        if (!_stalls.TryGetValue(seller, out var stall)) return new(BuyOutcome.NoStall, null);
+        if (stall.Status != DomainStallStatus.Open) return new(BuyOutcome.StallNotOpen, null);
+        if (stall.ItemId != itemId) return new(BuyOutcome.WrongItem, null);
+        if (stall.Stock < qty) return new(BuyOutcome.InsufficientStock, null);
+
+        // ── 双方英雄 ──
         var sellerHero = _heroLookup(seller);
         var buyerHero = _heroLookup(buyer);
-        if (sellerHero is null || buyerHero is null) return null;
+        if (sellerHero is null || buyerHero is null) return new(BuyOutcome.InvalidRequest, null);
 
-        // 算金额 + 拆 5%
+        // ── 算金额 + 拆 5% ──
         long totalAmount = stall.UnitPrice * qty;
         var (sellerNet, villageCut) = DomainStallFee.Compute(totalAmount);
 
-        // ── I15 预检：所有 TryAdd/TrySpend/TryAdd 都能成？─────────────────
-        // 1. 卖方收钱（加钱不可能失败，但跑一手守门）
+        // ── 预检 + 一次性提交（I15）──
         var newSellerWallet = sellerHero.Wallet.TryAdd(Gold, sellerNet);
-        if (newSellerWallet is null) return null;
-        // 2. 买方付钱
+        if (newSellerWallet is null) return new(BuyOutcome.WalletRejected, null);
+
         var newBuyerWallet = buyerHero.Wallet.TrySpend(Gold, totalAmount);
-        if (newBuyerWallet is null) return null;
-        // 3. 买方收货
+        if (newBuyerWallet is null) return new(BuyOutcome.CannotAfford, null);
+
         var newBuyerBag = buyerHero.Bag.TryAdd(itemId, qty);
-        if (newBuyerBag is null) return null;
-        // 4. 摊位库存递减
+        if (newBuyerBag is null) return new(BuyOutcome.BagRejected, null);
+
         var newStall = stall.AfterSale(qty);
 
-        // ── 全有或全无：四个都拿到了，提交 ──
-        sellerHero.ApplyTradeResult(newSellerWallet, sellerHero.Bag);   // 只换 Wallet
-        buyerHero.ApplyTradeResult(newBuyerWallet, newBuyerBag);          // 双换
-        _stalls[seller] = newStall;
+        // 村金库先写：它是唯一可能抛的一步。它失败 = 什么都没写。
         if (villageCut > 0)
         {
             _village.Add(Gold, villageCut);
         }
 
-        return new BuyStallResult
+        // 以下全是不可失败的赋值 —— 到这里已经没有半笔账的路径。
+        sellerHero.ApplyTradeResult(newSellerWallet, sellerHero.Bag);   // 只换 Wallet
+        buyerHero.ApplyTradeResult(newBuyerWallet, newBuyerBag);          // 双换
+        _stalls[seller] = newStall;
+
+        if (useRequestKey) _appliedRequestIds.Add(requestId);
+
+        return new BuyAttempt(BuyOutcome.Bought, new BuyStallResult
         {
             Seller = seller,
             Buyer = buyer,
@@ -223,7 +299,7 @@ public sealed class StallService
             TotalAmount = totalAmount,
             SellerNet = sellerNet,
             VillageCut = villageCut,
-        };
+        });
     }
 
     /// <summary>收摊：状态变 Closed。<b>不</b>动英雄背包（库存归 0 时也是 Closed 而非"丢货"）。</summary>

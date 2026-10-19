@@ -793,6 +793,7 @@ public partial class Main : Node2D
         if (OS.GetCmdlineUserArgs().Contains("--relations") && !_relationsTestDone) RunRelationsSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--grant=", StringComparison.Ordinal)) && !_grantTestDone)
             RunGrantSelfTest();
+        if (OS.GetCmdlineUserArgs().Contains("--trade") && !_tradeTestDone) RunTradeSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a is "--save" or "--load") && !_saveTestDone)
         {
             RunSaveSelfTest();
@@ -1774,6 +1775,91 @@ public partial class Main : Node2D
     }
 
     private bool _dungeonTestDone;
+    private bool _tradeTestDone;
+
+    /// <summary>
+    /// <c>--trade</c>：第四阶段 3A 真机自检 —— 发物品 → 开摊 → 手动购买 → 失败场景。
+    /// </summary>
+    /// <remarks>
+    /// <para>覆盖：成功购买（双方货币/背包/摊位库存/村库费用）、重复请求幂等、
+    /// 库存不足、余额不足；每个失败场景都检查状态不变（无部分结算）。</para>
+    /// <para>走的是生产代码路径：<see cref="ItemGrantService.Grant"/>、
+    /// <c>StallService.PlaceStall</c>、<c>StallService.TryBuy</c>，不是复制品。</para>
+    /// </remarks>
+    private void RunTradeSelfTest()
+    {
+        _tradeTestDone = true;
+
+        if (_states.Count < 2)
+        {
+            GD.Print("TRADETEST FAIL 英雄不足 2 人，无法验证买卖。");
+            return;
+        }
+
+        var seller = _heroes[0];
+        var buyer = _heroes[1];
+        var item = new ClaudeCodeGameStudios.Domain.Items.ItemId("石料");
+        var gold = ClaudeCodeGameStudios.Application.Stall.StallService.Gold;
+
+        long sellerGold0 = seller.Wallet.Amount(gold);
+        long buyerGold0 = buyer.Wallet.Amount(gold);
+        long villageGold0 = _villageModel.Get(gold);
+
+        // 1. 测试配给 + 开摊
+        var grant = _itemGrant.Grant(seller.Id, item, 5);
+        var placed = _stallService.PlaceStall(seller.Id, item, 5, _clock.Now);
+        GD.Print($"TRADETEST 配给={grant.Result}，开摊={(placed is null ? "FAIL" : "OK")}");
+        if (!grant.Granted || placed is null)
+        {
+            GD.Print("TRADETEST FAIL 无法准备交易场景");
+            return;
+        }
+
+        // 2. 成功购买 2 份
+        var buy = _stallService.TryBuy(seller.Id, buyer.Id, item, 2, _clock.Now, "traderun-1");
+        long stockAfterBuy = _stallService.GetStall(seller.Id)?.Stock ?? -1;
+        long sellerGold1 = seller.Wallet.Amount(gold);
+        long buyerGold1 = buyer.Wallet.Amount(gold);
+        long villageGold1 = _villageModel.Get(gold);
+        bool buyOk = buy.Bought
+                     && buyerGold0 - buyerGold1 == 10
+                     && sellerGold1 - sellerGold0 == 10   // 10×5% floor = 0，全归卖家
+                     && buyer.Bag.Count(item) == 2
+                     && stockAfterBuy == 3
+                     && villageGold1 == villageGold0;     // 村费为 0
+        GD.Print($"TRADETEST 购买={buy.Outcome}，卖家金 {sellerGold0}→{sellerGold1}，" +
+                 $"买家金 {buyerGold0}→{buyerGold1}，买家背包={buyer.Bag.Count(item)}，" +
+                 $"摊位库存={stockAfterBuy}，村金 {villageGold0}→{villageGold1} → {buyOk}");
+
+        // 3. 重复同一请求键：幂等，状态不变
+        var dup = _stallService.TryBuy(seller.Id, buyer.Id, item, 2, _clock.Now, "traderun-1");
+        bool dupOk = dup.Outcome == ClaudeCodeGameStudios.Application.Stall.StallService.BuyOutcome.DuplicateRequest
+                     && seller.Wallet.Amount(gold) == sellerGold1
+                     && buyer.Wallet.Amount(gold) == buyerGold1
+                     && buyer.Bag.Count(item) == 2
+                     && (_stallService.GetStall(seller.Id)?.Stock ?? -1) == 3;
+        GD.Print($"TRADETEST 重复请求={dup.Outcome}，状态不变={dupOk}");
+
+        // 4. 库存不足：状态不变
+        var shortStock = _stallService.TryBuy(seller.Id, buyer.Id, item, 999, _clock.Now, "traderun-2");
+        bool stockOk = shortStock.Outcome ==
+                       ClaudeCodeGameStudios.Application.Stall.StallService.BuyOutcome.InsufficientStock
+                       && (_stallService.GetStall(seller.Id)?.Stock ?? -1) == 3
+                       && buyer.Wallet.Amount(gold) == buyerGold1;
+
+        // 5. 余额不足：把买家金币压到 5，再买 2 份（需 10）→ 拒绝且状态不变
+        buyer.TrySpendResource(gold, buyerGold1 - 5);
+        var poor = _stallService.TryBuy(seller.Id, buyer.Id, item, 2, _clock.Now, "traderun-3");
+        bool poorOk = poor.Outcome ==
+                      ClaudeCodeGameStudios.Application.Stall.StallService.BuyOutcome.CannotAfford
+                      && buyer.Wallet.Amount(gold) == 5
+                      && (_stallService.GetStall(seller.Id)?.Stock ?? -1) == 3
+                      && buyer.Bag.Count(item) == 2;
+
+        GD.Print($"TRADETEST 库存不足={shortStock.Outcome}/{stockOk}，余额不足={poor.Outcome}/{poorOk}");
+        GD.Print(buyOk && dupOk && stockOk && poorOk ? "TRADETEST PASS" : "TRADETEST FAIL");
+    }
+
     private bool _grantTestDone;
 
     /// <summary>

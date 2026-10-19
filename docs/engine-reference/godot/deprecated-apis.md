@@ -1,9 +1,37 @@
 # Godot — Deprecated APIs
 
-Last verified: 2026-02-12
+Last verified: 2026-10-17 (4.7 deprecations still NOT ESTABLISHED — see below)
 
 If an agent suggests any API in the "Deprecated" column, it MUST be replaced
 with the "Use Instead" column.
+
+## 4.7 Deprecations — NOT ESTABLISHED
+
+**This table is empty because nothing could be sourced, NOT because 4.7
+deprecated nothing.** Those are opposite conclusions and the difference decides
+whether an agent may trust a blank row.
+
+**NOT SOURCEABLE — Godot 4.7's deprecation list.** Two obstacles, both still in
+place on 2026-10-17:
+
+1. WebFetch is blocked for `docs.godotengine.org`, `godotengine.org` and
+   `raw.githubusercontent.com`, so the migration guide cannot be read.
+2. The differential engine probe used for `breaking-changes.md` cannot answer
+   this question — it compares APIs that *exist*, not ones that were *removed*.
+   Enumerating removals needs the deprecation list itself.
+
+What the probe did observe, which is **suggestive but not evidence of absence**:
+every API it checked that differs between 4.6 and 4.7.2 changed by **addition**
+(`AreaLight3D` added; `DEVICE_ID_MOUSE`/`_KEYBOARD` added;
+`AnimationNodeBlendSpace2D.SYNC_MODE_*` added) — none by removal. Three classes
+sampled is a very narrow sample, and a feature release carrying mostly additions
+is exactly what you would expect from a release that also changed the headline
+features. **This does not substitute for the table below being filled in.**
+
+An agent proposing a 4.7-era API must say it is unverified against this file
+rather than reading the absence as approval. To fill this in, read
+`https://docs.godotengine.org/en/4.7/tutorials/migrating/upgrading_to_godot_4.7.html`
+when WebFetch works again.
 
 ## Nodes & Classes
 

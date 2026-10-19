@@ -1,8 +1,58 @@
 # Godot — Breaking Changes
 
-Last verified: 2026-02-12
+Last verified: 2026-10-17 (the 4.6 → 4.7 section was tested against both engine binaries, not the docs — read its header)
 
 Changes between Godot versions, focused on post-LLM-cutoff changes (4.4+).
+
+## 4.6 → 4.7 (June 2026 — POST-CUTOFF, HIGH RISK)
+
+> **SOURCE: engine binaries, 2026-10-17.** WebFetch was blocked for
+> `docs.godotengine.org`, `godotengine.org` and `raw.githubusercontent.com`, so
+> the migration guide could not be read. Instead each claim below was tested
+> headlessly against **both** installed engines — 4.6 (`89cea1439`) and 4.7.2
+> (`ed1daf0bf`). 6 checks: **4 confirmed, 2 refuted.** The refuted ones are
+> marked and must not be acted on.
+>
+> Re-verify anything here that matters to you, using the same method:
+> `godot --headless --path . -s <probe>.gd` on each version.
+
+### CONFIRMED by differential test
+
+| Subsystem | Change | Evidence | Affects this 2D project? |
+|-----------|--------|----------|---------------------------|
+| Input | **`InputEvent.DEVICE_ID_MOUSE` and `DEVICE_ID_KEYBOARD` added** — `32` and `16` | **4.6: parse error** ("Cannot find member DEVICE_ID_MOUSE in base InputEvent"). **4.7.2: both resolve**, to 32 and 16. | **YES** — never hardcode device id `0`; use the named constants |
+| 3D | **`AreaLight3D` class added** | `ClassDB.class_exists("AreaLight3D")` → `false` on 4.6, `true` on 4.7.2 | No — 2D project |
+| Animation | **`AnimationNodeBlendSpace2D` gained a `SyncMode` enum** | Integer constants on 4.6: `BLEND_MODE_INTERPOLATED`, `BLEND_MODE_DISCRETE`, `BLEND_MODE_DISCRETE_CARRY`. On 4.7.2 those three **plus** `SYNC_MODE_NONE`, `SYNC_MODE_INDEPENDENT`, `SYNC_MODE_CYCLIC_MUTABLE`, `SYNC_MODE_CYCLIC_CONSTANT`. | Only if used |
+
+### REFUTED — do not act on these
+
+| Claim that circulated | What the engines actually show |
+|---|---|
+| "`AudioStreamPlayer.area_mask` default changed from `1` to `0`, silently breaking `audio_bus_override` on Area2D/Area3D" | **The property does not exist in either version.** `ClassDB.class_get_property_list("AudioStreamPlayer")` on 4.7.2 returns exactly: `stream, volume_db, volume_linear, pitch_scale, playing, autoplay, stream_paused, mix_target, max_polyphony, bus, playback_type`. No `area_mask` on 4.6 either. This is not a default change and not a removal — the premise is false. If you hit a bug described this way, the diagnosis is wrong somewhere else. |
+| "New projects now default to stretch mode `canvas_items` / aspect `expand`" | **Unchanged.** A fresh project reports `display/window/stretch/mode` = `disabled` and `aspect` = `keep` on **both** 4.6 and 4.7.2. |
+
+> The stretch row was read from a project with no stretch settings, i.e. the
+> engine default in effect — not copied from official documentation, which
+> remains unreachable. It is labelled accordingly rather than presented as
+> documented fact.
+
+### NOT SOURCEABLE — could not be tested headlessly
+
+Not observable through `ClassDB` / `ProjectSettings` from a script, and the
+migration guide is unreachable. **Do not assume these are false — they are
+unchecked.** All are 3D, web, or platform areas this project does not use.
+
+- Jolt `SoftBody3D` mass default change
+- Jolt `WorldBoundaryShape3D.plane.d` sign flip
+- Vulkan push-constant padding rules for custom compositor effects
+- Android OBB support removal
+- `class_name` in built-in scripts being re-enforced as a parse error
+- Shader preprocessor macro restrictions
+- Audio spectrum analyzer API changes; particle angular velocity corrections
+
+If one of these becomes relevant, consult
+`https://docs.godotengine.org/en/4.7/tutorials/migrating/upgrading_to_godot_4.7.html`
+when WebFetch works again.
 
 ## 4.5 → 4.6 (Jan 2026 — POST-CUTOFF, HIGH RISK)
 

@@ -1,0 +1,42 @@
+; Godot project file — created by /setup-engine 2026-10-16.
+;
+; VERIFIED 2026-10-17: `godot --headless --path . --import` ran clean against
+; Godot 4.7.2.stable.official (exit 0, no ERROR lines, editor layout loaded).
+; Re-verified against the .NET/mono build of 4.7.2 the same day.
+;
+; Re-verify after installing a different editor build — that is a different binary.
+
+config_version=5
+
+[application]
+
+; From the repo directory name. Rename when the game gets its shipping name.
+config/name="村长与冒险者"
+
+; The whole scene tree is built in code from res://src/Main.cs, so the main
+; scene only has to name the root node and attach that one script.
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.7", "C#", "Forward Plus")
+
+[dotnet]
+
+; Godot's C# integration reads this to know which assembly to load at startup.
+; Without it, the .NET build's scripts fail with "Cannot instantiate C# script
+; because the associated class could not be found" — even when the class is
+; plainly present in the compiled DLL. Must match the .csproj file name.
+project/assembly_name="Claude-Code-Game-Studios"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+
+[rendering]
+
+; Forward+ — PC-only, non-web (engine.rendering in project.yaml).
+renderer/rendering_method="forward_plus"
+; 2D stretch is left at the engine default (`disabled` / `keep`), measured on
+; both 4.6 and 4.7.2 on 2026-10-17. For a 2D game that usually wants
+; `canvas_items` / `expand` instead, so this is a deliberate open decision,
+; not an oversight — see production/异世界村庄经营与英雄冒险游戏_设计基线_V1.2.md.
+; Change it deliberately.

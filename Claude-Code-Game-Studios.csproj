@@ -1,0 +1,30 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>ClaudeCodeGameStudios</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    Godot.NET.Sdk globs **/*.cs, so without this the test project's sources
+    (which reference GdUnit4) would be pulled into the GAME assembly and fail
+    to compile there. Keep the test project out of the shipped build.
+  -->
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
+    <None Remove="tests/**/*.cs" />
+  </ItemGroup>
+
+  <!--
+    Tests under tests/ live in a separate assembly and cannot see internal
+    members here unless we opt them in. HeroAgent.RestoreWallet / RestoreBag
+    are internal on purpose (read-load only) but tests must be able to call
+    them to verify "rejected null" / "wallet replaced". So expose just that
+    one assembly. If we ever add more restricted internal members, list them
+    here or move to a friend assembly pattern.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Claude-Code-Game-Studios.Tests" />
+  </ItemGroup>
+</Project>

@@ -1,9 +1,36 @@
 # Godot — Current Best Practices
 
-Last verified: 2026-02-12 | Engine: Godot 4.6
+Last verified: 2026-10-17 | Engine: Godot 4.7.2 (pin and installed version agree — see VERSION.md)
 
-Practices that are **new or changed** since the model's training data (~4.3).
+Practices that are **new or changed** since the model's training data.
 This supplements (not replaces) the agent's built-in knowledge.
+
+## Godot 4.7 Additions
+
+> **Split provenance — read which is which.**
+>
+> **Engine-verified 2026-10-17** (tested against both 4.6 and 4.7.2 binaries;
+> method and full results in `breaking-changes.md` § 4.6 → 4.7):
+> `AreaLight3D` added · `InputEvent.DEVICE_ID_MOUSE` (32) and
+> `DEVICE_ID_KEYBOARD` (16) added · `AnimationNodeBlendSpace2D` gained
+> `SYNC_MODE_NONE` / `_INDEPENDENT` / `_CYCLIC_MUTABLE` / `_CYCLIC_CONSTANT`.
+>
+> **Not verified** — reported feature headlines, from search summaries, because
+> WebFetch is still blocked for every primary source. Do not build on these
+> without checking the class docs: HDR output · Asset Store · wasm64 web
+> exports · scene paint mode · inline shader previews.
+
+**Practical consequence for a 2D project: use the named device constants.**
+`InputEvent.DEVICE_ID_MOUSE` / `DEVICE_ID_KEYBOARD` did not exist in 4.6 and
+resolve on 4.7.2. Code that hardcodes device id `0` for "mouse or keyboard" is
+carrying an assumption that 4.7 explicitly replaced. For a game with mouse/keyboard
+as its primary input this is the one 4.7 change that touches real code.
+
+Everything else in 4.7's headline set is 3D rendering or web export, which this
+**2D PC-only** project does not use. An agent working here should still read
+`breaking-changes.md` § 4.6 → 4.7 before assuming 4.6 behaviour carries over —
+including its **REFUTED** table, which contains two claims that sound plausible
+and are false.
 
 ## GDScript (4.5+)
 

@@ -1,0 +1,363 @@
+# Game World Entity Registry
+#
+# PURPOSE: Single source of truth for all named game-world facts that appear
+# in more than one document. Skills check this before writing new content to
+# detect cross-doc inconsistencies at authoring time.
+#
+# RULES:
+#   - Only register facts that cross system boundaries. Internal-only facts
+#     (a formula used in one GDD only) do NOT need to be registered.
+#   - Never delete entries — set status: deprecated instead.
+#   - When a value changes: update the value, set revised: to today's date,
+#     and add a comment with the old value and which GDD changed it.
+#   - source: is the authoritative GDD — the one that "owns" this fact.
+#     Other GDDs that reference it list themselves in referenced_by.
+#   - When a new GDD references an existing entry, append its path to
+#     referenced_by. Do not create a duplicate entry.
+#
+# WRITTEN BY: /design-system (Phase 5 — after GDD sections are approved)
+#             /consistency-check (when resolving conflicts)
+#             economy-designer, systems-designer (new cross-system entries,
+#               after asking)
+# READ BY:    /design-system (Phase 2 — before authoring begins, and after
+#               Section C/D writes to conflict-check new entities/formulas)
+#             /consistency-check (primary input — grep-first, GDD-second)
+#             /review-all-gdds (Phase 1 — baseline for Phase 2 checks)
+#             /design-review (Phase 1 — cross-doc facts, in place of sibling GDDs)
+#             /content-audit (Step 2 — planned named-content count)
+#             /balance-check (Phase 3 — intended constant/formula values)
+#             /propagate-design-change (Step 3 — downstream GDD impact via referenced_by)
+#             /asset-spec (named entities to write specs for)
+#             economy-designer, systems-designer (before authoring items,
+#               loot tables and formulas)
+#
+# SEARCH PATTERNS (for skills using Grep):
+#   All entity names:        Grep pattern="^  - name:" path="design/registry/entities.yaml"
+#   Specific entity:         Grep pattern="  - name: goblin" path="design/registry/entities.yaml"
+#   All items:               Grep pattern="^  - name:" path="design/registry/entities.yaml" (items section)
+#   What combat.md owns:     Grep pattern="source: design/gdd/combat.md"
+#   What inventory.md uses:  Grep pattern="design/gdd/combat.md" -B 8
+#                            (referenced_by is a block list, so match the
+#                            path; referenced_by.*inventory never matches)
+#   All gold values:          Grep pattern="value_gold:"
+#   Deprecated entries:      Grep pattern="status: deprecated"
+#
+# FORMAT: YAML. Consistent indentation is critical for grep reliability.
+#   Sections: entities | items | formulas | constants
+#   Each entry: name, status, source, referenced_by[], attributes{}, added, revised
+
+version: 1
+last_updated: "2026-10-17"
+
+# ─── ENTITIES ────────────────────────────────────────────────────────────────
+# Named game-world objects: enemies, NPCs, characters, factions, bosses.
+# Register an entity here when it appears in more than one GDD — e.g., an
+# enemy defined in combat.md that also drops items listed in inventory.md.
+#
+# Required fields: name, status, source, referenced_by, added
+# Attribute fields: any key stats that could appear in another GDD
+#   (health, damage, drops, faction, etc.)
+
+entities:
+  - name: inhabitant
+    status: active
+    source: design/gdd/native-folk.md
+    referenced_by:
+      - design/gdd/time-and-schedule.md
+      - design/gdd/village-building.md
+      - design/gdd/squad-and-cohesion.md
+      - design/gdd/expedition.md
+    # The unified interface every village resident must satisfy. Added because
+    # `OnDuty`/`Present`/`IsOnlineAt` were typed on HeroAgent, so natives could
+    # not participate and every downstream grew an `is HeroAgent` branch.
+    # See time-and-schedule.md R7a.
+    #
+    # ⚠️ CORRECTED 2026-10-17: `IsOnlineAt` was initially listed here as a
+    # required predicate. That contradicted native-folk.md AC-4, which asserts
+    # `NativeFolk` must NOT carry an `IsOnlineAt` (or equivalent) method at all
+    # — its `Presence` must be constant-true and must not read `h`.
+    # `IsOnlineAt` belongs to the Earth-schedule sub-interface, not the base.
+    requires_predicates:
+      - OnDuty
+      - Present
+    requires_fields:
+      - AbsentDays
+    earth_schedule_subinterface:
+      # Only inhabited by beings summoned from Earth. Natives do not implement it.
+      - IsOnlineAt
+      - LoginAt
+      - PlayHours
+      - UtcOffset
+      - Diligence
+    does_not_require_fields:
+      # Semantics of these fields is "he has a job on Earth". Natives do not.
+      - UtcOffset
+      - LocalLoginAt
+      - PlayHours
+      - Diligence
+    added: 2026-10-17
+    revised: ""
+
+  - name: bond_pair
+    status: active
+    source: design/gdd/relations.md
+    referenced_by:
+      - design/gdd/squad-and-cohesion.md
+      - design/gdd/personality.md
+      - design/gdd/trade-and-betrayal.md
+      - design/gdd/beasts-and-raids.md
+    # Key = unordered pair min<<32|max; value holds TWO directions, each
+    # {Warmth, Churn, Flags, LastDay, Tally}. Bidirectional asymmetry is the
+    # whole reason an undirected edge table was rejected.
+    key_form: "min(heroId) << 32 | max(heroId)"
+    per_direction_fields: [Warmth, Churn, Flags, LastDay, Tally]
+    bytes_per_direction: 7
+    consumers:
+      - "GrudgeBlocks(a, b)   — squad-and-cohesion.md 编队可行性约束（唯一）"
+      - "BondKind(a, b)       — 当前关系标签"
+      - "BondFreshness(a, b)  — 新鲜度，用于反固化"
+    invariant: "仇是唯一能触发『可行性约束』的关系（改可不可行，不是改数值）。且它不自愈：日衰减只减 Warmth，永不增加 Churn —— 否则裁定⑬ 会被时间架空。"
+    blocked: "同乡是纯函数（零存储），但阻塞于 summoning.md Q1 的 WorldName 未落盘。"
+    added: 2026-10-17
+    revised: ""
+
+  - name: material_id
+    status: active
+    source: design/gdd/expedition.md
+    referenced_by:
+      - design/gdd/economy-and-stalls.md
+      - design/gdd/functional-buildings.md
+      - design/gdd/beasts-and-raids.md
+    # Six ids. Naming set is fixed by the brief.
+    # DECIDED 2026-10-17: 裁定⑨ — 全部可卖（石料/泥土/布匹/木料/杂物/铁料）。
+    # ⚠️ expedition.md 的 OQ-1 已由裁定⑨ 回答，但该文档尚未同步引用本条。
+    values:
+      - stone      # 石料
+      - dirt       # 泥土
+      - cloth      # 布匹
+      - wood       # 木料
+      - salvage    # 杂物
+      - iron       # 铁料
+    deduction_order: "石料→泥土→杂物→布匹→木料→铁料（beasts-and-raids.md F7 与 economy 的扣款共用此顺序）"
+    added: 2026-10-17
+    revised: "2026-10-17 — OQ-E1 由裁定⑨ 关闭：全部可卖"
+
+  - name: grudge_with
+    status: active
+    source: design/gdd/personality.md
+    referenced_by:
+      - design/gdd/squad-and-cohesion.md
+      - design/gdd/trade-and-betrayal.md
+      - design/gdd/chronicle.md
+    produced_by: "村庄日常事件「吵架」与「干起来了」"
+    consumed_by: "CohesionOf() 配合系数 ×0.50"
+    # ⚠️ UNRESOLVED CONFLICT — do not resolve by picking a side:
+    #   squad-and-cohesion.md / village-building.md describe this as a HARD BAN
+    #   (「进不了同一支队」); the implementation is a ×0.50 soft penalty.
+    #   Also: currently stores a NAME string, and the name space is only 155
+    #   combinations, so same-name villagers collide (squad-and-cohesion.md Q6).
+    open_question: "硬禁止还是软惩罚？见 squad-and-cohesion.md Q4"
+    added: 2026-10-17
+    revised: ""
+
+# ─── ITEMS ───────────────────────────────────────────────────────────────────
+# Named collectables, equipment, consumables, crafting materials, currency.
+# Register an item when its name or value appears in more than one GDD.
+#
+# Required fields: name, status, source, referenced_by, added
+# Attribute fields: value_gold, weight, stackable, category, and any stat
+#   modifiers that another system (e.g., economy, crafting) might reference.
+
+items: []
+
+# NOTE: deliberately empty. No developer-described item has a defined price or
+# owner yet. `economy-and-stalls.md` normalised every price to an abstract unit
+# price P precisely because the goods catalogue is blocked on OQ-E1.
+# Currency is also unnamed — the economy GDD explicitly declined to name it.
+
+
+# ─── FORMULAS ────────────────────────────────────────────────────────────────
+# Named calculations with defined variables and output ranges.
+# Register a formula when its output feeds into another system's input,
+# or when another GDD references it by name.
+#
+# Required fields: name, status, source, referenced_by, variables[],
+#   output_range[min, max], added
+# Optional: expression (the actual formula), notes
+
+formulas:
+  - name: is_online_at
+    status: active
+    source: design/gdd/time-and-schedule.md
+    referenced_by:
+      - design/gdd/village-building.md
+      - design/gdd/squad-and-cohesion.md
+      - design/gdd/expedition.md
+      - design/gdd/death-and-revival.md
+      - design/gdd/native-folk.md
+      - design/gdd/chief-progression.md
+    variables:
+      - UtcOffset
+      - LocalLoginAt
+      - PlayHours
+      - Hour
+      - AbsentDays
+    output_range: [false, true]
+    expression: "AbsentDays > 0 ? false : (LoginAt + PlayHours <= 24 ? (Hour >= LoginAt && Hour < LoginAt + PlayHours) : (Hour >= LoginAt || Hour < LoginAt + PlayHours - 24))"
+    notes: "LoginAt = Wrap(LocalLoginAt - UtcOffset). The wrap branch is the midnight case and is the one most easily written wrong — a delta computed on Hour (not AbsoluteHour) goes negative across midnight and stops advancing forever. Verified: village stalled 00:28–08:34 with rate 0.0000, then resumed at 10:35 when the founding three logged back on."
+    added: 2026-10-17
+    revised: ""
+
+  - name: work_rate
+    status: active
+    source: design/gdd/personality.md
+    referenced_by:
+      - design/gdd/village-building.md
+    variables:
+      - Power
+      - Grit
+      - Personality
+      - Diligence
+      - SlackDays
+      - RestlessDays
+      - AbsentDays
+    output_range: [0, 0.060]
+    expression: "AbsentDays > 0 ? 0 : base * personalityMul * diligenceMul * slackMul * restlessMul"
+    notes: "⚠️ ONLY 傲×0.60 comes from the developer's own words. 0.60/1.00/1.35 and 肝1.30/挂机0.55 are assistant derivations — see personality.md Q7. Do not balance-tune against them before they are confirmed."
+    added: 2026-10-17
+    revised: ""
+
+  - name: build_rate
+    status: active
+    source: design/gdd/village-building.md
+    referenced_by:
+      - design/gdd/time-and-schedule.md
+    variables:
+      - ToSite
+      - Away
+      - OnDuty
+      - WorkRate
+    output_range: [0, 0.180]
+    expression: "Σ over roster of [ToSite(h) ∧ ¬Away(h) ∧ OnDuty(h)] × WorkRate(h)"
+    notes: "Zero workers ⇒ the site freezes but time keeps running. This is the load-bearing mechanic of the whole schedule system."
+    added: 2026-10-17
+    revised: ""
+
+  - name: coalition_multiplier
+    status: active
+    source: design/gdd/squad-and-cohesion.md
+    referenced_by:
+      - design/gdd/expedition.md
+    variables:
+      - roster personalities
+      - AbsentDays
+      - GrudgeWith
+    output_range: [0.50, 1.15]
+    expression: "first_match over an ordered 9-row table"
+    notes: "⚠️ Two of the nine rows (1.15 and 1.05) are UNREACHABLE — proven by exhaustive enumeration over the three personalities (squad-and-cohesion.md; expedition.md A9). The 人数 dimension is therefore provably degenerate: a compatible 4-person squad is always strictly better than 3, because job yield is DIVIDED among successes rather than accumulated. See A2 in production/design-review-findings.md."
+    added: 2026-10-17
+    revised: ""
+
+  - name: stall_commission_ceiling
+    status: active
+    source: design/gdd/economy-and-stalls.md
+    referenced_by: []
+    variables:
+      - rate
+      - Markup
+    output_range: [0, 0.231]
+    expression: "rate < Markup / (1 + Markup)"
+    expression_note: "at Markup = 0.30 this evaluates to 0.2307…"
+    notes: "Crossing this is NOT a gentle loss of commission — the entire first tier of the economy stalls. Safe zone 0.00–0.20. `rate` and `Markup` cannot be tuned independently. UNRESOLVED: whether 摆摊费 means a one-time fee or a commission at all — if the former, this formula is void (OQ-E6)."
+    added: 2026-10-17
+    revised: ""
+
+
+# ─── CONSTANTS ───────────────────────────────────────────────────────────────
+# Named numerical values referenced across multiple systems.
+# Register a constant when it is defined in one GDD but another GDD must
+# agree with it (e.g., gold carry limit defined in economy but checked in
+# inventory, or base inventory slots defined in inventory but displayed in HUD).
+#
+# Required fields: name, status, source, referenced_by, value, unit, added
+
+constants:
+  - name: day_length_seconds
+    status: active
+    source: design/gdd/time-and-schedule.md
+    referenced_by:
+      - design/gdd/village-building.md
+      - design/gdd/expedition.md
+      - design/gdd/death-and-revival.md
+    value: 75
+    unit: real_seconds_per_village_day
+    notes: "Overridable at runtime via --daylen=N for headless testing. In production this means a full village day takes 75 real seconds."
+    added: 2026-10-17
+    revised: ""
+
+  - name: squad_max
+    status: active
+    source: design/gdd/squad-and-cohesion.md
+    referenced_by:
+      - design/gdd/expedition.md
+      - design/gdd/chief-progression.md
+      - design/gdd/economy-and-stalls.md
+    value: 4
+    unit: villagers_per_squad
+    notes: "⚠️ UNRESOLVED: is this 同时外出人数 or 队伍容量? (squad-and-cohesion.md Q8). Also: the 村长 occupies a separate slot outside these 4 (expedition.md)."
+    added: 2026-10-17
+    revised: ""
+
+  - name: building_tier_max
+    status: active
+    source: design/gdd/village-building.md
+    referenced_by:
+      - design/gdd/functional-buildings.md
+      - design/gdd/chief-progression.md
+      - design/gdd/economy-and-stalls.md
+    value: 5
+    unit: tier
+    notes: "Tier 0–5 is the STRAIGHT-LINE model, explicitly superseded by the dependency web in functional-buildings.md. Tier still survives as the stall-capacity input (4 + 2×tier). Anything else keyed on tier must declare which model it uses."
+    added: 2026-10-17
+    revised: ""
+
+  - name: stall_capacity_formula
+    status: active
+    source: design/gdd/economy-and-stalls.md
+    referenced_by: []
+    value: "4 + 2 * tier"
+    unit: stalls
+    notes: "tier 0–5 ⇒ 4/6/8/10/12/14, capped. Capacity is the village chief's ONLY lever in Phase 1 that applies influence without spending materials — which is why the chief's treasury having no sink (OQ-E2) matters."
+    added: 2026-10-17
+    revised: ""
+
+  - name: shield_wear
+    status: active
+    source: design/gdd/beasts-and-raids.md
+    referenced_by:
+      - design/gdd/functional-buildings.md
+    # NEW 2026-10-17. #7 does not know this quantity exists; the raid system
+    # is the sole writer. It is PERMANENT — repair is the only way down.
+    value: 0.0
+    unit: fractional_0_to_1
+    range: [0.0, 0.40]
+    owner: design/gdd/beasts-and-raids.md
+    consumers: ["EffectiveShield = ShieldCapacity × min(1, Integrity) × (1 − Wear)"]
+    invariant: "Wear 只增不减（除修理外无其它下降途径）。罩可以恢复，磨损不行 —— 违反 functional-buildings.md E10『建筑不消失』的变体：磨损可修，不是不可逆。"
+    added: 2026-10-17
+    revised: ""
+
+  - name: upgrade_coin_cost
+    status: active
+    source: design/gdd/chief-progression.md
+    referenced_by:
+      - design/gdd/village-building.md
+      - design/gdd/economy-and-stalls.md
+    # 金库出口之二（裁定⑪）。出口之一是 summoning.md R11 召唤收费。
+    value: "CoinBase + CoinStep * t"   # t = 目标 Village.Tier ∈ [1,5]
+    defaults: {CoinBase: 100, CoinStep: 100}
+    output_range: [200, 600]
+    unit: coin
+    executor: design/gdd/village-building.md   # 按下 Q 扣费；本条只定义规则与数值
+    added: 2026-10-17
+    revised: ""

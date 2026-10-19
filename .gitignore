@@ -171,3 +171,17 @@ $RECYCLE.BIN/
 # the project root. Anchored so a reports/ folder elsewhere stays tracked.
 /reports/
 /test-results/
+
+# === 本地临时文件（探针 / 草稿 / 截图） ===
+.oq_raw.txt
+_probe_*
+_verify_ui.png
+shot.png
+SmokeTest.cs.uid
+production/*.bak
+tests/_spike*
+
+# 游戏工程文件是源码，不是生成物（模板默认忽略 *.csproj/*.sln）
+!/*.csproj
+!/*.sln
+!/tests/*.csproj

@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    CCGS test project — Godot 4.7.2 / C#.
+    Verified 2026-10-17 by execution, not by documentation:
+      · gdUnit4.api 5.1.0-rc5 + gdUnit4.test.adapter 3.1.1
+        (adapter 3.1.1 requires api >= 5.1.0-rc5; pinning the stable 5.0.0
+         produces NU1605 package-downgrade and the restore fails)
+      · `dotnet test` → exit 0 on pass, exit 1 on failure
+      · API surface read out of GdUnit4Api.dll, not recalled:
+        [TestSuite] on the class, [TestCase] on the method,
+        `Assertions.AssertThat(...)` — there is no bare `Assert` symbol
+        and no `GdUnit4.Test` namespace.
+    Runner: `dotnet test tests/Claude-Code-Game-Studios.Tests.csproj`
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <!-- Godot C# still loads on net8; keep GodotSharp referenced so tests can
+         construct Node/Resource types directly. -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="gdUnit4.api" Version="5.1.0-rc5" />
+    <PackageReference Include="gdUnit4.test.adapter" Version="3.1.1" />
+    <PackageReference Include="GodotSharp" Version="4.7.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Claude-Code-Game-Studios.csproj" />
+  </ItemGroup>
+
+  <!--
+    TEMPORARY EXCLUSIONS — spike scaffolding left in place on 2026-10-17 because
+    file deletion was refused by the sandbox. Delete these two files, then delete
+    this whole <ItemGroup>:
+        tests/_spike.csproj
+        tests/_spike_test.cs
+  -->
+  <ItemGroup>
+    <Compile Remove="_spike*.cs" />
+    <None Remove="_spike*" />
+  </ItemGroup>
+
+</Project>

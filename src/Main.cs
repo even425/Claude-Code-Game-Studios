@@ -107,6 +107,9 @@ public partial class Main : Node2D
     /// <summary>M4 英雄自主经济行为（"每英雄每天 ≤ 1 次" 决策的 DI 入口）。</summary>
     private ClaudeCodeGameStudios.Application.Stall.HeroBehaviorService _heroBehavior = null!;
 
+    /// <summary>每日自主购物调度（第四阶段 3B）：同一游戏日只尝试一次。</summary>
+    private ClaudeCodeGameStudios.Application.Stall.DailyShoppingService _dailyShopping = null!;
+
     private readonly List<HeroAgent> _heroes = new();
     /// <summary>与 <c>_heroes</c> 一一对应的领域状态（基线 §4.1 的「当前状态」层）。</summary>
     private readonly List<HeroState> _states = new();
@@ -514,6 +517,8 @@ public partial class Main : Node2D
             _stallService,
             id => _heroes.FirstOrDefault(h => h.Id == id),
             () => _rng.NextDouble(1.0));
+        // 第四阶段 3B：按游戏日调度一次自主购物（同日重复调用由服务内部闸门挡住）。
+        _dailyShopping = new ClaudeCodeGameStudios.Application.Stall.DailyShoppingService(_heroBehavior);
 
         // === 右栏：杂谈滚动 ===
         var right = new VBoxContainer
@@ -778,7 +783,11 @@ public partial class Main : Node2D
                          string.Join(" ", _chronicle.Recent(3)));
         }
 
-        // 4. 出征回来了没有
+        // 4. 每日自主购物（第四阶段 3B）：按游戏日触发一次。
+        //    每帧只判一个整数（LastRunDay == today 就直接返回），不会每帧执行购物逻辑。
+        RunDailyShoppingIfNeeded();
+
+        // 5. 出征回来了没有
         if (Expending && _clock.AbsoluteHour >= _pendingEnd) ResolveExpedition();
 
         TickBuild(dt);
@@ -794,6 +803,7 @@ public partial class Main : Node2D
         if (OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--grant=", StringComparison.Ordinal)) && !_grantTestDone)
             RunGrantSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--trade") && !_tradeTestDone) RunTradeSelfTest();
+        if (OS.GetCmdlineUserArgs().Contains("--shop") && !_shopTestDone) RunShoppingSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a is "--save" or "--load") && !_saveTestDone)
         {
             RunSaveSelfTest();
@@ -1860,6 +1870,153 @@ public partial class Main : Node2D
         GD.Print(buyOk && dupOk && stockOk && poorOk ? "TRADETEST PASS" : "TRADETEST FAIL");
     }
 
+    private bool _shopTestDone;
+
+    /// <summary>每日自主购物：按游戏日触发一次（服务内部有同日闸门）。</summary>
+    private void RunDailyShoppingIfNeeded()
+    {
+        int today = (int)_clock.Day;
+        if (_dailyShopping.LastRunDay == today) return;
+
+        var ids = new List<HeroId>(_states.Count);
+        foreach (var state in _states) ids.Add(state.Id);
+
+        PublishShoppingResults(_dailyShopping.RunDay(today, ids, _clock.Now));
+    }
+
+    /// <summary>把「成交」结果转成领域事件；跳过/失败一律不发事件（反装饰规则）。</summary>
+    private void PublishShoppingResults(
+        IReadOnlyList<ClaudeCodeGameStudios.Application.Stall.HeroBehaviorService.ShoppingResult> results)
+    {
+        foreach (var result in results)
+        {
+            if (result.Outcome !=
+                ClaudeCodeGameStudios.Application.Stall.HeroBehaviorService.ShoppingOutcome.Bought)
+            {
+                continue;
+            }
+
+            EmitTradeCompleted(result);
+        }
+    }
+
+    /// <summary>一条真实成交 → 一个可追溯事件。</summary>
+    private void EmitTradeCompleted(
+        ClaudeCodeGameStudios.Application.Stall.HeroBehaviorService.ShoppingResult result)
+    {
+        if (result.Buyer is null || result.Seller is null || result.ItemId is null) return;
+
+        var buyer = result.Buyer.Value;
+        var seller = result.Seller.Value;
+        var item = result.ItemId.Value.Value;   // ItemId? → ItemId → string
+        string buyerName = NameOfHero(buyer);
+        string sellerName = NameOfHero(seller);
+        long qty = result.Quantity ?? 0;
+        long villageCut = result.VillageCut ?? 0;
+
+        var changed = new List<ClaudeCodeGameStudios.Domain.Events.StateKey>
+        {
+            StHeroWallet,
+            StHeroBag,
+        };
+        if (villageCut > 0) changed.Add(StVillageResource);
+
+        var payload = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["buyer"] = buyerName,
+            ["seller"] = sellerName,
+            ["item"] = item,
+            ["qty"] = qty.ToString(),
+            ["amount"] = ((result.SellerNet ?? 0) + villageCut).ToString(),
+            ["villageCut"] = villageCut.ToString(),
+        };
+
+        Emit(EvTradeCompleted, buyerName, changed, payload,
+            ev => $"{buyerName}从{sellerName}的摊上买走了{item}×{qty}。");
+    }
+
+    /// <summary>按 HeroId 找显示名；找不到时回落为 Id。</summary>
+    private string NameOfHero(HeroId id)
+    {
+        foreach (var hero in _heroes)
+        {
+            if (hero.Id == id) return hero.Name;
+        }
+
+        return id.Value;
+    }
+
+    /// <summary>
+    /// <c>--shop</c>：第四阶段 3B 真机自检 —— 有物品/有开放摊位时自主购物成交，同日不重复。
+    /// </summary>
+    /// <remarks>
+    /// <para>走生产路径：<see cref="ItemGrantService.Grant"/> → <c>PlaceStall</c> →
+    /// 逐日 <see cref="RunDailyShoppingIfNeeded"/>（跨天推进）→ 事件管线。</para>
+    /// <para>最多推进 30 个游戏日等待成交（随机性格/投骰；30 天内未成交视为失败）；
+    /// 成交后同日再调用一次，验证闸门不重复执行。</para>
+    /// </remarks>
+    private void RunShoppingSelfTest()
+    {
+        _shopTestDone = true;
+
+        if (_states.Count < 2)
+        {
+            GD.Print("SHOPTEST FAIL 英雄不足 2 人");
+            return;
+        }
+
+        var seller = _heroes[0];
+        var buyer = _heroes[1];
+        var item = new ClaudeCodeGameStudios.Domain.Items.ItemId("石料");
+        var gold = ClaudeCodeGameStudios.Application.Stall.StallService.Gold;
+
+        _itemGrant.Grant(seller.Id, item, 100);
+        if (_stallService.GetStall(seller.Id) is null)
+        {
+            var placed = _stallService.PlaceStall(seller.Id, item, 100, _clock.Now);
+            if (placed is null)
+            {
+                GD.Print("SHOPTEST FAIL 开摊失败（英雄可能不在场/在忙）");
+                return;
+            }
+        }
+
+        long buyerGold0 = buyer.Wallet.Amount(gold);
+        long stock0 = _stallService.GetStall(seller.Id)?.Stock ?? -1;
+        int events0 = _events.Count;
+        int startDay = (int)_clock.Day;
+        bool bought = false;
+        int days = 0;
+
+        while (!bought && days < 30)
+        {
+            _clock.SetSimTime(_clock.Now + _clock.SimSecondsPerDay);
+            RunDailyShoppingIfNeeded();
+            if (buyer.LastShoppingDay == (int)_clock.Day) bought = true;
+            days++;
+        }
+
+        long stock1 = _stallService.GetStall(seller.Id)?.Stock ?? -1;
+        long buyerGold1 = buyer.Wallet.Amount(gold);
+        int events1 = _events.Count;
+
+        // 同日再调一次：闸门应直接返回，不产生新事件/状态变化
+        long goldCheck = buyerGold1;
+        long stockCheck = stock1;
+        int eventsCheck = events1;
+        RunDailyShoppingIfNeeded();
+        bool noRepeat = events1 == _events.Count
+                        && buyer.Wallet.Amount(gold) == goldCheck
+                        && (_stallService.GetStall(seller.Id)?.Stock ?? -1) == stockCheck;
+
+        bool stateOk = bought && buyerGold1 < buyerGold0 && stock1 < stock0 && events1 > events0;
+        GD.Print($"SHOPTEST 第{startDay}→{_clock.Day}天/尝试{days}天：成交={bought}，" +
+                 $"买家金 {buyerGold0}→{buyerGold1}，摊位库存 {stock0}→{stock1}，" +
+                 $"事件 {events0}→{events1}");
+        GD.Print($"SHOPTEST 同日重复调用无新增={noRepeat}");
+        GD.Print(stateOk && noRepeat ? "SHOPTEST PASS" : "SHOPTEST FAIL");
+    }
+
     private bool _grantTestDone;
 
     /// <summary>
@@ -2057,6 +2214,8 @@ public partial class Main : Node2D
         new("HeroSocialized");                 // 第三阶段 M5：英雄之间的社交
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvSquadBonded =
         new("SquadBonded");                    // 第三阶段 M5：同队副本合作（一条聚合）
+    private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvTradeCompleted =
+        new("TradeCompleted");                 // 第四阶段 3B：英雄自主购物成交
 
     // ── 状态键 ──
     // 反装饰规则（03 §5.2 / 基线 §7.3）靠它们在**构造期**生效：
@@ -2081,6 +2240,10 @@ public partial class Main : Node2D
         new("settlement.applied");
     private static readonly ClaudeCodeGameStudios.Domain.Events.StateKey StRelationship =
         new("relationship.value");             // 第三阶段 M5：关系变化
+    private static readonly ClaudeCodeGameStudios.Domain.Events.StateKey StHeroWallet =
+        new("hero.wallet");                    // 第四阶段 3B：英雄货币变化
+    private static readonly ClaudeCodeGameStudios.Domain.Events.StateKey StHeroBag =
+        new("hero.bag");                       // 第四阶段 3B：英雄背包变化
 
     /// <summary>已记录的事件数（自检用）。</summary>
     private int EventCount => _events.Count;

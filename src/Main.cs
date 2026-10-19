@@ -1836,7 +1836,7 @@ public partial class Main : Node2D
     {
         var lines = Roster.Lines(
             _heroes, _squad,
-            hero => EconomySummary.For(hero, ClaudeCodeGameStudios.Application.Stall.StallService.Gold));
+            hero => RosterLine(hero));
 
         if (Roster.SameLines(lines, _rosterLines)) return;
 
@@ -1856,6 +1856,46 @@ public partial class Main : Node2D
 
         _rosterLines.Clear();
         _rosterLines.AddRange(lines);
+    }
+
+    /// <summary>
+    /// 花名册行尾：经济摘要 + 「想买未成」标记（R-07）。
+    /// </summary>
+    /// <param name="hero">该英雄。</param>
+    /// <returns>行尾文本。</returns>
+    /// <remarks>
+    /// <b>标记在最后</b>：经济摘要是每一行都有的「状态」，
+    /// 标记是偶尔才有的追加信息 —— 放最后，读起来是「名字 → 状态 → 补充」。
+    /// </remarks>
+    private string RosterLine(HeroAgent hero)
+    {
+        string economy = EconomySummary.For(
+            hero, ClaudeCodeGameStudios.Application.Stall.StallService.Gold);
+
+        string note = ShoppingNoteFor(hero);
+        return string.IsNullOrEmpty(note) ? economy : $"{economy}  {note}";
+    }
+
+    /// <summary>
+    /// 这个人今天「想买没买成」的原因标记（没有则空串）。
+    /// </summary>
+    /// <param name="hero">该英雄。</param>
+    /// <returns>例如 <c>想买未成·钱不够</c>；不该标时返回空串。</returns>
+    /// <remarks>
+    /// <b>只标当天的</b>：跨天了还没买成，是昨天的事，不该继续挂在今天的花名册上。
+    /// </remarks>
+    private string ShoppingNoteFor(HeroAgent hero)
+    {
+        if (_lastShoppingDay != (int)_clock.Day) return string.Empty;
+        if (_lastShoppingResults.Count == 0) return string.Empty;
+
+        foreach (var result in _lastShoppingResults)
+        {
+            if (result.Buyer is not { } id || id != hero.Id) continue;
+            return ClaudeCodeGameStudios.Application.Stall.ShoppingFeedback.RosterNote(result);
+        }
+
+        return string.Empty;
     }
 
     /// <summary>
@@ -2281,6 +2321,20 @@ public partial class Main : Node2D
         if (_econLog) PrintShoppingResults("ECONLOG", today, results);
 
         PublishShoppingResults(results);
+
+        // R-07：每天一条「想买没买成」的汇总。
+        //
+        // 这条**没有改变任何状态** —— 它是「今天有多少人没买成、卡在哪儿」的**读数**，
+        // 不是一次事件。所以按反装饰规则**不发事件**，直接进杂谈
+        // （与「摆摊失败」「副本结算被拒」同一条先例：都是没改状态、但值得说一声）。
+        //
+        // **每天只有一条**，且**不点名** —— 37 个人名进杂谈就是刷屏；
+        // 名字本来就在花名册行尾上。
+        var summary = ClaudeCodeGameStudios.Application.Stall.ShoppingFeedback.MissedSummary(results);
+        if (summary is not null)
+        {
+            Add(new Chronicle.Entry((int)_clock.Day, summary, null));
+        }
     }
 
     /// <summary>把「成交」结果转成领域事件；跳过/失败一律不发事件（反装饰规则）。</summary>
@@ -2497,7 +2551,32 @@ public partial class Main : Node2D
                  $"买家金 {buyerGold0}→{buyerGold1}，摊位库存 {stock0}→{stock1}，" +
                  $"事件 {events0}→{events1}");
         GD.Print($"SHOPTEST 同日重复调用无新增={noRepeat}");
-        GD.Print(stateOk && noRepeat ? "SHOPTEST PASS" : "SHOPTEST FAIL");
+
+        // ── R-07：想买没买成 的两条反馈 ──────────────────────────────────
+        // 把买家的钱清零 → 他想买（欲望够）却买不成。
+        // 这条验的是**玩家能看见**：花名册行尾有标记、杂谈里有一条汇总。
+        //
+        // 欲望是随机的（性格权重），所以像上面等成交那样**逐日推进直到命中** ——
+        // 买家的钱一直是 0，一旦他动了念头，就必然落在「钱不够」上。
+        buyer.TrySpendResource(gold, buyer.Wallet.Amount(gold));
+        int chronBefore = _chronicle.Count;
+        int missDays = 0;
+
+        for (int i = 0; i < 30; i++)
+        {
+            _clock.SetSimTime(_clock.Now + _clock.SimSecondsPerDay);
+            RunDailyShoppingIfNeeded();
+            if (ShoppingNoteFor(buyer).Contains("钱不够")) { missDays = i + 1; break; }
+        }
+
+        string note = ShoppingNoteFor(buyer);
+        string chronText = string.Join(" | ", _chronicle.Recent(_chronicle.Count - chronBefore));
+        bool noteOk = note.Contains("钱不够");
+        bool summaryOk = chronText.Contains("想买没买成");
+        GD.Print($"SHOPTEST R-07 第{missDays}天命中：花名册标记=「{note}」→ {noteOk}");
+        GD.Print($"SHOPTEST R-07 杂谈新增=「{chronText}」→ {summaryOk}");
+
+        GD.Print(stateOk && noRepeat && noteOk && summaryOk ? "SHOPTEST PASS" : "SHOPTEST FAIL");
     }
 
     private bool _grantTestDone;

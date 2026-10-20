@@ -94,7 +94,7 @@ except ImportError:
 | `mutate-ledger-consistency.py` | `07` 台账自身（两处状态表不许互相矛盾 / 现状必须是真的） |
 | `mutate-doc-citations.py` | 活文档点名的测试必须真的存在（文件 / 类 / 方法） |
 
-全部一起跑（很慢，约 20 分钟）：
+全部一起跑（**很慢** —— 每个脚本都要重建 + 重跑测试，建议过夜跑）：
 
 ```
 python production/qa/verify-all.py --with-mutations

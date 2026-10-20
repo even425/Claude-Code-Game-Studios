@@ -92,6 +92,19 @@ CHECKS = [
 ]
 
 
+# 每个自检跑多少帧。
+#
+# ⚠️ 这里曾经是 8000 —— 那是**纯浪费**：自检在**第一帧**里就同步跑完了，
+# 剩下的 7999 帧什么也不做，只为了让进程自己退出。
+# 于是每个自检 ≈ 56 秒、7 个 ≈ 6.5 分钟；runner 慢一点就是 20~35 分钟
+# （CI 上实测到过 17 分钟还没跑完）。
+#
+# 实测（`production/qa/frame-budget.py`）：**600 帧全部命中**，每个 ≈ 4.6 秒；
+# 120 帧也够（≈ 1.3 秒）。取 600 —— 留足余量，runner 慢也不怕，但已经快了 12 倍。
+# ⚠️ 改这个数之前先跑 `frame-budget.py <帧数>` 量一遍，别凭感觉。
+FRAMES = "600"
+
+
 def find_godot():
     for c in GODOT_CANDIDATES:
         if c and Path(c).exists():
@@ -142,7 +155,7 @@ def main():
 
     failures = []
     for c in checks:
-        argv = [godot, "--headless", "--path", str(ROOT), "--quit-after", "8000", "--"] \
+        argv = [godot, "--headless", "--path", str(ROOT), "--quit-after", FRAMES, "--"] \
                + c["args"] + [f"--savepath={tmp_save}"]
         try:
             proc = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True,

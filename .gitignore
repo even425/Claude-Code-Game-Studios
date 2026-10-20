@@ -185,5 +185,11 @@ tests/_spike*
 !/*.csproj
 !/*.sln
 !/tests/*.csproj
+# ⚠️ 上面那条 `!/tests/*.csproj` 只对**直接**在 tests/ 下的工程文件生效；
+# **嵌套目录**（`tests/<子目录>/*.csproj`）仍然被 `*.csproj` 忽略 ——
+# 于是 `tests/DomainPurity/DomainPurity.csproj`（不变量 I9 的那道门）
+# 会**静默地不进版本库** ⇒ 别人 clone 下来就没有这道门，而本机一直是绿的。
+# ⇒ 这里给嵌套目录也开例外。
+!/tests/**/*.csproj
 tests/_spike.csproj
 production/qa/evidence/shot-check-latest.png

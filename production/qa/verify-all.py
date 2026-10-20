@@ -12,9 +12,13 @@
 2. `dotnet build -c Release`
 3. `dotnet test -c Release`
 4. `production/qa/run-selfchecks.py` —— 7 个真机自检 + 「玩家存档未被碰」断言
-5. `production/qa/param-inventory.py --check` —— 参数台账与代码一致
-6. （可选 `--with-screenshot`）截图自检 —— **需要显示器**，无头机器上跑不了
-7. （可选 `--with-mutations`）全部变异矩阵 —— 很慢（约 20 分钟），建议过夜跑
+5. **领域层脱离 Godot 编译**（不变量 I9）—— 这道门**故意**在另一个工程里：
+   测试工程引用整个游戏（含 `GodotSharp`），在那儿跑测试**证明不了**
+   「领域层脱离 Godot 也能编译」；只有一个**不引用** Godot 的工程能证明。
+   领域层里多一行 `using Godot;` ⇒ 这里编译失败 ⇒ CI 红。
+6. `production/qa/param-inventory.py --check` —— 参数台账与代码一致
+7. （可选 `--with-screenshot`）截图自检 —— **需要显示器**，无头机器上跑不了
+8. （可选 `--with-mutations`）全部变异矩阵 —— 很慢，建议过夜跑
 
 **跳过要说出来**：某一步因前提缺失被跳过时，脚本**明确打印「跳过了什么、为什么」**，
 并可用 `--require-all` 把「跳过」也变成失败（CI 上用它比较诚实）。
@@ -101,11 +105,19 @@ def main():
                  [sys.executable, QA / "run-selfchecks.py"])
         results.append(("真机自检", "ok" if ok else "fail"))
 
-    # 5. 参数台账
+    # 5. 领域层脱离 Godot 编译（不变量 I9）——
+    #    这道门**故意**在另一个工程里：测试工程引用整个游戏（含 GodotSharp），
+    #    在那儿跑测试**证明不了**「领域层脱离 Godot 也能编译」。
+    ok = run("领域层脱离 Godot 编译（I9）",
+             ["dotnet", "build", "tests/DomainPurity/DomainPurity.csproj",
+              "--nologo", "-v", "q"])
+    results.append(("领域层脱离 Godot 编译（I9）", "ok" if ok else "fail"))
+
+    # 6. 参数台账
     ok = run("参数台账与代码一致", [sys.executable, QA / "param-inventory.py", "--check"])
     results.append(("参数台账", "ok" if ok else "fail"))
 
-    # 6. 截图（可选）
+    # 7. 截图（可选）
     if args.with_screenshot:
         ok = run("截图自检（画面不是空图）", [sys.executable, QA / "shot-check.py"])
         results.append(("截图自检", "ok" if ok else "fail"))
@@ -113,7 +125,7 @@ def main():
         results.append(("截图自检", "skip"))
         print("\n=== 截图自检 ===\n（跳过：需要 --with-screenshot，且需要显示器）")
 
-    # 7. 变异矩阵（可选）
+    # 8. 变异矩阵（可选）
     if args.with_mutations:
         scripts = sorted(QA.glob("mutate-*.py"))
         for s in scripts:

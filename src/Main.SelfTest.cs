@@ -205,6 +205,7 @@ public partial class Main : Node2D
         long villageGold0 = _villageModel.Get(gold);
 
         // 1. 测试配给 + 开摊
+        SelfTestEnsurePresentAndIdle(seller);   // 夹具：摊主必须在场且空闲（否则偶发开摊失败）
         var grant = _itemGrant.Grant(seller.Id, item, 5);
         var placed = _stallService.PlaceStall(seller.Id, item, 5, _clock.Now);
         GD.Print($"TRADETEST 配给={grant.Result}，开摊={(placed is null ? "FAIL" : "OK")}");
@@ -292,6 +293,7 @@ public partial class Main : Node2D
         long villageGold0 = _villageModel.Get(gold);
 
         // 1. 配给 + 开摊：摊主有 5 份石料，摊上摆 5 份。
+        SelfTestEnsurePresentAndIdle(seller);   // 夹具：摊主必须在场且空闲（否则偶发开摊失败）
         var grant = _itemGrant.Grant(seller.Id, item, 5);
         var placed = _stallService.PlaceStall(seller.Id, item, 5, _clock.Now);
         if (!grant.Granted || placed is null)
@@ -362,6 +364,28 @@ public partial class Main : Node2D
     }
 
     /// <summary>
+    /// 自检夹具：把某个英雄摆成「<b>在场且空闲</b>」。
+    ///
+    /// <para><b>为什么需要它</b>：<c>StallService.PlaceStall</c> 的前置条件里有
+    /// 「英雄<b>空闲</b>（<c>ToSite == false</c>）」，而 <c>ToSite</c> 是
+    /// <b>模拟的随机决策</b>驱动的 ⇒ 自检跑到时那个英雄**可能正在工地干活**
+    /// ⇒ 开摊被拒 ⇒ 自检**偶发**失败
+    /// （2026-10-21 实测：<c>--shop</c> 偶发「SHOPTEST FAIL 开摊失败（英雄可能不在场/在忙）」，
+    /// 症状是「缺 PASS 标记 + 出现 FAIL 标记」）。
+    /// </para>
+    ///
+    /// <para><b>偶发的守卫比坏掉的守卫更糟</b> —— 人会开始无视它。
+    /// 而这条前置条件**本身**另有单元测试守着（<c>StallServiceTests</c> 的
+    /// 「开摊前置」用例）⇒ 自检只需要**摆出它要验的场景**（有摊可买 → 自主购物成交），
+    /// 不该把「英雄恰好空闲」也变成自检的一部分。</para>
+    /// </summary>
+    private static void SelfTestEnsurePresentAndIdle(HeroAgent hero)
+    {
+        hero.Away = false;    // 在场
+        hero.ToSite = false;  // 空闲（不在工地）
+    }
+
+    /// <summary>
     /// <c>--shop</c>：第四阶段 3B 真机自检 —— 有物品/有开放摊位时自主购物成交，同日不重复。
     /// </summary>
     /// <remarks>
@@ -388,6 +412,7 @@ public partial class Main : Node2D
         _itemGrant.Grant(seller.Id, item, 100);
         if (_stallService.GetStall(seller.Id) is null)
         {
+            SelfTestEnsurePresentAndIdle(seller);   // 夹具：摊主必须在场且空闲（见该方法的说明）
             var placed = _stallService.PlaceStall(seller.Id, item, 100, _clock.Now);
             if (placed is null)
             {
@@ -670,6 +695,7 @@ public partial class Main : Node2D
             var stallItem = new ClaudeCodeGameStudios.Domain.Items.ItemId("石料");
 
             _itemGrant.Grant(seller.Id, stallItem, 10);
+            SelfTestEnsurePresentAndIdle(seller);   // 夹具：摊主必须在场且空闲（否则偶发开摊失败）
             var placed = _stallService.PlaceStall(seller.Id, stallItem, 10, _clock.Now);
             if (placed is not null)
             {
@@ -1129,6 +1155,7 @@ public partial class Main : Node2D
                 long buyerGold0 = buyer.Wallet.Amount(gold);
                 long buyerBag0 = buyer.Bag.Count(item);
 
+                SelfTestEnsurePresentAndIdle(seller);   // 夹具：摊主必须在场且空闲（否则偶发开摊失败）
                 var placed = stock > 0
                     ? _stallService.PlaceStall(seller.Id, item, stock, _clock.Now)
                     : null;

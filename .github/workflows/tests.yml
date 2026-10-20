@@ -86,6 +86,13 @@ jobs:
         shell: pwsh
         run: python production/qa/param-inventory.py --check
 
+      # Invariant I9: the domain layer must compile **without Godot**.
+      # The test project references the whole game (hence GodotSharp), so a
+      # test there cannot prove this - only a project that does NOT reference
+      # Godot can. One `using Godot;` inside src/Domain fails this build.
+      - name: Build the domain layer without Godot (invariant I9)
+        run: dotnet build tests/DomainPurity/DomainPurity.csproj --nologo -v q
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

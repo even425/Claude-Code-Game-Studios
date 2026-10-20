@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    领域层的「脱离 Godot 也能编译」证明 —— 不变量 **I9**。
+
+    **它为什么存在**：`tests/Claude-Code-Game-Studios.Tests.csproj` 通过
+    `ProjectReference` 引用整个主工程，而主工程是 `Godot.NET.Sdk` 且引用 `GodotSharp`
+    ⇒ **在这个测试工程里跑的测试，无法证明「领域层脱离 Godot 也能编译运行」**
+    —— GodotSharp 已经在引用链上，`using Godot` 也一定能编译成功。
+    换句话说：`DomainLayerPurityTests` 守的是「领域层**没有引用** Godot」，
+    而本工程守的是「领域层**在没有 Godot 的情况下真的能编译**」——
+    两者不是一回事，后者才是 I9 的原文。
+
+    **它故意什么都不引**：
+      ✗ 不用 `Godot.NET.Sdk`（那会把 Godot 的引用链带进来）
+      ✗ 不引用 `GodotSharp`
+      ✗ 不 `ProjectReference` 主工程（那会把整个游戏拖进来）
+    它只**直接编译** `src/Domain/**` 的源文件 —— 领域层是自包含的
+    （只引用自己的 `ClaudeCodeGameStudios.Domain.*` 命名空间），
+    所以这样编译得起来。
+
+    **它怎么起作用**：任何人往领域层写一个 `using Godot;` 或一个
+    `Godot.Vector2` ⇒ **这个工程立刻编译失败** ⇒ CI 红。
+    那时不需要「读代码发现它不该在这儿」——
+    **机器会喊**。
+
+    ⚠️ 它**不是**一个测试工程（没有测试适配器、没有 `[TestCase]`）——
+    它的全部意义就是「**能不能编译**」。
+    所以用 `dotnet build` 跑它，不是 `dotnet test`。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <!-- Godot 的动态加载在这里**必须关掉**（它只对 Godot.NET.Sdk 有意义，
+         留着是为了万一有人把它换成那个 SDK 时会看到这一行）。 -->
+    <EnableDynamicLoading>false</EnableDynamicLoading>
+    <!-- 本工程只有一个目的：**编译领域层**。不要往里加测试。 -->
+    <IsTestProject>false</IsTestProject>
+    <!-- 没有测试适配器时，Microsoft.NET.Test.Sdk 的警告会吵；这里不需要它。 -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 领域层源文件（30 个）。**不引用主工程** ⇒ 没有 GodotSharp。 -->
+    <Compile Include="../../src/Domain/**/*.cs" />
+  </ItemGroup>
+
+</Project>

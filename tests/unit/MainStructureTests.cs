@@ -56,13 +56,23 @@ public class MainStructureTests
         }),
     };
 
-    /// <summary>自检方法（名字以 <c>SelfTest</c> 收尾）。它们是<b>验证装置</b>，不拥有任何职责。</summary>
+    /// <summary>
+    /// 自检装置的方法 —— <b>自检入口</b>，以及它们用的<b>夹具</b>。
+    /// 它们是<b>验证装置</b>，不拥有任何职责。
+    /// <para>
+    /// 夹具也在这里，是因为自检文件**只允许有验证装置**：
+    /// 放一个「让英雄在场且空闲」的小工具进来是合规的（它只服务于自检），
+    /// 放一段**玩法逻辑**进来才是「验证装置伪装成实现装置」——
+    /// 那条断言守的正是这个区别。
+    /// </para>
+    /// </summary>
     private static readonly string[] SelfTestMethods =
     {
         "SelfTest", "RunEconomySelfTest", "RunClickSelfTest", "RunEventsSelfTest",
         "RunTradeSelfTest", "RunMarketSelfTest", "RunShoppingSelfTest",
         "RunGrantSelfTest", "RunRelationsSelfTest", "RunSaveSelfTest",
         "RunDungeonSelfTest",
+        "SelfTestEnsurePresentAndIdle",   // 自检夹具：把英雄摆成「在场且空闲」
     };
 
     /// <summary>

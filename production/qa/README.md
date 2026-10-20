@@ -77,6 +77,17 @@ except ImportError:
 
 由 `QaToolingTests`（`tests/unit/architecture/`）守住 —— **新脚本忘了加就红**。
 
+### ⑥ 领域层必须**在没有 Godot 的情况下编译得出来**
+
+`tests/DomainPurity/DomainPurity.csproj` 是一个**故意什么都不引**的工程
+（不用 `Godot.NET.Sdk`、不引 `GodotSharp`、不 `ProjectReference` 主工程），
+它只直接编译 `src/Domain/**` ⇒ 领域层里多一行 `using Godot;` ⇒ **它编译失败** ⇒ CI 红。
+
+**为什么不能靠测试工程**：测试工程引用整个主工程（因而引用 `GodotSharp`），
+在那边跑测试**证明不了**「领域层脱离 Godot 也能编译」。这正是不变量 **I9** 的原文。
+`DomainLayerPurityTests` 守的是「领域层**没有引用** Godot」（静态扫描）；
+这一道守的是「领域层**在没有 Godot 的情况下真的能编译**」—— **后者比前者强**：全名引用也抓得到。
+
 ## 变异矩阵一览
 
 | 脚本 | 守的是什么 |
@@ -98,6 +109,7 @@ except ImportError:
 | `mutate-doc-citations.py` | 活文档点名的测试必须真的存在（文件 / 类 / 方法） |
 | `mutate-price-fallback.py` | 价格表两份副本不许分叉 + 同步脚本不许帮倒忙 |
 | `mutate-ledger-crossref.py` | 两张参数台账之间的链接不许悬空 / 占位值不许无主 |
+| `mutate-domain-purity.py` | 领域层脱离 Godot 编译（不变量 I9）：加一行 `using Godot;` ⇒ 编译失败 |
 
 全部一起跑（**很慢** —— 每个脚本都要重建 + 重跑测试，建议过夜跑）：
 

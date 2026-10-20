@@ -47,4 +47,16 @@
     <None Remove="_spike*" />
   </ItemGroup>
 
+  <!--
+    `tests/DomainPurity/` 是**另一个工程**（不变量 I9 的那道门：领域层脱离 Godot 编译）。
+    它有自己的 `obj/`，而本工程的默认 glob 是 `**/*.cs`
+    ⇒ 那个 `obj/` 里生成的 `*.AssemblyInfo.cs` 会被本工程**当成自己的源文件**编译进去
+    ⇒ 重复的 assembly 特性 ⇒ **本工程编译失败**（CS0579 × 15）。
+    ⇒ 把它整个排除：本工程不编译它，CI 里单独 `dotnet build` 它。
+  -->
+  <ItemGroup>
+    <Compile Remove="DomainPurity/**" />
+    <None Remove="DomainPurity/**" />
+  </ItemGroup>
+
 </Project>

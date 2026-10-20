@@ -115,7 +115,14 @@ public class DocCitationTests
             {
                 checkedRefs++;
                 string rel = m.Groups["f"].Value;
-                if (!files.Contains(rel)) offenders.Add($"{name} 引用了不存在的测试文件 {rel}");
+                if (files.Contains(rel)) continue;
+                // ⚠️ **被 .gitignore 排除的路径不算「缺失」** —— 那是**本机工具**，
+                // 不是仓库内容（例如 `tests/_spike_test.cs`：一个故意失败的探针，
+                // 用来验证「测试失败时 runner 真的会退出 1」）。
+                // 不豁免它的话，CI（干净检出）会红，而本机是绿的 ——
+                // 同一个引用在两台机器上答案不同。
+                if (IsGitIgnored(rel)) continue;
+                offenders.Add($"{name} 引用了不存在的测试文件 {rel}");
             }
 
             // ② 类名
@@ -148,5 +155,38 @@ public class DocCitationTests
         // 防空转：必须真的扫到了引用，否则「一个都没查」也会「通过」。
         Assertions.AssertThat(checkedRefs).IsGreaterEqual(10);
         Assertions.AssertThat(string.Join(" | ", offenders)).IsEmpty();
+    }
+
+    /// <summary>
+    /// 这个路径是不是被 <c>.gitignore</c> 明确排除 ⇒ 它是**本机工具**，不是仓库内容。
+    /// <para><b>为什么用 <c>git check-ignore</c> 而不自己实现匹配</b>：
+    /// gitignore 的语义（否定规则、目录、锚定、优先级）不是几十行能写对的，
+    /// 而 <c>git check-ignore</c> 是**权威实现**。没有 git 就返回 false
+    /// （退回到「文件必须存在」的严格判据 —— 宁可多报一条，也不放过一个真的空气）。</para>
+    /// </summary>
+    private static bool IsGitIgnored(string relPath)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo(
+                "git", $"check-ignore -q -- \"{relPath}\"")
+            {
+                WorkingDirectory = RepoRoot(),
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc is null) return false;
+            proc.StandardOutput.ReadToEnd();
+            proc.StandardError.ReadToEnd();
+            proc.WaitForExit();
+            return proc.ExitCode == 0;   // 0 = 被忽略；1 = 没被忽略；128 = 出错
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

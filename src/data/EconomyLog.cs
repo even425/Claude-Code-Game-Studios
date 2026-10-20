@@ -102,6 +102,41 @@ public sealed record EconomyRow
     /// 自由文本没法分组统计，而这行的全部意义就是「按原因分组数一数」。
     /// </remarks>
     public string? Reason { get; init; }
+
+    // ── 每日经济快照（D-054 阶段 3）─────────────────────────────────────
+    //
+    // 守恒律的每一项都要能在流水里查到，否则「逐日核对」只能靠推算：
+    //   Σ英雄金币 + 村库 + 已销毁金币 + 税额余数 = 初始金币 + 累计新增金币
+
+    /// <summary>快照日的<b>英雄金币合计</b>（守恒律的「Σ英雄金币」）。</summary>
+    public long? HeroGoldTotal { get; init; }
+
+    /// <summary>快照日的<b>村庄金库余额</b>（守恒律的「村库」）。</summary>
+    public long? VillageGold { get; init; }
+
+    /// <summary>快照日的<b>村庄材料池</b>（升级材料线的进度）。</summary>
+    public long? VillageMaterial { get; init; }
+
+    /// <summary>累计<b>发放</b>给英雄的金币（守恒律的「累计新增」）。</summary>
+    public long? GoldGranted { get; init; }
+
+    /// <summary>累计<b>销毁</b>掉的金币（升级花掉的那些 → 变成建筑）。</summary>
+    public long? GoldSpent { get; init; }
+
+    /// <summary>累计升级次数（= 已建成的级数）。</summary>
+    public long? Upgrades { get; init; }
+
+    /// <summary>快照日的<b>税额余数</b>（单位 1/100 金；守恒律的「余数」）。</summary>
+    public long? TaxCarry { get; init; }
+
+    /// <summary>快照日的<b>英雄人数</b>（初始金币池 = 人数 × 100）。</summary>
+    public long? HeroCount { get; init; }
+
+    /// <summary>快照日<b>在工地的人手</b>数（建造中会抽走市场供给 → 数据偏差要标注）。</summary>
+    public long? Builders { get; init; }
+
+    /// <summary>快照日<b>待发零头</b>（单位 1/100 金；已挣到但还没进钱包的钱）。</summary>
+    public long? GoldPending { get; init; }
 }
 
 /// <summary>
@@ -147,6 +182,30 @@ public sealed class EconomyLog : IDisposable
     /// </remarks>
     public const string ShoppingMissedKind = "ShoppingMissed";
 
+    /// <summary>
+    /// 每日经济快照行的类别标识（D-054 阶段 3；<b>每天一行</b>）。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么需要它</b>：守恒律（<b>流通口径</b>）
+    /// 「<c>Σ英雄钱包金币 + 村库金币 + 累计销毁金币 = 初始金币 + 累计发放金币</c>」
+    /// 里的每一项都得能在数据里查到，否则「逐日核对」只能靠事后推算 ——
+    /// 而**推算就等于没有验证**。
+    /// <para>
+    /// ⚠️ <b>这里没有「税额余数」</b> —— 余数是记账零头，不是钱
+    /// （见 <c>StallFee.Compute</c>：钱在买卖双方之间完整转移）。
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>这里也没有把「待发零头」算进守恒律</b> —— 它是
+    /// 「已经挣到、但<b>还没进任何钱包</b>」的<b>应收</b>：
+    /// 左边是「钱在哪」（它哪都不在），右边是「已经兑现了多少」
+    /// （兑现的那部分才在「累计发放」里）。
+    /// 只把它加在一边 = 凭空多算那部分钱（2026-10-20 的 37 人探针实测差出
+    /// 整整一个零头：3810 vs 3820）。
+    /// 它是<b>独立科目</b>（跟着存档 0.6 的 <c>GoldCarry</c> 走），单独核对自洽性。
+    /// </para>
+    /// </remarks>
+    public const string SnapshotKind = "EconomySnapshot";
+
     /// <summary>条目分隔符（物品名不含逗号）。</summary>
     public const char EntrySeparator = ',';
 
@@ -171,6 +230,9 @@ public sealed class EconomyLog : IDisposable
 
     /// <summary>「未成」行的序号（用于拼出行标识；这些行没有领域事件 ID）。</summary>
     private long _missedSeq;
+
+    /// <summary>「每日快照」行的序号（用于拼出行标识）。</summary>
+    private long _snapshotSeq;
 
     /// <param name="path">落盘路径（由调用方注入，不写死 <c>user://</c>）。</param>
     /// <param name="simSecondsPerDay">一个模拟日的秒数（用来把模拟时间换算成游戏日）。</param>
@@ -291,8 +353,66 @@ public sealed class EconomyLog : IDisposable
         return true;
     }
 
-    /// <summary>关掉文件（flush 并释放句柄）。<b>可重复调用</b>。</summary>
+    /// <summary>
+    /// 追加一条<b>每日经济快照</b>（D-054 阶段 3；每天一行）。
+    /// </summary>
+    /// <param name="simTime">快照时刻（模拟秒）；游戏日由它换算。</param>
+    /// <param name="heroGoldTotal">英雄金币合计。</param>
+    /// <param name="villageGold">村庄金库余额。</param>
+    /// <param name="villageMaterial">村庄材料池。</param>
+    /// <param name="goldGranted">累计发放给英雄的金币。</param>
+    /// <param name="goldSpent">累计销毁掉的金币（升级花掉的）。</param>
+    /// <param name="upgrades">累计升级次数。</param>
+    /// <param name="taxCarry">税额余数（单位 1/100 金）。</param>
+    /// <param name="heroCount">英雄人数。</param>
+    /// <param name="builders">在工地的人手数。</param>
+    /// <returns>写入了就 true；文件已关就 false。</returns>
     /// <remarks>
+    /// <b>为什么是「直写」而不是事件</b>：快照是<b>读数</b>（某一刻的经济状态），
+    /// 不是一次事件 —— 同一套理由见 <see cref="AppendShoppingMissed"/>。
+    /// </remarks>
+    public bool AppendSnapshot(
+        double simTime,
+        long heroGoldTotal,
+        long villageGold,
+        long villageMaterial,
+        long goldGranted,
+        long goldSpent,
+        long upgrades,
+        long taxCarry,
+        long heroCount,
+        long builders,
+        long goldPending = 0)
+    {
+        if (_writer is null) return false;
+
+        long day = DayOf(simTime);
+        _snapshotSeq++;
+
+        var row = new EconomyRow
+        {
+            Kind = SnapshotKind,
+            Id = $"snapshot-{day}-{_snapshotSeq}",
+            Day = day,
+            SimTime = simTime,
+            HeroGoldTotal = heroGoldTotal,
+            VillageGold = villageGold,
+            VillageMaterial = villageMaterial,
+            GoldGranted = goldGranted,
+            GoldSpent = goldSpent,
+            Upgrades = upgrades,
+            TaxCarry = taxCarry,
+            HeroCount = heroCount,
+            Builders = builders,
+            GoldPending = goldPending,
+        };
+
+        _writer.WriteLine(JsonSerializer.Serialize(row, Options));
+        _rows++;
+        return true;
+    }
+
+    /// <summary>关掉文件（flush 并释放句柄）。<b>可重复调用</b>。</summary>    /// <remarks>
     /// 幂等是必需的：<c>using</c> 与显式 <c>Close()</c> 都会走到这里，
     /// 对已释放的 <c>StreamWriter</c> 再 Flush 会抛「Cannot write to a closed TextWriter」。
     /// </remarks>

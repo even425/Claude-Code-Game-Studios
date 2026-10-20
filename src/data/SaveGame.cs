@@ -8,17 +8,29 @@ namespace ClaudeCodeGameStudios.Data;
 /// <summary>存档格式版本。基线 §13.7 要求存档带版本号并有迁移入口。</summary>
 public readonly record struct SaveVersion(int Major, int Minor)
 {
-    /// <summary>当前版本。<b>【已确认】</b>(0,5) —— R-05 第二轮 / D-052 升。</summary>
+    /// <summary>当前版本。<b>【已确认】</b>(0,6) —— R-05 第四轮 / D-054 阶段 4 升。</summary>
     /// <remarks>
-    /// <b>0,4 → 0,5</b>（`07` **D-052**）：存档里增
-    /// <see cref="VillageSave.VillageCutRemainder"/>（村庄税额余数，单位 1/100 金）。
+    /// <b>0,5 → 0,6</b>（`07` **D-054** 阶段 4 拍板）：存档里增
+    /// <list type="bullet">
+    /// <item><see cref="HeroSave.GoldCarry"/>（每英雄的<b>待发零头</b>，单位 1/100 金）</item>
+    /// <item><see cref="SaveGame.GoldGrantedTotal"/>（累计发放给英雄的金币）</item>
+    /// <item><see cref="SaveGame.GoldSpentTotal"/>（累计销毁的金币 —— 升级花掉的）</item>
+    /// <item><see cref="SaveGame.VillageTier"/>（村庄层级 —— <b>顺带修既有缺陷</b>）</item>
+    /// </list>
     /// <para>
     /// 旧档<b>整份拒绝</b>（I11 + D-021/D-029/D-036 先例），<b>不</b>写迁移器。
-    /// 余数是<b>已经向买家收走、只是暂时没入账</b>的钱，读档后丢掉它等于让那部分钱凭空消失
-    /// —— 所以它必须跟着存档走。
+    /// </para>
+    /// <para>
+    /// <b>为什么必须存</b>：待发零头是<b>已经挣到、只是还没发出去</b>的钱，
+    /// 读档后丢掉它等于让那部分钱凭空消失 —— 与 D-052 存税额余数是**同一条理由**。
+    /// 累计发放/累计销毁则是守恒律的另外两项，不存就<b>对不上账</b>。
+    /// </para>
+    /// <para>
+    /// <b>村庄层级本来就不入档</b>（既有缺陷）：读档后村庄回到 0 级，
+    /// 而升级花掉的金币已经记下了 → <b>账实不符</b>。这次一并补上。
     /// </para>
     /// </remarks>
-    public static SaveVersion Current => new(0, 5);
+    public static SaveVersion Current => new(0, 6);
 
     /// <inheritdoc />
     public override string ToString() => $"{Major}.{Minor}";
@@ -162,6 +174,18 @@ public sealed class HeroSave
     /// 同一名英雄会在同一天再成交一次 —— 钱和货都会被重复搬运（D-025 每英雄每天 ≤ 1 次）。
     /// </remarks>
     public int LastShoppingDay { get; set; }
+
+    /// <summary>
+    /// 该英雄的<b>待发零头</b>（单位 1/100 金）。<b>0,6 新增</b>（D-054 阶段 4）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>它是什么</b>：副本金币报酬是「每人每次 X 金」，而 X 可以是<b>分数</b>
+    /// （金币的最小单位是 1/100 金）。这个英雄攒到但<b>还没发出去</b>的零头就记在这儿。</para>
+    /// <para><b>为什么不存就会丢钱</b>：它是<b>已经挣到</b>的钱。
+    /// 读档后丢掉它 = 那部分钱凭空消失 —— 与 D-052 存税额余数同一条理由。</para>
+    /// <para><b>合法范围 [0, 99]</b>：满 100 就该发出去一张整金了。</para>
+    /// </remarks>
+    public long GoldCarry { get; set; }
 }
 
 /// <summary>
@@ -298,6 +322,41 @@ public sealed class SaveGame
 
     /// <summary>模拟时间（模拟秒）。</summary>
     public double SimTime { get; set; }
+
+    /// <summary>
+    /// 累计<b>发放</b>给英雄的金币（整金）。<b>0,6 新增</b>（D-054 阶段 4）。
+    /// </summary>
+    /// <remarks>
+    /// 守恒律的「累计新增」这一项。不存它，读档后账就<b>对不上</b>。
+    /// </remarks>
+    public long GoldGrantedTotal { get; set; }
+
+    /// <summary>
+    /// 累计<b>销毁</b>掉的金币（升级花掉的那些）。<b>0,6 新增</b>（D-054 阶段 4）。
+    /// </summary>
+    /// <remarks>
+    /// 守恒律的「已销毁」这一项。升级花掉的钱**变成建筑**，
+    /// 既不在任何英雄钱包里，也不在金库里 —— 必须单独记一笔。
+    /// </remarks>
+    public long GoldSpentTotal { get; set; }
+
+    /// <summary>
+    /// 村庄层级（0 = 未升级）。<b>0,6 新增</b>（D-054 阶段 4）。
+    /// </summary>
+    /// <remarks>
+    /// <b>顺带修一个既有缺陷</b>：村庄层级<b>本来就不入档</b> ——
+    /// 读档后村庄回到 0 级，而升级花掉的金币已经记下了 → <b>账实不符</b>。
+    /// </remarks>
+    public int VillageTier { get; set; }
+
+    /// <summary>
+    /// 累计<b>已付款</b>的升级次数。<b>0,6 新增</b>（D-054 阶段 4）。
+    /// </summary>
+    /// <remarks>
+    /// 与 <see cref="VillageTier"/>（**已建成**的级数）不同：付款时层级还没升上去
+    /// （建造要时间）。两个数都存，才对得上账。
+    /// </remarks>
+    public long VillageUpgrades { get; set; }
 
     /// <summary>
     /// 随机数状态（十进制字符串）。
@@ -472,6 +531,14 @@ public static class SaveValidator
             {
                 errors.Add(new SaveError(
                     $"{path}", $"属性为负（力 {h.Power} / 速 {h.Speed} / 韧 {h.Grit}）。"));
+            }
+
+            // 待发零头（0.6 新增）：单位 1/100 金，必须落在 [0, 99]。
+            if (h.GoldCarry < 0 || h.GoldCarry >= 100)
+            {
+                errors.Add(new SaveError(
+                    $"{path}.goldCarry",
+                    $"待发零头 {h.GoldCarry} 超出合法范围 [0, 99]（单位 1/100 金）。"));
             }
 
             // 在场性与行动状态（R-03）：读档要恢复「在村/随队」与「正在做什么」，
@@ -766,6 +833,35 @@ public static class SaveValidator
                 "village.villageCutRemainder",
                 $"村庄税额余数 {save.Village.VillageCutRemainder} 超出合法范围 "
                 + $"[0, {ClaudeCodeGameStudios.Domain.Stall.StallFee.UnitsPerGold - 1}]。"));
+        }
+
+        // 0.6 新增（D-054 阶段 4）：累计发放 / 累计销毁 / 村庄层级
+        if (save.GoldGrantedTotal < 0)
+        {
+            errors.Add(new SaveError("goldGrantedTotal", "累计发放的金币为负。"));
+        }
+
+        if (save.GoldSpentTotal < 0)
+        {
+            errors.Add(new SaveError("goldSpentTotal", "累计销毁的金币为负。"));
+        }
+
+        if (save.VillageTier < 0
+            || save.VillageTier > ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier)
+        {
+            errors.Add(new SaveError(
+                "villageTier",
+                $"村庄层级 {save.VillageTier} 超出合法范围 "
+                + $"[0, {ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier}]。"));
+        }
+
+        if (save.VillageUpgrades < 0
+            || save.VillageUpgrades > ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier)
+        {
+            errors.Add(new SaveError(
+                "villageUpgrades",
+                $"累计已付款的升级次数 {save.VillageUpgrades} 超出合法范围 "
+                + $"[0, {ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier}]。"));
         }
 
         return errors.Count == 0 ? SaveValidationResult.Ok() : SaveValidationResult.Fail(errors);

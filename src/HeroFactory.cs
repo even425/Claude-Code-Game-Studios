@@ -79,7 +79,23 @@ public static class HeroFactory
         }
     }
 
-    private static readonly Random _rng = new();
+    private static Random _rng = new();
+
+    /// <summary>
+    /// 固定召唤用的随机源（D-054 阶段 3：让「同一种子两次跑」真正可复现）。
+    /// </summary>
+    /// <param name="seed">种子（通常传 <c>Main.BootSeed</c>）。</param>
+    /// <remarks>
+    /// <para><b>为什么必须有这个</b>：召唤用的是<b>另一个</b>随机源
+    /// （<see cref="_rng"/>，<c>System.Random</c>），与游戏主随机流（<c>Main._rng</c>）<b>无关</b>。
+    /// 早先只固定了 <c>Main.BootSeed</c>，结果两次跑的<b>英雄本人</b>（名字/世界/性格/属性）
+    /// 仍然不同 → 经济行为随之不同 → 采集数据**依然不可复现**
+    /// （实测：模拟时间与副本实例标识两次完全一致，但英雄不同、行数不同）。
+    /// </para>
+    /// <para><b>调用时机</b>：必须在<b>第一次召唤之前</b>（<c>Main._Ready</c> 里
+    /// <c>OnSummon()</c> 之前）。</para>
+    /// </remarks>
+    public static void Seed(ulong seed) => _rng = new Random((int)(seed & 0x7FFFFFFF));
 
     /// <summary>村民口头上的绰号。杂谈里 {a} 槽位用这个。</summary>
     internal static readonly string[] Nicknames =

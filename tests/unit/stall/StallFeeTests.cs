@@ -206,8 +206,50 @@ public class StallFeeTests
             Assertions.AssertThat(seller + village).IsEqual(amount);   // 每笔守恒
         }
 
-        long expected = totalAmount * 5 / 100;   // 整数口径的 5%
-        Assertions.AssertThat(totalVillage + carry).IsEqual(expected);
+        // 累计守恒的**精确**恒等式（D-054 阶段 3 更正）：
+        //   Σ(villageCut) × 100 + carry == totalAmount × 5
+        // （单位 1/100 金，所以 carry 直接加；两边都是整数，无浮点误差）
+        //
+        // ⚠️ **不要写成 `Σ(villageCut) + carry == floor(5% × 总成交额)`** ——
+        // 那个写法**只在 5% × 成交额恰为整数时成立**。
+        // 旧基线（成交 3280 金 → 5% = 164.0 恰好整数）正好蒙对了，
+        // 于是这个错误一直没被发现；2026-10-21 的采集数据（成交 702 金 → 5% = 35.1）
+        // 才把它照出来 —— 按旧写法会差 0.1 金。
+        long expected = totalAmount * 5;   // 单位 1/100 金
+        Assertions.AssertThat(totalVillage * 100 + carry).IsEqual(expected);
+    }
+
+    /// <summary>
+    /// 同一条恒等式，但<b>故意用 5% 不是整数的金额</b> —— 这才是能抓住 floor 错误的用例。
+    /// </summary>
+    /// <remarks>
+    /// 2026-10-21 之前，本文档档的恒等式用例用的是「5% 恰好整除」的金额，
+    /// 于是「<c>Σ村抽 + 在途余数 = floor(5% × 成交额)</c>」这个**错误写法**一直通过。
+    /// 采集数据（成交 702 金，5% = 35.1）把它照出来了。
+    /// </remarks>
+    [TestCase]
+    public void Compute_AccumulatedConservation_HoldsWhenFivePercentIsNotAnInteger()
+    {
+        // 5% × 51 = 2.55（**不是整数**）→ floor 版会差 0.05 金
+        long[] amounts = { 3, 7, 11, 13, 17 };   // 合计 51
+        long carry = 0;
+        long totalVillage = 0;
+        long totalAmount = 0;
+
+        foreach (long amount in amounts)
+        {
+            var (seller, village, newCarry) = StallFee.Compute(amount, carry);
+            carry = newCarry;
+            totalVillage += village;
+            totalAmount += amount;
+            Assertions.AssertThat(seller + village).IsEqual(amount);   // 每笔守恒
+        }
+
+        // 精确恒等式：Σ村抽 × 100 + 在途余数 == 成交额 × 5
+        Assertions.AssertThat(totalVillage * 100 + carry).IsEqual(totalAmount * 5L);
+        // 51 × 5% = 2.55 金 → 村库入 2 金 + 在途 55（1/100）
+        Assertions.AssertThat(totalVillage).IsEqual(2L);
+        Assertions.AssertThat(carry).IsEqual(55L);
     }
 
     /// <summary>跨日不清零：余数是**累计**的，不随日期重置。</summary>

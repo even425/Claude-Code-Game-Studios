@@ -456,4 +456,77 @@ public class EconomyLogTests
             if (File.Exists(path)) File.Delete(path);
         }
     }
+
+    // ── 每日经济快照（D-054 阶段 3）───────────────────────────────────────
+
+    /// <summary>
+    /// 快照行必须<b>把守恒律的每一项都写出来</b> —— 缺一项，「逐日核对」就只能靠推算。
+    /// </summary>
+    [TestCase]
+    public void AppendSnapshot_WritesEveryConservationTerm()
+    {
+        string path = TempPath("snapshot");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+            bool written = log.AppendSnapshot(
+                7 * SimSecondsPerDay,
+                heroGoldTotal: 345, villageGold: 35, villageMaterial: 482,
+                goldGranted: 80, goldSpent: 50, upgrades: 1,
+                taxCarry: 10, heroCount: 3, builders: 1);
+
+            Assertions.AssertThat(written).IsTrue();
+            Assertions.AssertThat(log.RowCount).IsEqual(1L);
+
+            log.Close();
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var row = doc.RootElement;
+
+            Assertions.AssertThat(row.GetProperty("Kind").GetString()).IsEqual("EconomySnapshot");
+            Assertions.AssertThat(row.GetProperty("Day").GetInt64()).IsEqual(8L);
+            Assertions.AssertThat(row.GetProperty("HeroGoldTotal").GetInt64()).IsEqual(345L);
+            Assertions.AssertThat(row.GetProperty("VillageGold").GetInt64()).IsEqual(35L);
+            Assertions.AssertThat(row.GetProperty("VillageMaterial").GetInt64()).IsEqual(482L);
+            Assertions.AssertThat(row.GetProperty("GoldGranted").GetInt64()).IsEqual(80L);
+            Assertions.AssertThat(row.GetProperty("GoldSpent").GetInt64()).IsEqual(50L);
+            Assertions.AssertThat(row.GetProperty("Upgrades").GetInt64()).IsEqual(1L);
+            Assertions.AssertThat(row.GetProperty("TaxCarry").GetInt64()).IsEqual(10L);
+            Assertions.AssertThat(row.GetProperty("HeroCount").GetInt64()).IsEqual(3L);
+            Assertions.AssertThat(row.GetProperty("Builders").GetInt64()).IsEqual(1L);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    /// <summary>快照行<b>不依赖</b>领域事件 —— 它是「某一刻的读数」，没有事件 ID。</summary>
+    [TestCase]
+    public void AppendSnapshot_HasUniqueIdPerCall()
+    {
+        string path = TempPath("snapshot-ids");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+            log.AppendSnapshot(1.0, 1, 1, 1, 1, 1, 1, 1, 1, 1);
+            log.AppendSnapshot(1.0, 2, 2, 2, 2, 2, 2, 2, 2, 2);
+
+            log.Close();
+            string[] lines = File.ReadAllLines(path);
+            Assertions.AssertThat(lines.Length).IsEqual(2);
+
+            var ids = new List<string>();
+            foreach (var line in lines)
+            {
+                using var doc = JsonDocument.Parse(line);
+                ids.Add(doc.RootElement.GetProperty("Id").GetString()!);
+            }
+
+            Assertions.AssertThat(ids.Distinct().Count()).IsEqual(2);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
 }

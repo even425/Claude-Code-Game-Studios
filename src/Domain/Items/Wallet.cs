@@ -81,12 +81,23 @@ public sealed class Wallet
     /// <summary>返回「加了 <paramref name="delta"/>」之后的新包。</summary>
     /// <remarks>
     /// 走 <see cref="Inventory.TryAdd"/> 的同款防线：空 id / 非正 delta / 超容量 = null。
+    /// <para>
+    /// <b>【D-054-01 补】溢出也拒收</b>：容量为 0（无限）时，容量检查不生效，
+    /// 于是 <c>Amount + delta</c> 溢出会<b>绕成负数</b> ——
+    /// 钱包里出现负余额，而余额为负的检查在别处（I12）只保护「扣减」方向。
+    /// 一笔溢出的发放若被接受，结算就会记下一个**负钱**的英雄。
+    /// 显式判掉溢出，发放路径的「拒收 → 整笔不应用」（I15）才是真的可达。
+    /// </para>
     /// </remarks>
     public Wallet? TryAdd(ResourceId id, long delta)
     {
         if (string.IsNullOrEmpty(id.Value)) return null;
         if (delta <= 0) return null;
-        long next = Amount(id) + delta;
+
+        long current = Amount(id);
+        if (delta > long.MaxValue - current) return null;   // 溢出：拒，不让它绕成负数
+
+        long next = current + delta;
         if (Capacity > 0 && next > Capacity) return null;
 
         var cloned = new Dictionary<ResourceId, long>(ResourceIdComparer.Comparer);

@@ -8,6 +8,7 @@ using ClaudeCodeGameStudios.Domain.Heroes;
 using ClaudeCodeGameStudios.Domain.Quests;
 using ClaudeCodeGameStudios.Domain.Relationships;
 using System.IO;
+using System.Globalization;
 // 别名而非整包 using：领域类型就叫 Village，而本类已有一个名为 _village 的
 // VillageView（表现层节点）。两个都叫「村庄」，混用会读错。
 using DomainVillage = ClaudeCodeGameStudios.Domain.Village.Village;
@@ -62,8 +63,33 @@ public partial class Main : Node2D
 
     /// <summary>新开局的种子。<b>读档时会被存档里的状态取代</b>，所以它只对新开局有意义。</summary>
     // System.Environment —— 写全名是因为 Godot 也有一个 Environment，会撞名。
-    private static readonly ulong BootSeed =
-        unchecked((ulong)System.Environment.TickCount * 2654435761UL) + 1UL;
+    private static readonly ulong BootSeed = ResolveBootSeed();
+
+    /// <summary>
+    /// 解析开局种子：<c>--seed=N</c> 优先；否则按时间派生（<b>每次运行都不同</b>）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么要能固定</b>（D-054 阶段 3）：采集器的种子来自
+    /// <c>Environment.TickCount</c> → 同一份代码两次跑出的数据也不同 →
+    /// 跨版本比较只能给区间（实测旧代码两份样本的成交额差 <b>2.3 倍</b>）。
+    /// 固定种子让「同一代码两次跑」<b>逐行一致</b>，回归才有可比性。</para>
+    /// <para><b>注意</b>：固定种子也固定了 <see cref="SessionToken"/>（副本实例标识的组成部分），
+    /// 于是两次运行的副本标识会相同 —— 采集器**不落盘**结算幂等键，因此**不会**互相误伤。
+    /// （真机自检会落盘，那种场景别用固定种子。）</para>
+    /// </remarks>
+    private static ulong ResolveBootSeed()
+    {
+        foreach (var a in OS.GetCmdlineUserArgs())
+        {
+            if (a.StartsWith("--seed=", StringComparison.Ordinal)
+                && ulong.TryParse(a.Substring("--seed=".Length), out var fixedSeed))
+            {
+                return fixedSeed;
+            }
+        }
+
+        return unchecked((ulong)System.Environment.TickCount * 2654435761UL) + 1UL;
+    }
 
     /// <summary>
     /// 本次会话的令牌 —— 参与副本实例标识的构造。
@@ -231,8 +257,88 @@ public partial class Main : Node2D
     /// <summary>本次副本要发的资源种类。由 <see cref="ResolveDungeon"/> 在结算前写入。</summary>
     private string _pendingRewardResource = "";
 
+    /// <summary>村庄升级的扣款服务（D-054-02：金币 + 材料）。</summary>
+    private ClaudeCodeGameStudios.Application.VillageUpgradeService _upgradeService = null!;
+
+    /// <summary>给英雄钱包发金币的写入入口（D-054-01；记「累计发放」）。</summary>
+    private ClaudeCodeGameStudios.Application.WalletGrantService _walletWriter = null!;
+
     /// <summary>本次副本要发的数量。<b>【待定 T-004】无出处。</b></summary>
     private long _pendingRewardAmount;
+
+    /// <summary>副本金币报酬的默认值（D-054-01 基准候选值；单位 1/100 金 = 1 金）。</summary>
+    private const long DefaultGoldRewardUnits = 100L;
+
+    /// <summary>
+    /// 副本金币报酬率 X（单位 <b>1/100 金</b>）—— 每人每次实际参战获得多少。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么用 1/100 金</b>：金币是整数，而标定需要的 X 是分数（如 0.5）。
+    /// 零头由 <c>WalletGrantService</c> <b>按英雄分别累计</b>，攒够 1 金才发（D-054 阶段 4 拍板）。
+    /// </remarks>
+    private long _goldRewardUnits = DefaultGoldRewardUnits;
+
+    /// <summary>
+    /// 开局召唤多少英雄。
+    /// </summary>
+    /// <remarks>
+    /// <b>正常玩法是 3 人</b>；<b>采集模式默认 37 人</b>（设计目标的村庄规模，D-054 阶段 4 拍板）。
+    /// <br>为什么采集要更多：货物地板 = 人数 × 80 金 —— 3 人时地板 240 金，
+    /// 「目标 150 金」比地板还低、<b>物理上不可达</b>；37 人时地板 2960 金，
+    /// 目标才落在可讨论的区间里。
+    /// <br>可用 <c>--collectheroes=N</c> 覆盖。
+    /// </remarks>
+    private static int InitialHeroCount()
+    {
+        const int normalCount = 3;
+        const int collectCount = 37;   // 设计目标的村庄规模
+
+        var args = OS.GetCmdlineUserArgs();
+        if (!args.Any(a => a.StartsWith("--collect=", StringComparison.Ordinal)))
+        {
+            return normalCount;
+        }
+
+        var arg = args.FirstOrDefault(a => a.StartsWith("--collectheroes=", StringComparison.Ordinal));
+        if (arg is null) return collectCount;
+
+        var raw = arg.Substring("--collectheroes=".Length);
+        if (!int.TryParse(raw, out var n) || n <= 0 || n > 500)
+        {
+            GD.Print($"COLLECTHEROES 参数无效：「{raw}」。人数必须是 1 ~ 500 之间的整数。");
+            return collectCount;
+        }
+
+        return n;
+    }
+
+    /// <summary>
+    /// 解析命令行 <c>--goldreward=X</c>（X 可为分数，单位金）。
+    /// </summary>
+    /// <returns>报酬率（单位 1/100 金）；参数非法时返回 <c>null</c>。</returns>
+    /// <remarks>
+    /// ⚠️ **参数非法必须明确报错并中止采集** —— 静默取整会产出
+    /// 「看着像 X=1 其实不是」的样本，那比没有数据更坏（2026-10-21 实测踩过：
+    /// <c>--goldreward=0.5</c> 被 <c>long</c> 解析静默丢弃，两轮采集都跑的 X=1）。
+    /// </remarks>
+    private static long? ParseGoldRewardUnits()
+    {
+        var arg = OS.GetCmdlineUserArgs()
+            .FirstOrDefault(a => a.StartsWith("--goldreward=", StringComparison.Ordinal));
+        if (arg is null) return DefaultGoldRewardUnits;
+
+        var raw = arg.Substring("--goldreward=".Length);
+        if (!decimal.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            || value < 0m || value > 1000m)
+        {
+            GD.Print($"GOLDREWARD 参数无效：「{raw}」。"
+                     + "X 必须是 0 ~ 1000 之间的非负数（金），且**可以是分数**（如 0.5）。"
+                     + "本次采集中止 —— 不产出数据，免得留下「看着像另一个 X」的误导样本。");
+            return null;
+        }
+
+        return (long)Math.Round(value * 100m, MidpointRounding.AwayFromZero);
+    }
 
     /// <summary>副本胜利时发什么。<b>失败一律发空</b>（D-010 Q1「失败不给奖励」）。</summary>
     /// <remarks>
@@ -245,22 +351,46 @@ public partial class Main : Node2D
         => RewardsFor(heroesWon, ClaudeCodeGameStudios.Domain.Settlement.LootAllocation.Empty);
 
     /// <summary>
-    /// 本次结算的奖励：村庄资源 + <paramref name="loot"/> 里的个人战利品。
+    /// 本次结算的奖励：村庄资源 + <paramref name="loot"/> 里的个人战利品
+    /// + （副本时）每位实际参战英雄的金币。
     /// </summary>
     /// <param name="heroesWon">战斗是否胜利。</param>
     /// <param name="loot">本次副本的战利品分配（由调用方随这次结算带进来）。</param>
+    /// <param name="participants">
+    /// 本次副本的<b>实际参战英雄</b>（快照）。<b>null</b> = 与副本无关的结算 → 不发金币。
+    /// </param>
     /// <remarks>
-    /// <b>两半奖励，一次结算</b>（R-01）：村庄资源（既有行为）与英雄个人物品
-    /// （D04「不设公共奖励池，物品直接归个人」）被放进<b>同一个增量</b>，
-    /// 于是 <c>Settlement.Apply</c> 能用<b>同一把幂等锁</b>把它们一起落下去 ——
-    /// 中间任何一步失败都不会留下「村庄拿到了、英雄没拿到」的半笔账。
+    /// <b>三半奖励，一次结算</b>（R-01 + D-054-01）：村庄资源、英雄个人物品、
+    /// 英雄个人金币被放进<b>同一个增量</b>，于是 <c>Settlement.Apply</c> 能用
+    /// <b>同一把幂等锁</b>把它们一起落下去 —— 中间任何一步失败都不会留下
+    /// 「村庄拿到了、英雄没拿到」的半笔账。
+    /// <br><b>但三者不总是同时发生</b>：金币<b>失败也发</b>（D-054-01 裁决 ①），
+    /// 材料与战利品仍<b>失败不发</b>（D-010 Q1，见该条原处的加注）。
     /// </remarks>
     private ClaudeCodeGameStudios.Domain.Settlement.SettlementDelta RewardsFor(
-        bool heroesWon, ClaudeCodeGameStudios.Domain.Settlement.LootAllocation loot)
+        bool heroesWon,
+        ClaudeCodeGameStudios.Domain.Settlement.LootAllocation loot,
+        IReadOnlyList<string>? participants = null)
     {
         var delta = new ClaudeCodeGameStudios.Domain.Settlement.SettlementDelta();
 
-        // 失败不发任何东西。注意这里<b>照常返回一个空的增量</b>而不是抛错 ——
+        // ── 英雄个人：金币（D-054-01）──
+        //    **失败也发** —— 这是 D-054 引入的**唯一一项「失败也发」的奖励**。
+        //    参战名单用副本实例的**快照**（D-047 D02）：结算必须对应「谁去了」，
+        //    而不是「读档瞬间队伍里还有谁」。
+        //    金额不在这里给：报酬率 X 是**规则**，住在写入入口里
+        //    （`WalletGrantService` 负责按英雄分别累计零头）。
+        if (_goldRewardUnits > 0 && participants is not null)
+        {
+            foreach (var id in participants)
+            {
+                if (string.IsNullOrEmpty(id)) continue;
+                delta.AddWalletGrant(new HeroId(id));
+            }
+        }
+
+        // 失败不发**材料与战利品**（D-010 Q1「失败不给奖励」）。
+        // 注意这里<b>照常返回一个（可能含金币的）增量</b>而不是抛错 ——
         // 「失败也要发生一次结算」正是幂等键要防的那条路：若失败时不结算，
         // 同一次远征被重放就会重复发放胜利奖励。
         if (!heroesWon) return delta;
@@ -478,8 +608,24 @@ public partial class Main : Node2D
         //
         // 第四个参数是**个人物品的写入入口**（R-01）：村庄资源与英雄个人物品
         // 因此进的是同一次结算、共用同一把幂等锁（I15：要么完整应用，要么不应用）。
+        // D-054-01：给英雄个人钱包发金币的写入入口。
+        // **留成字段**（不内联）：它记着「累计发放了多少金币」与「每英雄的待发零头」，
+        // 守恒律的「累计新增」那一项要从这里取。
+        //
+        // ⚠️ 报酬率必须**在构造之前**定好 —— 写入入口把 X 当规则（不放在增量里，
+        // 免得同一个数字在两处定义、迟早分叉）。
+        var goldUnits = ParseGoldRewardUnits();
+        if (goldUnits is null) { GetTree().Quit(); return; }   // 参数非法：明确报错并中止
+        _goldRewardUnits = goldUnits.Value;
+
+        _walletWriter = new ClaudeCodeGameStudios.Application.WalletGrantService(
+            id => _heroes.FirstOrDefault(h => h.Id == id),
+            ClaudeCodeGameStudios.Application.Stall.StallService.Gold,
+            _goldRewardUnits);
+
         _settlement = new ClaudeCodeGameStudios.Domain.Settlement.Settlement(
-            RewardsFor, ApplyWrites, itemWriter: _itemGrant);
+            RewardsFor, ApplyWrites, itemWriter: _itemGrant,
+            walletWriter: _walletWriter);
 
         // 战斗模块与本类其余随机同源 —— 否则只有战斗可复现，
         // 而「战斗可复现、抽任务不可复现」是最坏的一种半成品。
@@ -495,7 +641,12 @@ public partial class Main : Node2D
             targetWeight: (hero, targetId) => RelationshipRules.TargetWeight(
                 _relationship.ValueOf(hero.Id, targetId)));
 
-        for (int i = 0; i < 3; i++) OnSummon();
+        // D-054 阶段 3：召唤用**另一个**随机源（HeroFactory 自己的 System.Random），
+        // 不播种它，「同一种子两次跑」就会得到**不同的英雄** → 数据仍不可复现。
+        // 必须在第一次召唤之前播种。
+        HeroFactory.Seed(BootSeed);
+
+        for (int i = 0; i < InitialHeroCount(); i++) OnSummon();
         // 原实现在这里把开局三人「钉」在固定在线窗口上（PinOnlineAt），
         // 那属于作废的时区作息。基线 §2.2：英雄总在场，不做在线窗口。
         // 编队规则：加入看「在不在场」，出发看「人数够不够」——两件事分开
@@ -628,6 +779,13 @@ public partial class Main : Node2D
             _villageModel,
             ClaudeCodeGameStudios.Domain.Items.PriceBook.Default,
             id => _heroes.FirstOrDefault(h => h.Id == id));
+
+        // D-054-02：村庄升级的扣款（**金币 + 材料**）。
+        // 成本表与「能不能花得起」都在服务里 —— Main 只管「点了要盖哪一级」。
+        _upgradeService = new ClaudeCodeGameStudios.Application.VillageUpgradeService(
+            _villageModel,
+            ClaudeCodeGameStudios.Application.Stall.StallService.Gold,
+            MaterialsId);
         // M4 自主经济行为 —— random = (() => _rng.NextDouble())
         // 注入 _stallService 是必须的（行为触发后调 BuyFromStall）
         _heroBehavior = new ClaudeCodeGameStudios.Application.Stall.HeroBehaviorService(
@@ -1430,7 +1588,8 @@ public partial class Main : Node2D
         bool granted;
         try
         {
-            granted = _settlement.Apply(key, outcome.Succeeded, won => RewardsFor(won, loot));
+            granted = _settlement.Apply(key, outcome.Succeeded,
+                won => RewardsFor(won, loot, outcome.Run.Participants));
         }
         catch (InvalidOperationException ex)
         {
@@ -1535,11 +1694,12 @@ public partial class Main : Node2D
     private void OnUpgrade()
     {
         if (_buildTarget >= 0) return;                      // 一次只盖一样
-        int cost = 30 + _tier * 25;
-        if (_tier >= VillageView.MaxTier || Mat < cost) { Refresh(); return; }
 
-        // 钱变材料，剩下的由人去干
-        _villageModel.TrySpend(MaterialsId, cost);
+        // D-054-02：升级同时花**金币**（从村庄金库）与**材料**。
+        // 「花得起吗」与「扣多少」都在 VillageUpgradeService 里 ——
+        // 这里是表现层，只管决定「要盖哪一级」与「派人去盖」。
+        if (!_upgradeService.TryUpgrade(_tier)) { Refresh(); return; }
+
         _buildProgress = 0f;
         _buildTarget = _tier + 1;
         // 队伍里的人要留着跑任务（那是材料来源），没派出去的留下盖房子。
@@ -1863,7 +2023,9 @@ public partial class Main : Node2D
             : $"发布任务（{ready.Count} 人）";
 
         // ---- 升级按钮 ----
-        int cost = 30 + _tier * 25;
+        // D-054-02：成本现在有**两项**（金币 + 材料），按钮要**两项都显示** ——
+        // 只显示材料会让玩家以为「升级不要钱」。
+        var upgradeCost = _upgradeService.CostFor(_tier);
         if (_buildTarget >= 0)
         {
             int pct = (int)(_buildProgress * 100);
@@ -1872,9 +2034,10 @@ public partial class Main : Node2D
         }
         else
         {
-            _btnUpgrade.Text = _tier >= VillageView.MaxTier ? "已是王国第一的城"
-                : $"{UpgradeNames[_tier]}  ·  {cost}";
-            _btnUpgrade.Disabled = _tier >= VillageView.MaxTier || Mat < cost;
+            _btnUpgrade.Text = _tier >= ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier
+                ? "已是王国第一的城"
+                : $"{UpgradeNames[_tier]}  ·  {upgradeCost.Gold}金 {upgradeCost.Material}材料";
+            _btnUpgrade.Disabled = !_upgradeService.CanUpgrade(_tier);
         }
 
         _btnSummon.Disabled = false;
@@ -2222,21 +2385,40 @@ public partial class Main : Node2D
         }
 
         _collectTargetDays = days;
-        GD.Print($"COLLECT 开始：目标 {days} 天 · 流水路径 = {_economyLog?.FilePath ?? "（无）"}");
+        GD.Print($"COLLECT 开始：目标 {days} 天 · 种子 {BootSeed}" +
+                 $"（--seed= 可固定；不固定则每次运行都不同）" +
+                 $" · 金币报酬 X = {_goldRewardUnits / 100.0:0.##} 金/参战者" +
+                 $" · 流水路径 = {_economyLog?.FilePath ?? "（无）"}");
     }
 
     /// <summary>
-    /// 采集的一天：副本 → 摆摊。自主购物由每帧的每日闸门自动跑。
+    /// 采集的一天：副本 → 摆摊 → 升级（够钱就升）→ 记一份经济快照。
+    /// 自主购物由每帧的每日闸门自动跑。
     /// </summary>
     /// <remarks>
     /// <b>顺序要紧</b>：先副本（今天的战利品进背包）→ 再摆摊（把战利品上架）
     /// → 然后当天的自主购物就能买到今天刚掉的东西。
     /// 反过来的话，战利品要等到第二天才上架。
+    /// <para>
+    /// <b>快照取在「日界那一刻」</b>（副本 → 摆摊 → 升级 → 快照 → 之后才是当天的自主购物）。
+    /// 所以标记为第 N 天的快照，反映的是<b>第 N 天开始时</b>的世界 ——
+    /// <b>当天还没开张</b>。这不是缺陷，而是一个<b>整齐的切面</b>：
+    /// 所有数量都取自同一瞬间，逐日核对才对得上。
+    /// </para>
+    /// <para>
+    /// ⚠️ 但它有个<b>必须记住的后果</b>：<b>税额余数</b>与<b>当天的成交</b>不在同一个窗口里
+    /// —— 快照里的余数只覆盖<b>到前一天为止</b>的成交。
+    /// 拿「全部成交」去配「快照的余数」做税务核对，会<b>恒差最后一天的量</b>
+    /// （2026-10-20 的 37 人探针实测差出整整 0.2 金）。
+    /// 核对时必须把窗口对齐（见 <c>production/qa/analyze-econ.py</c>）。
+    /// </para>
     /// </remarks>
     private void CollectOneDay()
     {
         DispatchDungeonForCollection();
         OpenStallsForCollection();
+        UpgradeVillageForCollection();
+        RecordEconomySnapshot();
     }
 
     /// <summary>
@@ -2250,13 +2432,34 @@ public partial class Main : Node2D
     /// </remarks>
     private void DispatchDungeonForCollection()
     {
-        var crew = new List<HeroAgent>();
-        foreach (var h in _heroes)
+        // 采集模式的人数多了，**一场副本喂不饱全村** —— 材料只从副本来，
+        // 37 个英雄共用 1 场/天 → 35 个人永远没货可卖 → 市场只有 2–3 个卖家，
+        // 那就不是「37 人的经济」了。
+        //
+        // ⇒ 副本数随人口缩放：**每 4 人一场**（一个满编小队 4 人对应 1 场 2 人副本的产出量级）。
+        int dungeons = Math.Max(1, (_heroes.Count + 3) / 4);
+        for (int k = 0; k < dungeons; k++)
         {
+            DispatchOneDungeonForCollection(k);
+        }
+    }
+
+    /// <summary>采集用副本：像玩家点「发布任务」那样，先建任务再打副本。</summary>
+    /// <param name="index">今天第几场（用来轮换队伍，避免总是同样两个人）。</param>
+    private void DispatchOneDungeonForCollection(int index)
+    {
+        // 轮换起点：按「日序 × 2 + 场序 × 2」错开，
+        // 否则「取前两个可用的人」会永远是同样两个人（他们每场结束就回来了）。
+        int n = _heroes.Count;
+        int start = n > 0 ? (((int)_clock.Day * 2 + index * 2) % n + n) % n : 0;
+
+        var crew = new List<HeroAgent>();
+        for (int k = 0; k < n && crew.Count < 2; k++)
+        {
+            var h = _heroes[(start + k) % n];
             if (h.Away || h.ToSite) continue;               // 不在场 / 在工地的不派
             if (IsOnMission(_states[_heroes.IndexOf(h)])) continue;   // 已在别的任务里
             crew.Add(h);
-            if (crew.Count >= 2) break;
         }
 
         if (crew.Count == 0)
@@ -2302,9 +2505,11 @@ public partial class Main : Node2D
     private void OpenStallsForCollection()
     {
         var book = ClaudeCodeGameStudios.Domain.Items.PriceBook.Default;
+        int day = (int)_clock.Day;
 
-        foreach (var h in _heroes)
+        for (int i = 0; i < _heroes.Count; i++)
         {
+            var h = _heroes[i];
             if (h.Away || h.ToSite) continue;
 
             var existing = _stallService.GetStall(h.Id);
@@ -2313,15 +2518,112 @@ public partial class Main : Node2D
                 _stallService.CloseStall(h.Id);
             }
 
+            // ── D-054-07：多商品摆摊 ──
+            //
+            // **原策略**：摆 `Bag.Snapshot()` 里的**第一个**可售物品就 `break`。
+            // 于是「谁的背包里先有布匹，谁就卖布匹」→ 整个市场只有一个商品在流通
+            // （实测：成交额 87–91% 集中在布匹，**是采集器规则主导的**，不是游戏规则）。
+            //
+            // **新策略**：**按日轮换** —— 每个英雄按 `(日序 + 英雄序) % 可售物品数`
+            // 选今天卖哪一样。效果：① 三种材料都进市场；② 英雄能买到不同材料，
+            // 背包不会被单一商品占满（「在玩的钱」上限才真正可达）。
+            //
+            // **注意「一人一摊」（D-023）没有破**：一个英雄**仍然只有一个摊**，
+            // 轮换的是「今天这个摊卖什么」，不是「同时摆多个摊」。
+            var sellable = new List<ClaudeCodeGameStudios.Domain.Items.ItemId>();
             foreach (var (item, count) in h.Bag.Snapshot())
             {
-                if (!book.IsSellable(item) || count < 1) continue;
-
-                long qty = Math.Min(3, count);
-                _stallService.PlaceStall(h.Id, item, qty, _clock.Now);
-                break;
+                if (book.IsSellable(item) && count >= 1) sellable.Add(item);
             }
+
+            if (sellable.Count == 0) continue;
+
+            var chosen = sellable[(day + i) % sellable.Count];
+            long qty = Math.Min(3, h.Bag.Count(chosen));
+            _stallService.PlaceStall(h.Id, chosen, qty, _clock.Now);
         }
+    }
+
+    /// <summary>
+    /// 采集用升级：<b>金库与材料都够就升一级</b>（D-054 阶段 3）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么必须有它</b>：D-054-02 定了「村庄升级消耗金币（从金库扣）」，
+    /// 而金库是<b>只进不出的池子</b>（D-054 审计的核心发现）。
+    /// 采集器若不升级，**金库支出侧在采集里永远验不到** ——
+    /// 重采之后金库照样只进不出，**看起来像「修法没生效」**。
+    /// 那是一个「验证装置缺失」伪装成「规则无效」的陷阱。</para>
+    ///
+    /// <para><b>施工队怎么定</b>：**没被派去副本的人**去工地。
+    /// ⚠️ <b>不能复用 <see cref="OnUpgrade"/> 的 <c>_squad</c> 逻辑</b> ——
+    /// 采集器不用玩家队伍，headless 里 <c>_squad</c> 是**空的**，
+    /// 那样会把<b>所有人</b>派去工地 → 副本派不出人、交易全停 → 经济直接死掉。</para>
+    /// </remarks>
+    private void UpgradeVillageForCollection()
+    {
+        if (_buildTarget >= 0) return;                       // 一次只盖一样
+        if (!_upgradeService.CanUpgrade(_tier)) return;     // 钱或材料不够
+        if (!_upgradeService.TryUpgrade(_tier)) return;     // 扣款（两边都扣或都不扣）
+
+        _buildProgress = 0f;
+        _buildTarget = _tier + 1;
+
+        // 施工队：**没被派去副本的人**去工地（副本里的人还在路上）。
+        foreach (var h in _heroes)
+        {
+            if (h.Away) continue;
+            h.ToSite = true;
+        }
+
+        _village.BuildProgress = 0f;
+        _village.BuildName = UpgradeNames[_tier];
+        GD.Print($"COLLECT 升级 → 第 {_buildTarget} 级（扣 金 {_upgradeService.CostFor(_tier).Gold}" +
+                 $" + 材料 {_upgradeService.CostFor(_tier).Material}）；金库余额 {VillageGold}");
+    }
+
+    /// <summary>
+    /// 记一份<b>每日经济快照</b>到流水（D-054 阶段 3）。
+    /// </summary>
+    /// <remarks>
+    /// 守恒律（<b>流通口径</b>）的每一项都在这里：
+    /// <c>Σ英雄钱包金币 + 村库金币 + 累计销毁金币 = 初始金币 + 累计发放金币</c>
+    /// —— 缺任何一项，「逐日核对」就只能靠推算，而**推算等于没验证**。
+    /// <para>
+    /// ⚠️ <b>不含「税额余数」</b>：余数是记账零头，不是钱（钱在买卖双方之间完整转移）。
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>也不把「待发零头」算进守恒律</b>：它是「已经挣到、但<b>还没进任何钱包</b>」
+    /// 的<b>应收</b> —— 左边是「钱在哪」（它哪都不在），右边是「已经兑现了多少」。
+    /// 只把它加在一边 = 凭空多算那部分钱（2026-10-20 的 37 人探针实测差出
+    /// 整整一个零头：3810 vs 3820）。
+    /// 它作为<b>独立科目</b>照样记在这里（跟着存档 0.6 的 <c>GoldCarry</c> 走），
+    /// 单独核对自洽性（每英雄 &lt; 100）。
+    /// </para>
+    /// </remarks>
+    private void RecordEconomySnapshot()
+    {
+        if (_economyLog is null) return;
+
+        long heroGold = 0;
+        int builders = 0;
+        foreach (var h in _heroes)
+        {
+            heroGold += h.Wallet.Amount(ClaudeCodeGameStudios.Application.Stall.StallService.Gold);
+            if (h.ToSite) builders++;
+        }
+
+        _economyLog.AppendSnapshot(
+            _clock.Now,
+            heroGold,
+            VillageGold,
+            Mat,
+            _walletWriter.TotalGranted,
+            _upgradeService.TotalGoldSpent,
+            _upgradeService.UpgradesStarted,
+            _stallService.VillageCutCarry,
+            _heroes.Count,
+            builders,
+            _walletWriter.TotalPending);
     }
 
     /// <summary>
@@ -3254,6 +3556,13 @@ public partial class Main : Node2D
     {
         Version = ClaudeCodeGameStudios.Data.SaveVersion.Current,
         SimTime = _clock.Now,
+        // D-054 阶段 4（存档 0.6）：守恒律的「累计新增」与「已销毁」两项。
+        // 不存它们，读档后账就对不上。
+        GoldGrantedTotal = _walletWriter.TotalGranted,
+        GoldSpentTotal = _upgradeService.TotalGoldSpent,
+        VillageUpgrades = _upgradeService.UpgradesStarted,
+        // 村庄层级（**顺带修既有缺陷**：本来不入档，读档后回到 0 级而钱已经花了）
+        VillageTier = _tier,
         // 存的是随机源状态，不是种子：只存种子的话，读档后只能回到开局那一刻，
         // 而不是回到存档那一刻。
         RandomState = _rng.State.ToString(),
@@ -3290,6 +3599,9 @@ public partial class Main : Node2D
                 Bag = BuildBagSave(h.Bag),
                 // 第四阶段 M4：自主购物的每日频率状态（0 = 从未购过）
                 LastShoppingDay = h.LastShoppingDay,
+                // D-054 阶段 4（存档 0.6）：该英雄的**待发零头**（单位 1/100 金）。
+                // 不存它 = 已挣到但还没发出去的钱凭空消失。
+                GoldCarry = _walletWriter.PendingOf(h.Id),
                 Origin = s.Definition.Origin,
                 TraitModifiers = new Dictionary<string, double>(s.Definition.TraitModifiers),
                 PreferenceWeights = new Dictionary<string, double>(s.Definition.PreferenceWeights),
@@ -3418,6 +3730,9 @@ public partial class Main : Node2D
             agent.RestoreBag(new ClaudeCodeGameStudios.Domain.Items.Inventory(bagDict));
             // 第四阶段 M4：自主购物的每日频率状态（0 = 从未购过）
             agent.LastShoppingDay = hs.LastShoppingDay;
+            // D-054 阶段 4（存档 0.6）：恢复该英雄的**待发零头**。
+            // 不恢复它 = 已挣到但还没发出去的钱凭空消失（与税额余数同一条理由）。
+            _walletWriter.RestorePending(new ClaudeCodeGameStudios.Domain.Heroes.HeroId(hs.Id), hs.GoldCarry);
             _heroes.Add(agent);
             _village.AddHero(agent);
             _village.HasPeople = true;
@@ -3508,6 +3823,16 @@ public partial class Main : Node2D
         // 曾经用 AdvanceTo（只向前推进），读档后时间停在 531 而存档是 31 ——
         // 因为存档更早，而它对「目标在更早」静默无操作。
         _clock.SetSimTime(save.SimTime);
+
+        // ── D-054 阶段 4（存档 0.6）：货币侧的三个状态 ──
+        // ① 累计发放 / 累计销毁（守恒律的两项；不恢复就读档后账对不上）
+        _walletWriter.RestoreTotalGranted(save.GoldGrantedTotal);
+        _upgradeService.RestoreTotals(save.GoldSpentTotal, save.VillageUpgrades);
+        // ② 村庄层级（**顺带修既有缺陷**：本来不入档 → 读档后回到 0 级，而钱已经花了）
+        _tier = save.VillageTier;
+        _village.SetTier(_tier);
+        _buildProgress = 0f;
+        _buildTarget = -1;
 
         // 编成按**存档**恢复，不是「取前 N 个在场者」——
         // 后者是猜测，玩家挑好的搭配会被悄悄换掉，而且不报错。
@@ -3612,6 +3937,22 @@ public partial class Main : Node2D
         // 「跑个自检把存档清了」是事故，不是特性。
         var selfTestSaves = SelfTestSaves();
 
+        // ── D-054 阶段 4（存档 0.6）：先把五个账本科目备成**非零**，再走「搅乱 → 读回来」──
+        //   待发零头 / 累计发放 / 累计销毁 / 村庄层级 / 累计升级次数。
+        //   全是 0 时「读回来」等于「什么都没验」，所以这里先摆好已知的值。
+        //   （用的是读档路径**同一个**入口 Restore*：那才是要验的东西。）
+        const long CarrySeed = 42L;      // 待发零头（1/100 金）
+        const long GrantedSeed = 777L;   // 累计发放（金）
+        const long SpentSeed = 333L;     // 累计销毁（金）
+        const int TierSeed = 2;          // 村庄层级
+        const long UpgradesSeed = 2L;    // 累计已付款的升级次数
+
+        _walletWriter.RestorePending(_heroes[0].Id, CarrySeed);
+        _walletWriter.RestoreTotalGranted(GrantedSeed);
+        _upgradeService.RestoreTotals(SpentSeed, UpgradesSeed);
+        _tier = TierSeed;
+        _village.SetTier(TierSeed);
+
         var save = BuildSave();
         GD.Print($"SAVETEST 存档路径 = {selfTestSaves.FilePath}（自检专用，非玩家存档）");
         GD.Print($"SAVETEST 将写入：版本 {save.Version} 模拟时间 {save.SimTime:0.###}" +
@@ -3655,9 +3996,17 @@ public partial class Main : Node2D
         // R-05 第二轮 / D-052：税额余数也要搅乱 —— 它必须是被读档「找回来」的。
         long carryBefore = _stallService.VillageCutCarry;
         _stallService.RestoreVillageCutCarry(0);
+        // D-054 阶段 4（存档 0.6）：五个账本科目同样搅乱。
+        _walletWriter.RestorePending(_heroes[0].Id, 7);
+        _walletWriter.RestoreTotalGranted(1);
+        _upgradeService.RestoreTotals(2, 1);
+        _tier = 4;
+        _village.SetTier(4);
         GD.Print($"SAVETEST 故意搅乱：材料 {matBefore} → {Mat}，队伍「{squadBefore}」已拆散，" +
                  $"摊位已清空、每日购物闸门与 LastShoppingDay 已清零，随机状态已推进，" +
                  $"税额余数 {carryBefore} → 0");
+        GD.Print($"SAVETEST 0.6 账本科目搅乱：待发零头 {CarrySeed} → 7，累计发放 {GrantedSeed} → 1，" +
+                 $"累计销毁 {SpentSeed} → 2，村庄层级 {TierSeed} → 4，累计升级 {UpgradesSeed} → 1");
 
         // ── 读档 ──
         var loaded = selfTestSaves.Read();
@@ -3677,6 +4026,25 @@ public partial class Main : Node2D
         GD.Print($"SAVETEST 已恢复的结算键 {string.Join(" | ", _settlement.AppliedKeys)}");
         GD.Print($"SAVETEST 读档后税额余数 {_stallService.VillageCutCarry}" +
                  $"（应为 {carryBefore}）→ {_stallService.VillageCutCarry == carryBefore}");
+
+        // ── D-054 阶段 4（存档 0.6）：五个账本科目必须真的读回来 ──
+        //   读不到的后果不是「少了一个数」，而是**守恒律的账从此对不上**：
+        //   待发零头丢了 = 已挣到的钱凭空消失；累计发放丢了 = 账目虚高；
+        //   村庄层级丢了 = 读档后村庄掉回 0 级，而升级花掉的钱已经记下了。
+        long carryAfter06 = _walletWriter.PendingOf(_heroes[0].Id);
+        bool econ06Ok =
+            carryAfter06 == CarrySeed
+            && _walletWriter.TotalGranted == GrantedSeed
+            && _upgradeService.TotalGoldSpent == SpentSeed
+            && _upgradeService.UpgradesStarted == (int)UpgradesSeed
+            && _tier == TierSeed;
+
+        GD.Print($"SAVETEST 0.6 待发零头 {carryAfter06}（应为 {CarrySeed}）；" +
+                 $"累计发放 {_walletWriter.TotalGranted}（应为 {GrantedSeed}）；" +
+                 $"累计销毁 {_upgradeService.TotalGoldSpent}（应为 {SpentSeed}）；" +
+                 $"村庄层级 {_tier}（应为 {TierSeed}）；" +
+                 $"累计升级 {_upgradeService.UpgradesStarted}（应为 {UpgradesSeed}）");
+        GD.Print(econ06Ok ? "SAVETEST 0.6 PASS" : "SAVETEST 0.6 FAIL");
 
         // ── R-03：在场性 / 行动 / 目标 / 首通标记是否真的恢复 ──
         if (_states.Count >= 3)
@@ -3803,6 +4171,14 @@ public partial class Main : Node2D
             h => h.Id.Value,
             h => h.Bag.Snapshot().ToDictionary(kv => kv.Key.Value, kv => kv.Value));
 
+        // ── D-054-01：发放**之前**的钱包与零头快照（对照用）──
+        //    金币**不论成败都发**（D-054-01 裁决 ①）→ 成功局与失败局都要验。
+        var goldResource = ClaudeCodeGameStudios.Application.Stall.StallService.Gold;
+        var goldBefore = crew.ToDictionary(
+            h => h.Id.Value, h => h.Wallet.Amount(goldResource));
+        var pendingBefore = crew.ToDictionary(
+            h => h.Id.Value, h => _walletWriter.PendingOf(h.Id));
+
         var outcome = ResolveDungeon(_pendingJob, crew);
 
         GD.Print($"DUNGEONTEST 队伍 {crew.Count} 人 → {_pendingJob.Name}");
@@ -3830,16 +4206,42 @@ public partial class Main : Node2D
                  string.Join(", ",
                      _villageModel.Snapshot().Select(kv => $"{kv.Key}:{kv.Value}")) + "}");
 
+        // ── D-054-01：金币发放（**不论成败**）──
+        //    单测验的是 Settlement 那一层；这里守的是「游戏真的把金币发到了
+        //    参战者的钱包里」—— 与 R-01 的战利品同款理由：单测验不出接线。
+        var goldAfter = crew.ToDictionary(
+            h => h.Id.Value, h => h.Wallet.Amount(goldResource));
+
+        bool goldOk = true;
+        foreach (var h in crew)
+        {
+            long got = goldAfter[h.Id.Value] - goldBefore[h.Id.Value];
+            // 零头机制（D-054 阶段 4）：本次实际到手 = floor((原零头 + X) / 100) 金，
+            // 余下的零头留在该英雄名下。X 是整数金时，零头恒为 0 → 每次到手恰好 X 金。
+            long expected = (pendingBefore[h.Id.Value] + _goldRewardUnits) / 100;
+            long pendingAfter = (pendingBefore[h.Id.Value] + _goldRewardUnits) % 100;
+            bool oneOk = got == expected
+                && _walletWriter.PendingOf(h.Id) == pendingAfter;
+            if (!oneOk) goldOk = false;
+            GD.Print($"DUNGEONTEST 金币 {h.Name}: {goldBefore[h.Id.Value]} → {goldAfter[h.Id.Value]}" +
+                     $"（到手 {got}，应 = {expected}；待发零头 {pendingBefore[h.Id.Value]} → {pendingAfter}（1/100 金）；" +
+                     $"X = {_goldRewardUnits / 100.0:0.##} 金；**不论成败都发**：D-054-01）");
+        }
+
         // ── I4：把同一个结算键再 Apply 一次，必须一分不加 ──
         // 单测验的是 Settlement 自己，验不了「游戏会不会真的重复调用它」。
         // 而「读档重放」正是基线 §13.7 要防的场景。
         var replayKey = new ClaudeCodeGameStudios.Domain.Settlement.SettlementKey(
             outcome.Run.Id.Value, outcome.Run.BattleResultId);
         long beforeReplay = Mat;
+        long goldBeforeReplay = crew.Sum(h => h.Wallet.Amount(goldResource));
         bool appliedAgain = _settlement.Apply(replayKey, outcome.Succeeded);
+        long goldAfterReplay = crew.Sum(h => h.Wallet.Amount(goldResource));
         GD.Print($"DUNGEONTEST 重放同一结算键 → Apply 返回 {appliedAgain}，" +
                  $"材料 {beforeReplay} → {Mat}" +
                  $"（材料必须不变、Apply 必须返回 false：I4 已完成事件不会重复应用）");
+        GD.Print($"DUNGEONTEST 重放同一结算键 → 英雄金币合计 {goldBeforeReplay} → {goldAfterReplay}" +
+                 $"（必须不变：金币也在同一把幂等锁下，I4）");
 
         // ── R-01：战利品分配与入包 ──
         // 单测验的是分配规则与发放入口，验不了「游戏有没有真的把战利品
@@ -3943,6 +4345,15 @@ public partial class Main : Node2D
         {
             GD.Print($"DUNGEONTEST 杂谈| {note}");
         }
+
+        // ── D-054-01 汇总判定 ──
+        //    「每位参战者 +X」且「重放同一结算键不再发」→ 才算这条规则在**真实游戏**里成立。
+        //    单测验的是 Settlement 那一层，验不出这里的接线。
+        bool goldPassed = goldOk && goldAfterReplay == goldBeforeReplay;
+        GD.Print($"DUNGEONTEST 金币发放 = {goldOk}（每位参战者按 X = {_goldRewardUnits / 100.0:0.##} 金累计，" +
+                 $"**不论成败**），" +
+                 $"重放后金币合计 {goldBeforeReplay} → {goldAfterReplay}（必须不变：I4）" +
+                 $" → D-054-01 {(goldPassed ? "PASS" : "FAIL")}");
     }
 
     public override void _UnhandledInput(InputEvent @event)

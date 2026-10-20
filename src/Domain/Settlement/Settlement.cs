@@ -35,11 +35,25 @@ public readonly record struct ResourceDelta(string ResourceId, long Amount);
 /// <param name="Quantity">数量，必须为正。</param>
 public readonly record struct ItemGrant(HeroId Hero, ItemId Item, long Quantity);
 
+/// <summary>
+/// 一次结算对<b>某个英雄个人钱包</b>的资金发放（D-054-01：副本金币报酬）。
+/// </summary>
+/// <param name="Hero">接收者。</param>
+/// <remarks>
+/// <b>这里不带金额</b>：报酬率是**规则**（D-054-01 定的「每人每次 X 金」），
+/// 住在写入入口（<c>IWalletGrantWriter</c> 的实现）里；
+/// 增量只说「<b>谁</b>有资格领一次报酬」。
+/// <br>金额之所以不能放这里：X 可以是<b>分数</b>（金币的最小单位是 1/100 金），
+/// 而增量里的数字若要参与「零头累计」，语义就会在两处重复定义 —— 那是最容易分叉的地方。
+/// </remarks>
+public readonly record struct WalletGrant(HeroId Hero);
+
 /// <summary>一次结算对村庄的全部影响。计算得出，尚未应用。</summary>
 public sealed class SettlementDelta
 {
     private readonly List<ResourceDelta> _resources = new();
     private readonly List<ItemGrant> _itemGrants = new();
+    private readonly List<WalletGrant> _walletGrants = new();
 
     /// <summary>村庄侧的资源增量。</summary>
     public IReadOnlyList<ResourceDelta> Resources => _resources;
@@ -57,6 +71,18 @@ public sealed class SettlementDelta
     /// </remarks>
     public IReadOnlyList<ItemGrant> ItemGrants => _itemGrants;
 
+    /// <summary>
+    /// 个人钱包发放（D-054-01）。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么金币也进结算增量，而不是另发一次</b>：
+    /// 副本的<b>村庄材料</b>、<b>英雄战利品</b>、<b>英雄金币</b>是同一笔奖励的三半
+    /// （D-054 明确「失败也发金币」→ 三者<b>不总是同时发生</b>，但属于
+    /// <b>同一次结算</b>）。分三次发，中间任何一步失败都会留下半笔账 ——
+    /// 与 <see cref="ItemGrants"/> 同一把理由，<b>同一把幂等锁</b>、<b>同一次提交</b>。
+    /// </remarks>
+    public IReadOnlyList<WalletGrant> WalletGrants => _walletGrants;
+
     /// <summary>本次结算是否改变任何东西。</summary>
     /// <remarks>
     /// <b>零增量是合法的</b>：副本失败不给奖励、也不额外惩罚（<c>07</c> **D-010 Q1**），
@@ -66,10 +92,15 @@ public sealed class SettlementDelta
     /// <b>物品发放也算「改变了东西」</b>：一次什么都没发的村庄资源结算，
     /// 只要带了个人物品，就不是零增量。
     /// </para>
+    /// <para>
+    /// <b>钱包发放同样算「改变了东西」</b>（D-054-01：失败也发金币）——
+    /// 只有「什么都没有」的失败结算**才是**零增量。
+    /// </para>
     /// </remarks>
     public bool IsEmpty =>
         (_resources.Count == 0 || _resources.All(r => r.Amount == 0))
-        && _itemGrants.Count == 0;
+        && _itemGrants.Count == 0
+        && _walletGrants.Count == 0;
 
     /// <summary>追加一条资源增量。</summary>
     /// <param name="resourceId">资源种类。</param>
@@ -113,6 +144,20 @@ public sealed class SettlementDelta
         _itemGrants.Add(new ItemGrant(hero, item, quantity));
         return this;
     }
+
+    /// <summary>追加一条个人钱包发放（D-054-01）。</summary>
+    /// <param name="hero">接收者。</param>
+    /// <exception cref="ArgumentException">英雄标识为空。</exception>
+    public SettlementDelta AddWalletGrant(HeroId hero)
+    {
+        if (string.IsNullOrEmpty(hero.Value))
+        {
+            throw new ArgumentException("接收者标识不能为空。", nameof(hero));
+        }
+
+        _walletGrants.Add(new WalletGrant(hero));
+        return this;
+    }
 }
 
 /// <summary>
@@ -149,22 +194,30 @@ public sealed class Settlement
     /// <see cref="Apply"/> 会<b>整笔拒绝</b>并抛异常 ——
     /// 绝不把物品悄悄丢掉，那会让「奖励发出去了」成为一句谎话。
     /// </param>
+    /// <param name="walletWriter">
+    /// 个人钱包发放的写入入口（可选，D-054-01）。
+    /// <b>没有它就发不了金币</b>：增量里若含钱包发放而本项为 null，
+    /// <see cref="Apply"/> 会<b>整笔拒绝</b>并抛异常 —— 同上，绝不静默丢弃。
+    /// </param>
     public Settlement(
         Func<bool, SettlementDelta> rewards,
         Func<ResourceDelta[], bool> resourceWriter,
         ITradeSettler? tradeSettler = null,
-        IItemGrantWriter? itemWriter = null)
+        IItemGrantWriter? itemWriter = null,
+        IWalletGrantWriter? walletWriter = null)
     {
         _rewards = rewards ?? throw new ArgumentNullException(nameof(rewards));
         _resourceWriter = resourceWriter ?? throw new ArgumentNullException(nameof(resourceWriter));
         _tradeSettler = tradeSettler;   // 可选：M6 引入；null = 旧行为
         _itemWriter = itemWriter;       // 可选：R-01 引入；null = 不发物品
+        _walletWriter = walletWriter;   // 可选：D-054-01 引入；null = 不发金币
     }
 
     private readonly Func<bool, SettlementDelta> _rewards;
     private readonly Func<ResourceDelta[], bool> _resourceWriter;
     private readonly ITradeSettler? _tradeSettler;
     private readonly IItemGrantWriter? _itemWriter;
+    private readonly IWalletGrantWriter? _walletWriter;
 
     /// <summary>已应用的结算键。</summary>
     public IReadOnlyCollection<string> AppliedKeys => _applied;
@@ -230,17 +283,17 @@ public sealed class Settlement
     /// 写入被拒（余额不足、背包装不下等）—— 结算<b>整体未应用</b>，状态保持不变（I15）。
     /// </exception>
     /// <remarks>
-    /// <para><b>三步，顺序不能换</b>：</para>
+    /// <para><b>步骤，顺序不能换</b>：</para>
     /// <list type="number">
-    /// <item><b>先算全量</b>（资源增量 + 个人物品发放）。失败在这里抛出 —— 此时什么都没写。</item>
-    /// <item><b>再预检物品</b>：背包装不下 → <b>整笔拒绝</b>。
+    /// <item><b>先算全量</b>（资源增量 + 个人物品发放 + 个人钱包发放）。失败在这里抛出 —— 此时什么都没写。</item>
+    /// <item><b>再预检个人发放</b>：背包装不下 / 钱包装不下 → <b>整笔拒绝</b>。
     /// 这一步必须在资源写入<b>之前</b>，否则会出现「村庄拿到了、英雄没拿到」的半笔账。</item>
-    /// <item><b>最后一次性提交</b>：先写资源，再写物品；两者都成功才记幂等标志。</item>
+    /// <item><b>最后一次性提交</b>：先写资源，再写物品，再写钱包；全部成功才记幂等标志。</item>
     /// </list>
     /// <para>
-    /// <b>为什么物品的预检与提交是分开的两个调用</b>：<see cref="IItemGrantWriter"/> 要能
-    /// <b>先算清楚每个英雄的新背包再动手</b>——背包是不可变的（<c>Inventory</c>），
-    /// 所以「算出全部新背包 → 一次性换上」天然就是原子的。
+    /// <b>为什么个人发放的预检与提交是分开的两个调用</b>：<see cref="IItemGrantWriter"/> 与
+    /// <see cref="IWalletGrantWriter"/> 要能<b>先算清楚每个英雄的新背包 / 新钱包再动手</b>——
+    /// 背包与钱包都是不可变的，所以「算出全部新值 → 一次性换上」天然就是原子的。
     /// 预检通过后提交不再有失败路径，因此提交阶段不会产生半笔账。
     /// </para>
     /// </remarks>
@@ -256,6 +309,7 @@ public sealed class Settlement
         var delta = (rewardsOverride ?? _rewards)(heroesWon) ?? new SettlementDelta();
         var writes = delta.Resources.Where(r => r.Amount != 0).ToArray();
         var grants = delta.ItemGrants.ToArray();
+        var walletGrants = delta.WalletGrants.ToArray();
 
         // 2. 个人物品：没有写入能力就整笔拒绝（绝不静默丢弃）。
         if (grants.Length > 0 && _itemWriter is null)
@@ -273,6 +327,22 @@ public sealed class Settlement
                 + "本次结算**整体未应用** —— 状态保持不变。幂等键未记录，可重试。");
         }
 
+        // 3b. 个人金币（D-054-01）：与物品同款的两道门 ——
+        //     「没有写入能力就整笔拒绝」+「预检不可行就整笔不应用」。
+        if (walletGrants.Length > 0 && _walletWriter is null)
+        {
+            throw new InvalidOperationException(
+                $"结算 {id} 含 {walletGrants.Length} 条个人钱包发放，但未注入 IWalletGrantWriter —— "
+                + "本次结算**整体未应用**，状态保持不变。");
+        }
+
+        if (walletGrants.Length > 0 && !_walletWriter!.CanGrant(walletGrants))
+        {
+            throw new InvalidOperationException(
+                $"结算 {id} 的个人钱包发放不可行（钱包容量不足、英雄不存在或金额溢出），"
+                + "本次结算**整体未应用** —— 状态保持不变。幂等键未记录，可重试。");
+        }
+
         // 4. 一次性提交。写入函数自身必须保证全成功或全不成功（不变量 I15）。
         if (writes.Length > 0 && !_resourceWriter(writes))
         {
@@ -284,7 +354,10 @@ public sealed class Settlement
         // 5. 物品提交。预检已通过，实现必须保证这一步不再失败。
         if (grants.Length > 0) _itemWriter!.Grant(grants);
 
-        // 6. 只有提交成功才记幂等标志。顺序反了会导致「记了但没写」。
+        // 6. 金币提交。预检已通过，实现必须保证这一步不再失败。
+        if (walletGrants.Length > 0) _walletWriter!.Grant(walletGrants);
+
+        // 7. 只有提交成功才记幂等标志。顺序反了会导致「记了但没写」。
         _applied.Add(id);
         return true;
     }
@@ -351,4 +424,32 @@ public interface IItemGrantWriter
     /// </summary>
     /// <param name="grants">发放明细。</param>
     void Grant(IReadOnlyList<ItemGrant> grants);
+}
+
+/// <summary>
+/// 个人<b>钱包</b>发放的写入入口（D-054-01：副本金币报酬）。
+/// </summary>
+/// <remarks>
+/// <para><b>形态与 <see cref="IItemGrantWriter"/> 完全同构</b>：预检 + 提交两步。
+/// 理由一样 —— 钱要发给<b>多个</b>英雄，任何一个人装不下（钱包容量 / 溢出），
+/// 整笔就该不发；而「能不能装下」必须在动手之前就知道。</para>
+///
+/// <para><b>实现方必须保证</b>：<see cref="Grant"/> 在 <see cref="CanGrant"/> 返回 true 之后
+/// <b>不会失败、不会抛</b>。钱包（<c>Wallet</c>）是不可变的，
+/// 因此「先算出每个英雄的新钱包，再一次性换上」天然满足这一条。</para>
+/// </remarks>
+public interface IWalletGrantWriter
+{
+    /// <summary>
+    /// 预检：这批发放是否<b>全部</b>可行。<b>不改变任何状态。</b>
+    /// </summary>
+    /// <param name="grants">发放明细。</param>
+    /// <returns>全部可行返回 true；任何一条不可行返回 false（此时整笔结算都不该应用）。</returns>
+    bool CanGrant(IReadOnlyList<WalletGrant> grants);
+
+    /// <summary>
+    /// 提交：把钱发出去。<b>调用前必须已通过 <see cref="CanGrant"/>。</b>
+    /// </summary>
+    /// <param name="grants">发放明细。</param>
+    void Grant(IReadOnlyList<WalletGrant> grants);
 }

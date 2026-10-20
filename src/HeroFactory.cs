@@ -125,6 +125,11 @@ public static class HeroFactory
         string name = w.Surname[_rng.Next(w.Surname.Length)] + w.Given[_rng.Next(w.Given.Length)];
 
         // 保底：三项之和 >= 60。纯随机会 roll 出废人，玩家会觉得召唤系统坏了。
+        //
+        // ⚠️ **【实现占位 · 不是玩法决定】**（基线 §10.6 / §17「禁止事项」）：
+        // 「召唤保底」是 §10.6 的 **【待定】** 项。这个 60 **替开发者回答了它**，
+        // 所以必须**显式标注**：它是**为了让原型跑得下去**的占位阈值，
+        // **不是**「设计已定的保底值」。正式数值由开发者定（→ §10.8 S1–S7 的一并评审）。
         int pow, spd, grt;
         do
         {
@@ -134,6 +139,9 @@ public static class HeroFactory
         } while (pow + spd + grt < 60);
 
         // 第二根轴：他投入多少。体力好的多半是肝帝，垫底的多数挂机。
+        //
+        // ⚠️ 同上：**【实现占位】**——「勤奋度」与属性的相关性（体力越好越可能是肝帝）
+        // 也是占位比例，不是设计结论。
         float roll = _rng.NextSingle();
         float liverBar = 0.28f + (grt - 10) / 120f;      // 体力越好越可能是肝帝
         float idleBar  = 0.72f + (grt - 10) / 160f;

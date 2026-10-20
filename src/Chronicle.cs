@@ -13,7 +13,29 @@ public static class Chronicle
 {
     public readonly record struct Entry(int Day, string Text, string? Who);
 
-    private static readonly Random _rng = new();
+    /// <summary>杂谈的随机源（挑模板 / 挑配角用的那一条流）。</summary>
+    /// <remarks>
+    /// <b>它必须是【可播种的】</b>：否则同一个种子两次运行会写出**不同的杂谈**，
+    /// 违反 <c>CLAUDE.md</c> 的 Determinism 测试标准，也让「同种子复现采集」失去意义。
+    /// （A7：此前它是一个**没播种**的 <c>static readonly Random</c>。）
+    /// </remarks>
+    private static Random _rng = new();
+
+    /// <summary>
+    /// 固定杂谈的随机源 —— 在**第一次产生杂谈之前**调用（与 <c>HeroFactory.Seed</c> 并排）。
+    /// </summary>
+    /// <param name="sessionSeed">本次会话的种子（与英雄召唤用的是同一个）。</param>
+    public static void Seed(ulong sessionSeed) => _rng = new Random(DeriveStreamSeed(sessionSeed));
+
+    /// <summary>从会话种子派生**杂谈这条流**的种子（**internal 只为测试**）。</summary>
+    /// <remarks>
+    /// <b>为什么不直接用会话种子</b>：<c>HeroFactory.Seed</c> 用的是会话种子的<b>低 31 位</b>。
+    /// 若杂谈也用同一个值，两条随机流会<b>逐值相同</b> ——
+    /// 杂谈挑哪句模板就会与英雄召唤的抽签**同进同退**（换个种子才看得出差别）。
+    /// <br>这里用<b>异或一个非零常量</b>派生：非零 ⇒ <b>必然</b>与原值不同（不会撞成同一条流）。
+    /// </remarks>
+    internal static int DeriveStreamSeed(ulong sessionSeed)
+        => (int)((sessionSeed & 0x7FFFFFFF) ^ 0x1D872B41);
 
     private static readonly string[] Others =
     {

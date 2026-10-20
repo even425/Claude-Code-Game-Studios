@@ -730,6 +730,12 @@ public partial class Main : Node2D
         // 必须在第一次召唤之前播种。
         HeroFactory.Seed(BootSeed);
 
+        // D-054 阶段 8（A7 收尾）：杂谈也有一条自己的随机流（挑模板/挑配角）。
+        // 不播种它 → **同一个种子两次跑会写出不同的杂谈**（Determinism 标准不满足，
+        // 而且采集样本之间的可比性会打折）。它从会话种子**另派生**一条流，
+        // 不与召唤共用同一条（见 Chronicle.DeriveStreamSeed 的说明）。
+        Chronicle.Seed(BootSeed);
+
         for (int i = 0; i < InitialHeroCount(); i++) OnSummon();
         // 原实现在这里把开局三人「钉」在固定在线窗口上（PinOnlineAt），
         // 那属于作废的时区作息。基线 §2.2：英雄总在场，不做在线窗口。

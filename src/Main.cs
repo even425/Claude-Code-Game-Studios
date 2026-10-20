@@ -183,6 +183,13 @@ public partial class Main : Node2D
     private readonly List<HeroState> _states = new();
 
     /// <summary>
+    /// 英雄 Id 的分配器（不变量 <b>I1</b>：同一 Id 只对应一个英雄实体）。
+    /// <para>读档后必须<b>重建</b>它（见 <c>Main.Save.cs</c> 的 <c>ApplySave</c>）——
+    /// 否则分配器不知道存档里已有哪些号，可能发出一个已被占用的号。</para>
+    /// </summary>
+    private ClaudeCodeGameStudios.Application.HeroIdAllocator _heroIds = new();
+
+    /// <summary>
     /// 全部英雄关系 —— <b>第三阶段的关系唯一写者</b>（<c>05</c> I10）。
     /// </summary>
     /// <remarks>

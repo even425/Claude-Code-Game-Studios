@@ -162,21 +162,32 @@ public class SimClock
     /// 时间倍率。<b>【待定】</b>取值档位属 <c>07</c> 的 <b>P-03 / T-001</b>；
     /// 本类只做「必须是正数」这一结构性校验，不规定它能取哪些档位。
     /// </summary>
+    /// <remarks>
+    /// <para><b>为什么是「只读属性 + 写方法」而不是公开 setter</b>（2026-10-21）：
+    /// 公开的 setter 是一条<b>任何模块都能用的直达写入口</b> ——
+    /// 而不变量 I10 要求「跨模块状态改变只经由拥有该数据的模块」。
+    /// 收成写方法之后，<b>改倍率这件事本身</b>仍然是一个明确的动作
+    /// （可以被记账、被守卫），而不是随手一个属性赋值。
+    /// 守卫：<c>DomainWritePointAuditTests</c>（领域层不得有公开可写属性）。</para>
+    /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">被设为非正数或非有限数。</exception>
-    public double TimeScale
-    {
-        get => _timeScale;
-        set
-        {
-            if (!(value > 0.0) || double.IsNaN(value) || double.IsInfinity(value))
-            {
-                throw new ArgumentOutOfRangeException(
-                    nameof(value), value,
-                    "时间倍率必须为正有限数。【待定】允许的档位见 07 / P-03。");
-            }
+    public double TimeScale => _timeScale;
 
-            _timeScale = value;
+    /// <summary>
+    /// 设置时间倍率。<b>唯一写入口</b>（不变量 I10：跨模块状态改变只经由拥有该数据的模块）。
+    /// </summary>
+    /// <param name="value">新的时间倍率，必须为正有限数。</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="value"/> 非正数或非有限数。</exception>
+    public void SetTimeScale(double value)
+    {
+        if (!(value > 0.0) || double.IsNaN(value) || double.IsInfinity(value))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(value), value,
+                "时间倍率必须为正有限数。【待定】允许的档位见 07 / P-03。");
         }
+
+        _timeScale = value;
     }
 
     // ── 推进 ────────────────────────────────────────────────────────────────

@@ -194,6 +194,12 @@ public partial class Main : Node2D
         _squad.Clear();
         _village.ClearHeroes();
 
+        // I1：读档后**重建 Id 分配器** —— 它必须知道存档里已经占了哪些号，
+        // 否则下一个召唤可能发出一个已被占用的号（两个英雄同号 ⇒ 读档时
+        // 两个状态映射到同一个实体）。分配器只拿「已占用的号」，不碰花名册。
+        _heroIds = new ClaudeCodeGameStudios.Application.HeroIdAllocator(
+            save.Heroes.Select(h => h.Id));
+
         foreach (var hs in save.Heroes)
         {
             var agent = new HeroAgent

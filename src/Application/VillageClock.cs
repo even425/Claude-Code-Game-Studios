@@ -135,9 +135,13 @@ public sealed class VillageClock
     public void SetSimTime(double simTime) => _clock.SetSimTime(simTime);
 
     /// <summary>时间倍率。【待定】允许的档位属 P-03 / T-001。</summary>
-    public double TimeScale
-    {
-        get => _clock.TimeScale;
-        set => _clock.TimeScale = value;
-    }
+    public double TimeScale => _clock.TimeScale;
+
+    /// <summary>
+    /// 设置时间倍率。转发到 <see cref="SimClock.SetTimeScale"/> ——
+    /// 时钟的倍率<b>只有这一个写入口</b>（不变量 I10）。
+    /// </summary>
+    /// <param name="value">新的时间倍率，必须为正有限数。</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="value"/> 非正数或非有限数。</exception>
+    public void SetTimeScale(double value) => _clock.SetTimeScale(value);
 }

@@ -450,7 +450,12 @@ public partial class Main : Node2D
         // **同一个 id 必须在 Add 之前算好**：原来 Agent 用 Add 前的 Count、Definition 用
         // Add 后的 Count，于是两边恒差 1（h-0 vs h-1）。M4 之前没有任何东西同时引用两边，
         // 直到摊位的 OwnerId（Agent）要去 heroes[]（Definition Id）里找引用才暴露。
-        string id = $"h-{_heroes.Count}";
+        //
+        // I1（同一 Id 只对应一个英雄实体）：Id 由 `HeroIdAllocator` 分配，
+        // **不用 `_heroes.Count`** —— 人数当序号在花名册连续时没问题，
+        // 但读档后花名册若缺一号（h-0 / h-2），下一个就会拿到 h-2 ⇒ **两个英雄同号**
+        // ⇒ 读档时两个状态映射到同一个实体（存档错乱，不是显示错乱）。
+        string id = _heroIds.Next();
         s.Hero.AssignId(new HeroId(id));
         _heroes.Add(s.Hero);
         _states.Add(new HeroState(new HeroDefinition(

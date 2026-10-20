@@ -103,36 +103,20 @@ public partial class Main : Node2D
     /// <param name="writes">本次结算要写的资源增量。</param>
     /// <returns><c>true</c> 表示整笔已写入；<c>false</c> 表示<b>一笔都没写</b>。</returns>
     private bool ApplyWrites(ClaudeCodeGameStudios.Domain.Settlement.ResourceDelta[] writes)
-    {
-        if (writes is null || writes.Length == 0) return true;
+        => _villageWriter.Write(writes);
 
-        // ── 预检：任何一笔不可行，整笔拒绝，此时什么都没写 ──
-        foreach (var w in writes)
-        {
-            var id = new ResourceId(w.ResourceId);
-            long current = _villageModel.Get(id);
-            long next = current + w.Amount;
-
-            if (next < 0) return false;                                  // 会被扣成负数
-            if (w.Amount > 0 && current > long.MaxValue - w.Amount) return false;  // 会溢出
-        }
-
-        // ── 提交：预检已排除全部失败路径，这里不会抛 ──
-        foreach (var w in writes)
-        {
-            var id = new ResourceId(w.ResourceId);
-            if (w.Amount > 0)
-            {
-                _villageModel.Add(id, w.Amount);
-            }
-            else
-            {
-                _villageModel.TrySpend(id, -w.Amount);   // 预检已保证扣得起
-            }
-        }
-
-        return true;
-    }
+    /// <summary>
+    /// 村庄资源的整笔写入入口（<b>I15</b> 的村庄侧）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么它是个服务而不是本类里的私有方法</b>：不变量 I15
+    /// 「结算要么完整应用，要么不应用」的<b>村庄那一半</b>就在这个写入里 ——
+    /// 而它以前是私有方法 ⇒ 集成测试<b>够不着</b> ⇒ 只能验一个桩，
+    /// 桩的原子性是自己写给自己的，<b>证明不了生产代码的原子性</b>。
+    /// 抽成服务后，IT-13 能在<b>真服务</b>上验「村庄资源与英雄持有物的总增量
+    /// 要么全为 0，要么等于完整增量」。</para>
+    /// </remarks>
+    private ClaudeCodeGameStudios.Application.VillageResourceWriter _villageWriter = null!;
 
     /// <summary>
     /// 村庄的<b>领域模型</b> —— 材料的唯一存放处（不变量 I10）。

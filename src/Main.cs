@@ -572,6 +572,11 @@ public partial class Main : Node2D
             ClaudeCodeGameStudios.Application.Stall.StallService.Gold,
             _goldRewardUnits);
 
+        // 村庄资源的整笔写入入口（I15 的村庄侧）。
+        // ⚠️ 必须在这里造：它要 _villageModel，而 _villageModel 是字段初始化器
+        // （BuildInitialVillage）—— 字段初始化器里 new 一个依赖它的服务是不行的。
+        _villageWriter = new ClaudeCodeGameStudios.Application.VillageResourceWriter(_villageModel);
+
         _settlement = new ClaudeCodeGameStudios.Domain.Settlement.Settlement(
             RewardsFor, ApplyWrites, itemWriter: _itemGrant,
             walletWriter: _walletWriter);

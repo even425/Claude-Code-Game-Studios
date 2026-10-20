@@ -736,6 +736,15 @@ public partial class Main : Node2D
         // 不与召唤共用同一条（见 Chronicle.DeriveStreamSeed 的说明）。
         Chronicle.Seed(BootSeed);
 
+        // B4（2026-10-21）：**世界表数据驱动** —— 读 config/worlds.json，
+        // 读不到 / 坏了 ⇒ 退回内置表（HeroFactory.LoadWorldsFromFile 负责兜底）。
+        // 必须在**第一次召唤之前**装载：召唤时才读 World.All。
+        bool externalWorlds = HeroFactory.World.LoadWorldsFromFile(
+            Godot.ProjectSettings.GlobalizePath("res://config/worlds.json"));
+        GD.Print($"WORLDTABLE {(externalWorlds ? "使用外部世界表" : "使用内置世界表")}：" +
+                 $"{(externalWorlds ? "config/worlds.json" : "（外部配置不可读）")}" +
+                 $"，{HeroFactory.World.All.Length} 个世界");
+
         for (int i = 0; i < InitialHeroCount(); i++) OnSummon();
         // 原实现在这里把开局三人「钉」在固定在线窗口上（PinOnlineAt），
         // 那属于作废的时区作息。基线 §2.2：英雄总在场，不做在线窗口。

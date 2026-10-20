@@ -186,3 +186,4 @@ tests/_spike*
 !/*.sln
 !/tests/*.csproj
 tests/_spike.csproj
+production/qa/evidence/shot-check-latest.png

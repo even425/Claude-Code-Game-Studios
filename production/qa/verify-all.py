@@ -105,13 +105,17 @@ def main():
                  [sys.executable, QA / "run-selfchecks.py"])
         results.append(("真机自检", "ok" if ok else "fail"))
 
-    # 5. 领域层脱离 Godot 编译（不变量 I9）——
+    # 5. 规则层脱离 Godot 编译**并运行**（不变量 I9）——
     #    这道门**故意**在另一个工程里：测试工程引用整个游戏（含 GodotSharp），
-    #    在那儿跑测试**证明不了**「领域层脱离 Godot 也能编译」。
-    ok = run("领域层脱离 Godot 编译（I9）",
-             ["dotnet", "build", "tests/DomainPurity/DomainPurity.csproj",
+    #    在那儿跑测试**证明不了**「领域层脱离 Godot 也能编译运行」。
+    #    领域层里多一行 `using Godot;` ⇒ 那个工程编译失败；它内部还有一条**运行时**
+    #    断言（查产物的程序集引用里有没有 Godot）⇒ 反射、延迟加载也躲不过。
+    #    ⚠️ 那个工程**必须零依赖** —— gdUnit4 会把 GodotSharp 传递带进来，
+    #    那道门就形同虚设（详见该 csproj 的注释）。
+    ok = run("规则层脱离 Godot 编译并运行（I9）",
+             ["dotnet", "run", "--project", "tests/DomainPurity/DomainPurity.csproj",
               "--nologo", "-v", "q"])
-    results.append(("领域层脱离 Godot 编译（I9）", "ok" if ok else "fail"))
+    results.append(("规则层脱离 Godot（I9）", "ok" if ok else "fail"))
 
     # 6. 参数台账
     ok = run("参数台账与代码一致", [sys.executable, QA / "param-inventory.py", "--check"])

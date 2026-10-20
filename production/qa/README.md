@@ -77,16 +77,20 @@ except ImportError:
 
 由 `QaToolingTests`（`tests/unit/architecture/`）守住 —— **新脚本忘了加就红**。
 
-### ⑥ 领域层必须**在没有 Godot 的情况下编译得出来**
+### ⑥ 规则层必须**在没有 Godot 的情况下**编译**并运行**得出来
 
-`tests/DomainPurity/DomainPurity.csproj` 是一个**故意什么都不引**的工程
-（不用 `Godot.NET.Sdk`、不引 `GodotSharp`、不 `ProjectReference` 主工程），
-它只直接编译 `src/Domain/**` ⇒ 领域层里多一行 `using Godot;` ⇒ **它编译失败** ⇒ CI 红。
+`tests/DomainPurity/DomainPurity.csproj` 是一个**零依赖**的控制台程序
+（不用 `Godot.NET.Sdk`、**不引任何 NuGet 包**、不 `ProjectReference` 主工程），
+它只直接编译 `src/Domain/**`，然后自己跑规则断言、并检查**产物的程序集引用里没有 Godot**。
 
 **为什么不能靠测试工程**：测试工程引用整个主工程（因而引用 `GodotSharp`），
-在那边跑测试**证明不了**「领域层脱离 Godot 也能编译」。这正是不变量 **I9** 的原文。
-`DomainLayerPurityTests` 守的是「领域层**没有引用** Godot」（静态扫描）；
-这一道守的是「领域层**在没有 Godot 的情况下真的能编译**」—— **后者比前者强**：全名引用也抓得到。
+在那边跑测试**证明不了**「领域层脱离 Godot 也能编译运行」。这正是不变量 **I9** 的原文。
+
+⚠️ **零依赖是硬要求，而且是踩出来的**：本工程**曾经**用 `gdUnit4.api` 当测试运行器，
+只引它确实能编译能跑，**看起来 gdUnit4 不需要 GodotSharp** ——
+**但 `gdUnit4.api` 传递依赖 `GodotSharp`** ⇒ 依赖图里仍有它 ⇒
+领域层写一行 `using Godot;` **照样编译通过** ⇒ **那道门形同虚设**。
+**一个「看起来在守、其实不守」的守卫比没有守卫更糟**（它让人以为有人盯着）。
 
 ## 变异矩阵一览
 

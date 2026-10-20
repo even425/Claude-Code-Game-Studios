@@ -91,6 +91,7 @@ except ImportError:
 | `mutate-death-cost.py` | IT-16 死亡代价：领域层不许有「永久损失」字段 |
 | `mutate-mt04-visible.py` | MT-04 存档重载后的可见状态（**含「界面没跟着刷新」那一档**） |
 | `mutate-qa-tooling.py` | QA 工具箱自身（脚本能说话 / README 与磁盘一致） |
+| `mutate-ledger-consistency.py` | `07` 台账自身（两处状态表不许互相矛盾 / 现状必须是真的） |
 
 全部一起跑（很慢，约 20 分钟）：
 

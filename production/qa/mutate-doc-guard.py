@@ -95,6 +95,25 @@ def main():
         elif PROBE.exists():
             PROBE.unlink()
 
+    # ── ③ 往文档里塞一个 U+FFFD（解码失败的残骸）────────────────────
+    #    ⚠️ 这正是本守卫**曾经漏掉**的那一类：U+FFFD 不是控制字符，
+    #    控制字符判据抓不到它 ⇒ `07` 与 `cross-doc-consistency.md` 里的
+    #    两处污染从第一个提交起就躺着，没人看见。
+    existed = PROBE.exists()
+    old = PROBE.read_bytes() if existed else None
+    try:
+        PROBE.write_text(
+            "# 变异探针\n\n"
+            "这里有一个被吃掉的汉字：但没有一\ufffd\ufffd\ufffd被游戏用到。\n",
+            encoding="utf-8", newline="")
+        failed, _ = run_tests()
+        results.append(report("往文档里塞 3 个 U+FFFD（解码失败的残骸）", failed))
+    finally:
+        if existed:
+            PROBE.write_bytes(old)
+        elif PROBE.exists():
+            PROBE.unlink()
+
     print("---")
     bad = results.count(False)
     print(f"变异矩阵：{len(results) - bad}/{len(results)} 符合预期")

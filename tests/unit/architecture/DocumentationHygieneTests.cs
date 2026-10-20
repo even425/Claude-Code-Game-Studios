@@ -46,10 +46,19 @@ public class DocumentationHygieneTests
     }
 
     /// <summary>
-    /// 规格与决策文档里不许有控制字符（<c>\r</c> / <c>\n</c> / <c>\t</c> 除外）。
+    /// 规格与决策文档里不许有控制字符（<c>\r</c> / <c>\n</c> / <c>\t</c> 除外），
+    /// 也不许有 <b>U+FFFD 替换字符</b>。
+    ///
+    /// <para><b>为什么 U+FFFD 也要查</b>：U+FFFD 是「解码失败」的产物 ——
+    /// 字节被吃掉或转义被展开后留下的残骸。它<b>不是控制字符</b>，
+    /// 所以控制字符那条判据抓不到它 ⇒ 本守卫刚写出来时，
+    /// <c>07</c> 里就躺着一处 <b>从第一个提交起</b>就有的污染
+    /// （「但没有一<code>���</code>被游戏用到」），
+    /// 它躺在文档里<b>没人看见</b>。
+    /// <b>凡是「读出来是乱码」的地方，机器都能一眼看见 —— 只要有人让它去看。</b></para>
     /// </summary>
     [TestCase]
-    public void ProductionDocs_ContainNoControlCharacters()
+    public void ProductionDocs_ContainNoControlOrReplacementCharacters()
     {
         var offenders = new List<string>();
 
@@ -65,6 +74,14 @@ public class DocumentationHygieneTests
                 {
                     offenders.Add($"{Path.GetFileName(file)}:{lineNo} → "
                                   + string.Join(",", bad.Select(c => $"U+{(int)c:X4}")));
+                }
+
+                int badChars = line.Count(c => c == '\uFFFD');
+                if (badChars > 0)
+                {
+                    offenders.Add($"{Path.GetFileName(file)}:{lineNo} → "
+                                  + $"{badChars} 个 U+FFFD（解码失败的残骸，"
+                                  + $"位置 {line.IndexOf('\uFFFD')}）");
                 }
             }
         }

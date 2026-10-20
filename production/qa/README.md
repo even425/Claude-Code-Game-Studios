@@ -52,12 +52,31 @@ Godot headless 加载的是 `.godot/mono/temp/bin/Debug/` 的程序集。
 > **不养烧不着的守卫。** 一条永远绿的守卫不是保护，是装饰 ——
 > 它让人以为「这一段有人盯着」，而实际盯着的可能是另一条更容易被改弱的规则。
 
-### ④ 跳过要说出来
+### ④ 想知道「CI 为什么红」，就在本地拉一份**干净检出**跑一遍
+
+CI 跑的是**干净检出**：只有**版本库里**的东西 + 一个**没有被 gitignore 的**工作副本。
+而你的工作副本里可能有别的东西（本地工具、被 ignore 的文件、没提交的改动）
+⇒ **「本机全绿、CI 全红」是完全可能的**，而且日志上看起来一模一样。
+
+复现方式（真的用过，好几回了）：
+
+```bash
+git clone --depth 1 --branch mytown https://github.com/<你>/<仓库>.git ci-check
+cd ci-check
+dotnet test tests/Claude-Code-Game-Studios.Tests.csproj -c Release
+```
+
+**本轮就靠它定位了一次 CI 失败**：某个提交上 `06` 引用了 `tests/_spike_test.cs`，
+而那个文件**被 .gitignore 排除** ⇒ 本机有、干净检出里没有 ⇒ 守卫在 CI 上红、本机绿。
+（根因是守卫当时查的是「磁盘上的文件」；现在改成查 **`git ls-files`**（版本库里的）
+**并豁免被 gitignore 的路径** ⇒ 两边答案一致了。）
+
+### ⑤ 跳过要说出来
 
 `verify-all.py` 里因前提缺失被跳过的项会**明确打印**（跳过了什么、为什么），
 `--require-all` 可以把「跳过」也变成失败。
 
-### ⑤ 脚本必须**在控制台上说得出来**
+### ⑥ 脚本必须**在控制台上说得出来**
 
 本机 Windows 控制台默认是 **GBK（cp936）**，而脚本里满是「✓ / ✗ / ⇒ / ✅」这类符号 ——
 **GBK 里没有它们** ⇒ `print` 抛 `UnicodeEncodeError` ⇒ 脚本**直接崩**。
@@ -77,7 +96,7 @@ except ImportError:
 
 由 `QaToolingTests`（`tests/unit/architecture/`）守住 —— **新脚本忘了加就红**。
 
-### ⑥ 规则层必须**在没有 Godot 的情况下**编译**并运行**得出来
+### ⑦ 规则层必须**在没有 Godot 的情况下**编译**并运行**得出来
 
 `tests/DomainPurity/DomainPurity.csproj` 是一个**零依赖**的控制台程序
 （不用 `Godot.NET.Sdk`、**不引任何 NuGet 包**、不 `ProjectReference` 主工程），

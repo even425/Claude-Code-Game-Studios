@@ -338,40 +338,19 @@ public class HeroBehaviorServiceTests
         Assertions.AssertThat(r.CheapestPrice).IsEqual(5L);
     }
 
-    /// <summary>没有可买摊（背包全满）→ <b>没有「最便宜价」这回事</b>（null）。</summary>
-    [TestCase]
-    public void SimulateShopping_BagFull_ReportsBalanceButNoCheapestPrice()
-    {
-        var (heroes, _, svc) = MakeScene();
-        heroes[Alice].RestoreBag(new Inventory().TryAdd(Stone, 5)!);
-        svc.PlaceStall(Bob, Stone, 5, 10.0);
-        var hbs = new HeroBehaviorService(svc, id => heroes.TryGetValue(id, out var h) ? h : null, AlwaysZero);
-
-        var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
-
-        Assertions.AssertThat(r.SkipReason).IsEqual(HeroBehaviorService.ShoppingSkipReason.BagFull);
-        Assertions.AssertThat(r.BuyerGold).IsEqual(100L);
-        Assertions.AssertThat(r.CheapestPrice).IsNull();
-    }
-
-    // ── D-054 阶段 5：背包上限造成的「只卖不买」单向阀 ──────────────────
+    // ── D-054 阶段 5/6：背包上限造成的「只卖不买」单向阀 ──────────────────
 
     /// <summary>
-    /// 🔴 <b>三种材料都背满 → 有钱也买不了任何东西</b> —— 英雄从此<b>只卖不买</b>。
+    /// 🔴 D-054 阶段 6（Q4）：背包对<b>所有</b>可买物品都已满 →
+    /// <b>顶替购买</b>（丢 1 份旧的同类货，腾位买 1 份新的），<b>不是「一个都买不了」</b>。
     /// </summary>
     /// <remarks>
-    /// <para><b>这是 2000 天采集里「一个人攥着 46% 的钱」的机制候选</b>：
-    /// 实测（X = 0.10 / 2000 天）里，<b>同一个英雄 h-28 在 97% 的日子是最富的</b>，
-    /// 持有 **46%** 的钱 —— 而中位英雄只有 1 ~ 2 金。</para>
-    /// <para><b>机制（这条测试就是它的证据）</b>：D-053 把「5 份上限」放在<b>决策层</b>，
-    /// 抽样前就把「该物品已满」的摊剔掉 ⇒ <b>三种材料都满时，一个摊都买不了</b>。
-    /// 于是这个英雄<b>卖出的收入永远花不出去</b> → 他变成一个<b>只进不出的钱袋子</b>，
-    /// 而村庄里的钱就这么一点点集中到他身上。</para>
-    /// <para><b>注意</b>：领域层背包容量是 0（无限）—— 满的只是<b>决策层</b>的判据，
-    /// 所以「买不进」不代表「拿不走」。</para>
+    /// <b>为什么必须这样</b>：旧行为下这个英雄从此<b>只卖不买</b> —— 卖出的收入永远花不出去，
+    /// 钱一点点堆在他身上（实测 2000 天：<b>一个人攥着 46% 的钱</b>，中位英雄只剩 1 金）。
+    /// <b>而物品总量仍被 5 份卡住</b>（丢 1 换 1，数量不增）⇒ D-053 的「不取消上限」边界**仍然有效**。
     /// </remarks>
     [TestCase]
-    public void SimulateShopping_BagFullOnEveryItem_BuysNothing_EvenWithPlentyOfGold()
+    public void SimulateShopping_BagFullOnEveryItem_StillBuys_ByReplacingOneOldCopy()
     {
         var (heroes, _, svc) = MakeScene(aliceGold: 999L);
         // 三种材料各 5 份 → 决策层的「余量」全为 0
@@ -386,43 +365,75 @@ public class HeroBehaviorServiceTests
 
         var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
 
-        // 有 999 金，却**一个都买不了**
-        Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Skipped_PrecheckFailed);
-        Assertions.AssertThat(r.SkipReason).IsEqual(HeroBehaviorService.ShoppingSkipReason.BagFull);
-        Assertions.AssertThat(r.BuyerGold).IsEqual(999L);
-        Assertions.AssertThat(heroes[Alice].Wallet.Amount(GoldResource)).IsEqual(999L);
-        Assertions.AssertThat(heroes[Alice].LastShoppingDay).IsEqual(0);   // 没成交 → 不写「今天买过」
+        // **买成了**（不再是「背包满 → 当天白过」）
+        Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Bought);
+        Assertions.AssertThat(r.Quantity).IsEqual(1L);
+        // 钱花出去了（石料 5 金）
+        Assertions.AssertThat(heroes[Alice].Wallet.Amount(GoldResource)).IsEqual(999L - 5L);
+        // **物品总量没增加**：丢 1 换 1，仍是 5 份
+        Assertions.AssertThat(heroes[Alice].Bag.Count(Stone)).IsEqual(5L);
+        Assertions.AssertThat(heroes[Alice].Bag.Count(Wood)).IsEqual(5L);
+        Assertions.AssertThat(heroes[Alice].Bag.Count(Cloth)).IsEqual(5L);
+        // 成交了 → 写「今天买过」
+        Assertions.AssertThat(heroes[Alice].LastShoppingDay).IsEqual(1);
+    }
+
+    /// <summary>顶替购买也要带<b>余额</b>与<b>最便宜价</b>（D-054 阶段 5 的测量字段）。</summary>
+    [TestCase]
+    public void SimulateShopping_ReplaceBuy_ReportsBalanceAndCheapestPrice()
+    {
+        var (heroes, _, svc) = MakeScene(aliceGold: 4L);
+        var bag = new Inventory().TryAdd(Stone, 5)!
+            .TryAdd(Wood, 5)!
+            .TryAdd(Cloth, 5)!;
+        heroes[Alice].RestoreBag(bag);
+        svc.PlaceStall(Bob, Stone, 5, 10.0);     // 5 金
+        AddCarol(heroes, svc);                    // Carol 卖木料 = 3 金
+        var hbs = new HeroBehaviorService(svc, id => heroes.TryGetValue(id, out var h) ? h : null, AlwaysZero);
+
+        var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
+
+        // 4 金买不起最便宜的 3 金？不，买得起 3 金（Carol 的木料）→
+        // 但抽样下标 0 抽中的是 5 金的石料 ⇒ 顶替购买也买不起
+        Assertions.AssertThat(r.SkipReason)
+            .IsEqual(HeroBehaviorService.ShoppingSkipReason.NotEnoughGold);
+        Assertions.AssertThat(r.BuyerGold).IsEqual(4L);
+        Assertions.AssertThat(r.CheapestPrice).IsEqual(3L);
+        // 钱一分没少（买不成就不该有副作用）
+        Assertions.AssertThat(heroes[Alice].Wallet.Amount(GoldResource)).IsEqual(4L);
+        Assertions.AssertThat(heroes[Alice].Bag.Count(Stone)).IsEqual(5L);
     }
 
     // ── D-053：背包上限判据移到抽样前 ────────────────────────────────
 
     /// <summary>
     /// 背包里该物品已满 → 那个摊在<b>抽样前</b>就被剔掉；
-    /// 村里只有这一个摊 → 报「背包满」（不是「只有自己的摊」）。
+    /// 村里<b>没有别的材料</b>可买时 → <b>顶替购买</b>（丢 1 换 1），不是「当天白过」。
     /// </summary>
     /// <remarks>
     /// 旧行为：抽到 → 才发现背满 → 整笔放弃（当天白过）。
-    /// 新行为：抽样前就把它剔掉 —— 若剔完没摊了，原因仍然是 <c>BagFull</c>，
-    /// 玩家看到的还是「想买没买成·背包满」，但**理由说对了**。
+    /// 新行为（<b>D-054 阶段 6 · Q4</b>）：抽样前剔掉它；**若剔完没摊了**，
+    /// 则**顶替购买** —— 丢掉 1 份旧的同类货买 1 份新的。
+    /// <br>（D-053 的「转去买别的材料」行为**不变** —— 见下一个用例。）
     /// </remarks>
     [TestCase]
-    public void SimulateShopping_BagAlreadyHas5_StallFilteredBeforeSampling_ReportsBagFull()
+    public void SimulateShopping_BagAlreadyHas5_NoAlternative_ReplacesOneOldCopy_AndBuys()
     {
         var (heroes, _, svc) = MakeScene();
         // Alice 背包先塞 5 份石
         var aliceBag = new Inventory().TryAdd(Stone, 5)!;
         heroes[Alice].RestoreBag(aliceBag);
-        svc.PlaceStall(Bob, Stone, 5, 10.0);
+        svc.PlaceStall(Bob, Stone, 5, 10.0);      // 村里只有石料这一种
         var hbs = new HeroBehaviorService(svc, id => heroes.TryGetValue(id, out var h) ? h : null, AlwaysZero);
 
         var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
-        Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Skipped_PrecheckFailed);
-        Assertions.AssertThat((r.Detail ?? "").Contains("背包")).IsTrue();
-        Assertions.AssertThat((r.Detail ?? "").Contains("上限 5")).IsTrue();
-        Assertions.AssertThat(r.SkipReason)
-            .IsEqual(HeroBehaviorService.ShoppingSkipReason.BagFull);
-        // 背包满时**不该**成交
+
+        Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Bought);
+        Assertions.AssertThat(r.Quantity).IsEqual(1L);
+        // 物品总量不变（丢 1 换 1）
         Assertions.AssertThat(heroes[Alice].Bag.Count(Stone)).IsEqual(5L);
+        // 钱花出去了（100 → 95）
+        Assertions.AssertThat(heroes[Alice].Wallet.Amount(GoldResource)).IsEqual(95L);
     }
 
     /// <summary>

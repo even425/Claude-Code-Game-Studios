@@ -262,6 +262,11 @@ def analyze(path, label, verbose=True):
                     top_name, top_n = c.most_common(1)[0]
                     print(f"最富英雄     : {len(set(tops))} 人轮流当过；"
                           f"最常的是 {top_name}（{top_n}/{len(tops)} 天 = {top_n / len(tops) * 100:.0f}%）")
+                topnames = [x.get("HeroGoldTopName") for x in snaps if x.get("HeroGoldTopName")]
+                if topnames:
+                    cn = Counter(topnames)
+                    nm, nn = cn.most_common(1)[0]
+                    print(f"最富者(名字) : {nm}（{nn}/{len(topnames)} 天）—— 名字是流水那一侧的键")
             s = m["last_snap"]
             print(f"末次快照      : 流通金 {s.get('HeroGoldTotal')} / 金库 {s.get('VillageGold')}"
                   f" / 材料 {s.get('VillageMaterial')} / 累计发放 {s.get('GoldGranted')}"

@@ -2624,12 +2624,12 @@ public partial class Main : Node2D
 
         long heroGold = 0;
         int builders = 0;
-        var perHero = new List<(string Id, long Gold)>(_heroes.Count);
+        var perHero = new List<(string Id, string Name, long Gold)>(_heroes.Count);
         foreach (var h in _heroes)
         {
             long g = h.Wallet.Amount(ClaudeCodeGameStudios.Application.Stall.StallService.Gold);
             heroGold += g;
-            perHero.Add((h.Id.Value, g));
+            perHero.Add((h.Id.Value, h.Name, g));
             if (h.ToSite) builders++;
         }
 
@@ -2638,12 +2638,14 @@ public partial class Main : Node2D
         perHero.Sort((a, b) => a.Gold.CompareTo(b.Gold));
         long? min = null, p25 = null, med = null, p75 = null, max = null;
         string? topId = null;
+        string? topName = null;
         if (perHero.Count > 0)
         {
             var sorted = perHero.Select(p => p.Gold).ToList();
             min = sorted[0];
             max = sorted[^1];
             topId = perHero[^1].Id;
+            topName = perHero[^1].Name;
             med = Percentile(sorted, 0.5);
             p25 = Percentile(sorted, 0.25);
             p75 = Percentile(sorted, 0.75);
@@ -2661,7 +2663,7 @@ public partial class Main : Node2D
             _heroes.Count,
             builders,
             _walletWriter.TotalPending,
-            min, p25, med, p75, max, topId);
+            min, p25, med, p75, max, topId, topName);
     }
 
     /// <summary>取有序数组的**线性插值**分位数（q ∈ [0,1]）。</summary>

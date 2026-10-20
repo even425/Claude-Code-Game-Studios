@@ -189,6 +189,14 @@ public sealed record EconomyRow
     /// **两者的修法完全不同**，而只靠分布分不开。
     /// </remarks>
     public string? HeroGoldTopId { get; init; }
+
+    /// <summary>快照日<b>最富</b>英雄的<b>名字</b>。</summary>
+    /// <remarks>
+    /// <b>为什么 id 之外还要名字</b>：经济流水里的交易 / 未成行**只记名字不记 id**
+    /// ⇒ 拿到 id 也**接不上流水**，追踪不了某个英雄的行为。
+    /// 名字是流水那一侧的键。两个都记，才能把「谁最富」和「他卖了多少 / 买不了几次」对上。
+    /// </remarks>
+    public string? HeroGoldTopName { get; init; }
 }
 
 /// <summary>
@@ -452,7 +460,8 @@ public sealed class EconomyLog : IDisposable
         long? heroGoldMedian = null,
         long? heroGoldP75 = null,
         long? heroGoldMax = null,
-        string? heroGoldTopId = null)
+        string? heroGoldTopId = null,
+        string? heroGoldTopName = null)
     {
         if (_writer is null) return false;
 
@@ -481,6 +490,7 @@ public sealed class EconomyLog : IDisposable
             HeroGoldP75 = heroGoldP75,
             HeroGoldMax = heroGoldMax,
             HeroGoldTopId = heroGoldTopId,
+            HeroGoldTopName = heroGoldTopName,
         };
 
         _writer.WriteLine(JsonSerializer.Serialize(row, Options));

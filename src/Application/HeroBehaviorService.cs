@@ -323,12 +323,12 @@ public sealed class HeroBehaviorService
         }
 
         var buyable = new List<DomainStall>(notOwn.Count);
-        int bagFullStalls = 0;
+        var bagFullStalls = new List<DomainStall>();
         foreach (var s in notOwn)
         {
             if (BagRoom(buyer.Bag, s.ItemId) < 1)
             {
-                bagFullStalls++;
+                bagFullStalls.Add(s);
                 continue;
             }
             buyable.Add(s);
@@ -347,12 +347,17 @@ public sealed class HeroBehaviorService
                 };
             }
 
-            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, null, null, null, null, null)
-            {
-                Detail = $"背包里相关物品都已满（上限 {BagItemLimit}）：{bagFullStalls} 个摊都买不了",
-                SkipReason = ShoppingSkipReason.BagFull,
-                BuyerGold = buyerGold,
-            };
+            // ── D-054 阶段 6（Q4）：**拆掉「只卖不买」单向阀** ──
+            //
+            // 背包对**所有**可买物品都已满 → 旧行为是「一个摊都买不了」，
+            // 于是这个英雄从此**只卖不买**：卖出的收入永远花不出去，
+            // 钱就一点点堆在他身上（实测：2000 天后**一个人攥着 46% 的钱**，
+            // 而中位英雄只有 1 金）。
+            //
+            // 新行为：**顶替购买** —— 丢掉 1 份旧的同类货，腾出位置买 1 份新的。
+            // ① **物品总量仍被 5 份卡住**（D-053 的「不取消上限」边界**仍然有效**）；
+            // ② 但**金币能继续流向市场** ⇒ 单向阀消失。
+            return ReplaceBuy(bagFullStalls, buyer, buyerId, today, simTime, buyerGold);
         }
 
         // 最便宜的可买摊单价（买得起的那批里最低的）——
@@ -412,6 +417,86 @@ public sealed class HeroBehaviorService
             buyResult.VillageCut)
         {
             Detail = $"买了 {stall.ItemId.Value}×{qty}，付 {buyResult.SellerNet + buyResult.VillageCut} 金币",
+            BuyerGold = buyerGold,
+            CheapestPrice = cheapestPrice,
+        };
+    }
+
+    /// <summary>
+    /// <b>顶替购买</b>：背包对所有可买物品都已满时，<b>丢掉 1 份旧的同类货</b>，
+    /// 腾出位置买 1 份新的（D-054 阶段 6 · Q4）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>它拆掉的是「只卖不买」单向阀</b>：旧行为下，背包满 ⇒ 一个摊都买不了
+    /// ⇒ 这个英雄卖出的收入**永远花不出去** ⇒ 钱堆在他身上
+    /// （实测 2000 天：一个人攥着 **46%** 的钱，中位英雄只剩 1 金）。</para>
+    /// <para><b>「不取消上限」这条边界仍然有效</b>（D-053）：**物品总量仍被 5 份卡住**
+    /// —— 顶替是「丢 1 换 1」，数量不增。变的只是「钱还能不能花出去」：
+    /// 现在能了（D-054 阶段 6）。</para>
+    /// <para><b>顺序：先买后丢</b> —— 买失败就什么都没发生（不留半笔账）；
+    /// 买成功后背包短暂到 6 份，再丢回 5 份。</para>
+    /// </remarks>
+    private ShoppingResult ReplaceBuy(
+        List<DomainStall> bagFullStalls,
+        HeroAgent buyer,
+        HeroId buyerId,
+        int today,
+        double simTime,
+        long buyerGold)
+    {
+        // 随机挑一个（与正常抽样同构）
+        int idx = (int)(_random() * bagFullStalls.Count);
+        if (idx >= bagFullStalls.Count) idx = bagFullStalls.Count - 1;
+        var stall = bagFullStalls[idx];
+
+        long cheapestPrice = long.MaxValue;
+        foreach (var s in bagFullStalls)
+        {
+            if (s.UnitPrice < cheapestPrice) cheapestPrice = s.UnitPrice;
+        }
+
+        // 丢 1 份 → 空出 1 份的位置 → 本次最多买 1 份
+        long qty = StallMarket.MaxAffordable(stall.Stock, stall.UnitPrice, buyerGold, 1);
+        if (qty < 1)
+        {
+            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, stall.Owner, stall.ItemId, null, null, null)
+            {
+                Detail = $"金币不足：有 {buyerGold}，需 {stall.UnitPrice}（背包已满，需顶替 1 份）",
+                SkipReason = ShoppingSkipReason.NotEnoughGold,
+                BuyerGold = buyerGold,
+                CheapestPrice = cheapestPrice,
+            };
+        }
+
+        // 先买：失败则什么都没变（不留半笔账）
+        var buyResult = _stall.BuyFromStall(stall.Owner, buyerId, stall.ItemId, qty, simTime);
+        if (buyResult is null)
+        {
+            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, stall.Owner, stall.ItemId, qty, null, null)
+            {
+                Detail = "结算失败（摊位被抢空 / 钱包不足）",
+                SkipReason = ShoppingSkipReason.SettlementFailed,
+                BuyerGold = buyerGold,
+                CheapestPrice = cheapestPrice,
+            };
+        }
+
+        // 丢掉 1 份旧的同类货 → 物品总量回到上限内（买不进时它也不会无限涨）
+        var trimmed = buyer.Bag.TryRemove(stall.ItemId, qty);
+        if (trimmed is not null) buyer.RestoreBag(trimmed);
+
+        buyer.LastShoppingDay = today;
+
+        return new ShoppingResult(
+            ShoppingOutcome.Bought,
+            buyerId,
+            stall.Owner,
+            stall.ItemId,
+            qty,
+            buyResult.SellerNet,
+            buyResult.VillageCut)
+        {
+            Detail = $"背包已满：顶替 1 份旧货，买了 {stall.ItemId.Value}×{qty}，付 {buyResult.SellerNet + buyResult.VillageCut} 金币",
             BuyerGold = buyerGold,
             CheapestPrice = cheapestPrice,
         };

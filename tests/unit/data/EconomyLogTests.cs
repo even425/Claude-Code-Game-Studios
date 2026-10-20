@@ -581,7 +581,7 @@ public class EconomyLogTests
                 goldPending: 12,
                 heroGoldMin: 0, heroGoldP25: 20, heroGoldMedian: 40,
                 heroGoldP75: 80, heroGoldMax: 100,
-                heroGoldTopId: "h-7");
+                heroGoldTopId: "h-7", heroGoldTopName: "北境旧堡");
 
             Assertions.AssertThat(written).IsTrue();
 
@@ -596,6 +596,8 @@ public class EconomyLogTests
             Assertions.AssertThat(row.GetProperty("HeroGoldMax").GetInt64()).IsEqual(100L);
             // 最富的是谁 —— 「同一个人一直囤」vs「轮流富」，修法完全不同
             Assertions.AssertThat(row.GetProperty("HeroGoldTopId").GetString()).IsEqual("h-7");
+            // 名字是**流水那一侧**的键（流水只记名字不记 id）⇒ 两个都要
+            Assertions.AssertThat(row.GetProperty("HeroGoldTopName").GetString()).IsEqual("北境旧堡");
         }
         finally
         {
@@ -623,6 +625,8 @@ public class EconomyLogTests
                     .IsEqual(System.Text.Json.JsonValueKind.Null);
             }
             Assertions.AssertThat(row.GetProperty("HeroGoldTopId").ValueKind)
+                .IsEqual(System.Text.Json.JsonValueKind.Null);
+            Assertions.AssertThat(row.GetProperty("HeroGoldTopName").ValueKind)
                 .IsEqual(System.Text.Json.JsonValueKind.Null);
         }
         finally

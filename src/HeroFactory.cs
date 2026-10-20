@@ -80,8 +80,19 @@ public static class HeroFactory
             }
         }
 
-        /// <summary>内置的世界表（外部配置不可用时的兜底）。</summary>
-        private static World[] Builtin =>
+        /// <summary>
+        /// 内置的世界表（外部配置不可用时的兜底）。
+        /// </summary>
+        /// <remarks>
+        /// <para><b>为什么是 <c>internal</c> 而不是 <c>private</c></b>：
+        /// 它与 <c>config/worlds.json</c> 是<b>同一份数据的两个副本</b>，
+        /// 而「外部化世界表」这个动作本身就是「把一份数据变成两份」。
+        /// 开发者改了 JSON 却忘了同步兜底 ⇒ <b>配置文件在</b>与<b>配置文件不在</b>
+        /// 会给出<b>两套不同的世界表</b>（英雄的名字风格、痕迹、性格、出场权重全不一样），
+        /// 而且<b>只在配置文件出问题时才暴露</b>。
+        /// <para>⇒ 守卫 <c>WorldTableConfigConsistencyTests</c> 逐字段比对这两份副本。</para>
+        /// </remarks>
+        internal static World[] Builtin =>
         [
             new World {
                 Name = "剑与魔法的大陆", Weight = 5,

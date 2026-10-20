@@ -72,6 +72,22 @@ public sealed class PriceBook
         => _prices.TryGetValue(id, out var p) && p > 0;
 
     /// <summary>
+    /// 本价格表的<b>只读快照</b>（按物品名排序，顺序稳定）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么需要它</b>：<c>PriceBook.Default</c>（内置兜底）与
+    /// <c>config/prices.json</c>（外部配置）是<b>同一份数据的两个副本</b>。
+    /// 开发者把最终价格写进 JSON 之后，如果内置兜底忘了同步，
+    /// 那么「配置文件在」与「配置文件不在」就会给出<b>两套不同的经济</b>，
+    /// 而且**只在配置文件丢失时**才暴露 —— 那正是你在查别的问题的时候。
+    /// <para>有了这个只读视图，守卫就能逐项比对两份副本
+    /// （<c>PriceBookConfigConsistencyTests</c>）。</para>
+    /// </remarks>
+    public IReadOnlyList<KeyValuePair<ItemId, long>> Items =>
+        _prices.OrderBy(kv => kv.Key.Value, StringComparer.Ordinal)
+               .ToList();
+
+    /// <summary>
     /// 替换整个价格表。<b>仅供读档（M7）</b>。
     /// </summary>
     /// <remarks>

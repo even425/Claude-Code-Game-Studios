@@ -134,6 +134,33 @@ def main():
         '"06_第一阶段验收与测试计划_V1.0.md",\n        "99_不存在_V1.0.md",',
     ))
 
+    # ── ⑤ 引用一个「本机有、但不在版本库里」的路径 ─────────────────────
+    #    （这正是 `tests/_spike_test.cs` 那类问题的通用形态：
+    #      同一个引用在两台机器上答案不同 —— 本机绿、CI 红。）
+    probe = ROOT / "production" / "qa" / "zz-untracked-probe.json"
+    existed = probe.exists()
+    old_bytes = probe.read_bytes() if existed else None
+    try:
+        probe.write_text("{}\n", encoding="utf-8", newline="")
+        results.append(mutate_doc(
+            "06 引用一个「本机有、但不在版本库」里的路径",
+            anchor,
+            anchor + "\n\n探针引用：`production/qa/zz-untracked-probe.json`。",
+        ))
+    finally:
+        if existed:
+            probe.write_bytes(old_bytes)
+        elif probe.exists():
+            probe.unlink()
+
+    # ── ⑥ 引用一个**大小写写错**的已追踪路径 ───────────────────────────
+    #    （Windows 上两种写法都能打开，Linux 上只有一种能 —— 干净检出会找不到。）
+    results.append(mutate_doc(
+        "06 引用一个大小写写错的已追踪路径",
+        anchor,
+        anchor + "\n\n探针引用：`src/Data/SaveGame.cs`。",
+    ))
+
     print("---")
     bad = results.count(False)
     print(f"变异矩阵：{len(results) - bad}/{len(results)} 符合预期")

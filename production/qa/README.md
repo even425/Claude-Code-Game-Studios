@@ -16,6 +16,7 @@
 | `frame-budget.py` | 量每个真机自检**到底需要多少帧** | 改自检的帧数上限之前（别凭感觉） |
 | `scan-cited-paths.py` | 扫活文档引用的路径：**在磁盘 / 在版本库 / 被 gitignore** 三态 | 想知道「哪条引用只在你的机器上成立」时 |
 | `recalibrate.py` | 重跑经济标定（扫 X → 稳态 / 分布） | 改了价格 / 掉落 / 报酬之后 |
+| `sync-price-fallback.py` | 把**内置兜底**价格表同步成 `config/prices.json`（两份副本不许分叉） | 改了价格之后（`recalibrate.py` 会自动调它） |
 | `mutate-*.py` | **变异矩阵**：把代码改坏，确认对应的守卫会红 | 改了守卫之后 |
 | `_utf8out.py` | 让本目录的脚本在**任何**控制台编码下都能把话说出来 | 不是工具，是**每个工具的前置**（见约定 ⑤） |
 
@@ -95,6 +96,7 @@ except ImportError:
 | `mutate-qa-tooling.py` | QA 工具箱自身（脚本能说话 / README 与磁盘一致） |
 | `mutate-ledger-consistency.py` | `07` 台账自身（两处状态表不许互相矛盾 / 现状必须是真的） |
 | `mutate-doc-citations.py` | 活文档点名的测试必须真的存在（文件 / 类 / 方法） |
+| `mutate-price-fallback.py` | 价格表两份副本不许分叉 + 同步脚本不许帮倒忙 |
 
 全部一起跑（**很慢** —— 每个脚本都要重建 + 重跑测试，建议过夜跑）：
 

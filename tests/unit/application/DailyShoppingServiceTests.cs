@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using GdUnit4;
+using ClaudeCodeGameStudios.Tests;
 using ClaudeCodeGameStudios.Application.Stall;
 using ClaudeCodeGameStudios.Domain.Heroes;
 using ClaudeCodeGameStudios.Domain.Items;
@@ -67,7 +68,7 @@ public class DailyShoppingServiceTests
             [Carol] = carol,
         };
 
-        var stall = new StallService(village, PriceBook.Default,
+        var stall = new StallService(village, TestPrices.Book,
             id => heroes.TryGetValue(id, out var h) ? h : null);
         if (openStall) stall.PlaceStall(Alice, Stone, 10, 10.0);
         if (openStall) stall.PlaceStall(Carol, Wood, 10, 10.0);   // 跟 Alice 同一开关

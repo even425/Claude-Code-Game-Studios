@@ -65,7 +65,7 @@ public class StallVillageCutTests
 
     private static StallService MakeService(
         Dictionary<HeroId, HeroAgent> heroes, DomainVillage village)
-        => new(village, PriceBook.Default, id => heroes.TryGetValue(id, out var h) ? h : null);
+        => new(village, TestPrices.Book, id => heroes.TryGetValue(id, out var h) ? h : null);
 
     // ── 累计 ────────────────────────────────────────────────────────
 

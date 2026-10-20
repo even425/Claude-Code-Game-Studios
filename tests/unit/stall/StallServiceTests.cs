@@ -76,7 +76,7 @@ public class StallServiceTests
         return (heroes, village);
     }
 
-    private static PriceBook MakeBook() => PriceBook.Default;
+    private static PriceBook MakeBook() => TestPrices.Book;
 
     // ── PlaceStall：前置条件 ─────────────────────────────────────────
 
@@ -139,7 +139,7 @@ public class StallServiceTests
         Assertions.AssertThat(r).IsNotNull();
         // Bag: 10 - 5 = 5
         Assertions.AssertThat(r!.NewBag.Count(Stone)).IsEqual(5L);
-        // 摊位：5 份，Open，单价 5（PriceBook.Default 石料 = 5）
+        // 摊位：5 份，Open，单价 5（**测试夹具** TestPrices.Book 的石料价 = 5；与产品的占位价无关）
         Assertions.AssertThat(r.Stall.Stock).IsEqual(5L);
         Assertions.AssertThat(r.Stall.Status).IsEqual(DomainStallStatus.Open);
         Assertions.AssertThat(r.Stall.UnitPrice).IsEqual(5L);

@@ -34,16 +34,16 @@ public class LootTableValidatorTests
     {
         var table = Table(new LootEntry(Stone, 60.0, 1, 2), new LootEntry(Cloth, 40.0, 1, 1));
 
-        var errors = LootTableValidator.Validate(table, Catalog(), PriceBook.Default);
+        var errors = LootTableValidator.Validate(table, Catalog(), TestPrices.Book);
 
         Assertions.AssertThat(errors.Count).IsEqual(0);
-        Assertions.AssertThat(LootTableValidator.IsValid(table, Catalog(), PriceBook.Default)).IsTrue();
+        Assertions.AssertThat(LootTableValidator.IsValid(table, Catalog(), TestPrices.Book)).IsTrue();
     }
 
     [TestCase]
     public void Validate_EmptyPool_ReportsError()
     {
-        var errors = LootTableValidator.Validate(Table(), Catalog(), PriceBook.Default);
+        var errors = LootTableValidator.Validate(Table(), Catalog(), TestPrices.Book);
 
         Assertions.AssertThat(errors.Count).IsGreater(0);
         Assertions.AssertThat(string.Join("|", errors)).Contains("池子是空的");
@@ -54,7 +54,7 @@ public class LootTableValidatorTests
     {
         var table = Table(new LootEntry(Unknown, 10.0, 1, 1));
 
-        var errors = LootTableValidator.Validate(table, Catalog(), PriceBook.Default);
+        var errors = LootTableValidator.Validate(table, Catalog(), TestPrices.Book);
 
         Assertions.AssertThat(string.Join("|", errors)).Contains("没有在物品注册表里登记");
     }
@@ -83,7 +83,7 @@ public class LootTableValidatorTests
     {
         var table = Table(new LootEntry(Stone, 0.0, 1, 1));
 
-        var errors = LootTableValidator.Validate(table, Catalog(), PriceBook.Default);
+        var errors = LootTableValidator.Validate(table, Catalog(), TestPrices.Book);
 
         Assertions.AssertThat(string.Join("|", errors)).Contains("配置非法");
     }
@@ -93,7 +93,7 @@ public class LootTableValidatorTests
     {
         var table = Table(new LootEntry(Stone, 10.0, 0, 1));
 
-        var errors = LootTableValidator.Validate(table, Catalog(), PriceBook.Default);
+        var errors = LootTableValidator.Validate(table, Catalog(), TestPrices.Book);
 
         Assertions.AssertThat(string.Join("|", errors)).Contains("配置非法");
     }
@@ -103,7 +103,7 @@ public class LootTableValidatorTests
     {
         var table = Table(new LootEntry(Stone, 10.0, 5, 2));
 
-        var errors = LootTableValidator.Validate(table, Catalog(), PriceBook.Default);
+        var errors = LootTableValidator.Validate(table, Catalog(), TestPrices.Book);
 
         Assertions.AssertThat(string.Join("|", errors)).Contains("配置非法");
     }
@@ -113,7 +113,7 @@ public class LootTableValidatorTests
     {
         var table = Table(new LootEntry(Stone, 0.0, 1, 1), new LootEntry(Cloth, 0.0, 1, 1));
 
-        var errors = LootTableValidator.Validate(table, Catalog(), PriceBook.Default);
+        var errors = LootTableValidator.Validate(table, Catalog(), TestPrices.Book);
 
         Assertions.AssertThat(string.Join("|", errors)).Contains("权重");
     }
@@ -124,7 +124,7 @@ public class LootTableValidatorTests
     {
         var table = Table(new LootEntry(Stone, 600.0, 1, 1), new LootEntry(Cloth, 400.0, 1, 1));
 
-        var errors = LootTableValidator.Validate(table, Catalog(), PriceBook.Default);
+        var errors = LootTableValidator.Validate(table, Catalog(), TestPrices.Book);
 
         Assertions.AssertThat(errors.Count).IsEqual(0);
     }

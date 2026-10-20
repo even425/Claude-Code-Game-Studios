@@ -62,7 +62,7 @@ public class LootPipelineTests
         });
 
     private static DungeonLootProvider Provider(int draws = 2)
-        => new(new[] { Table(draws) }, ItemCatalog.Default, PriceBook.Default);
+        => new(new[] { Table(draws) }, ItemCatalog.Default, TestPrices.Book);
 
     /// <summary>把分配结果压成可比较的字符串（英雄|物品|数量，按发放顺序）。</summary>
     private static string Describe(LootAllocation allocation)
@@ -148,7 +148,7 @@ public class LootPipelineTests
     {
         var provider = new DungeonLootProvider(
             new[] { new LootTable(Dungeon, 0, Array.Empty<LootEntry>()) },
-            ItemCatalog.Default, PriceBook.Default);
+            ItemCatalog.Default, TestPrices.Book);
 
         var result = LootPipeline.Run(provider, Dungeon, Crew, RunId);
 

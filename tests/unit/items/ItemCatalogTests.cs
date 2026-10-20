@@ -97,7 +97,7 @@ public class ItemCatalogTests
     public void Default_MatchesDefaultPriceBook()
     {
         var catalog = ItemCatalog.Default;
-        var prices = PriceBook.Default;
+        var prices = TestPrices.Book;
 
         foreach (var item in catalog.All)
         {

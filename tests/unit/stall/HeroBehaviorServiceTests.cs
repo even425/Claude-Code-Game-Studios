@@ -78,7 +78,7 @@ public class HeroBehaviorServiceTests
         bob.RestoreWallet(bobWallet);
         heroes[Bob] = bob;
 
-        var svc = new StallService(village, PriceBook.Default, id => heroes.TryGetValue(id, out var h) ? h : null);
+        var svc = new StallService(village, TestPrices.Book, id => heroes.TryGetValue(id, out var h) ? h : null);
         return (heroes, village, svc);
     }
 

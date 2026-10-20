@@ -55,7 +55,7 @@ public class StaticDefinitionSeparationTests
             lines.Add($"catalog[{def.Id.Value}] name={def.DisplayName} rarity={def.Rarity}");
         }
 
-        lines.Add($"prices={PriceBook.Default.Describe()}");
+        lines.Add($"prices={TestPrices.Book.Describe()}");
 
         return string.Join("\n", lines);
     }
@@ -79,7 +79,7 @@ public class StaticDefinitionSeparationTests
         var provider = new DungeonLootProvider(
             new[] { DefaultLootTables.For("测试副本") },
             ItemCatalog.Default,
-            PriceBook.Default);
+            TestPrices.Book);
 
         var loot = provider.LootFor("测试副本", new DecisionFlow.SeededRandom(0xC0FFEE));
         Assertions.AssertThat(loot).IsNotEmpty();
@@ -87,7 +87,7 @@ public class StaticDefinitionSeparationTests
         // ── 摆摊 + 购买：走真实的摊位服务（定价走 PriceBook）──────────
         var (heroes, village) = MakeScene();
         var stalls = new StallService(
-            village, PriceBook.Default,
+            village, TestPrices.Book,
             id => heroes.TryGetValue(id, out var h) ? h : null);
 
         var placed = stalls.PlaceStall(Seller, Stone, 5, 0.0);

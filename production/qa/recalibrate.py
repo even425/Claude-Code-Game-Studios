@@ -14,6 +14,14 @@
     python production/qa/recalibrate.py --skip-build        # 跳过构建与测试（只采集）
 
 它做什么：
+    0. **同步内置兜底价格表**（`config/prices.json` → `PriceBook.Default`）——
+       ⚠️ 这一步是**必须**的，不是锦上添花：价格表是同一份数据的**两个副本**，
+       守卫 `PriceBookConfigConsistencyTests` 要求两者严格相等。
+       开发者改了 JSON 却没同步兜底 ⇒ 守卫红 ⇒ **第 2 步的 `dotnet test` 当场抛错退出，
+       采集根本跑不起来** —— 也就是说，「改一个文件 + 跑一条命令」这条承诺
+       **恰好在最需要它的地方断了**。同步掉这一步，承诺才是真的。
+       （用 `--prices` 指定别的价格表时**不同步** —— 那是一次性的实验覆盖，
+       不该把提交在仓库里的兜底表改掉。）
     1. 读 config/prices.json（读不到就用内置占位表）并打印 —— **先确认价格表是哪个**
     2. 构建 Debug + Release，跑全部单元测试（两个都要：Godot headless 加载的是 Debug）
     3. 按给定的 X 列表逐个采集（37 英雄 / --daylen=0.15 / 指定种子）
@@ -42,7 +50,23 @@ PROJECT = ROOT
 PRICES = ROOT / "config" / "prices.json"
 QA = ROOT / "production" / "qa"
 ANALYZE = QA / "analyze-econ.py"
+SYNC = QA / "sync-price-fallback.py"
 OUT = Path(os.environ.get("TEMP", ".")) / "ccgs-recal"
+
+
+def sync_fallback() -> None:
+    """把内置兜底价格表同步成 `config/prices.json` 的内容。
+
+    **为什么必须在构建测试之前做**：价格表是同一份数据的两个副本，
+    守卫要求两者严格相等 ⇒ 开发者改了 JSON 忘了同步 ⇒ 守卫红 ⇒
+    下面的 `dotnet test` 当场抛错退出 ⇒ **采集根本跑不起来**。
+    """
+    print(">> 同步内置兜底价格表（config/prices.json → PriceBook.Default）", flush=True)
+    proc = subprocess.run([sys.executable, str(SYNC)], cwd=ROOT)
+    if proc.returncode != 0:
+        raise SystemExit(
+            "!! 同步内置兜底失败 —— 上面那一行是原因。"
+            "（价格表必须两份一致，否则副本一致性守卫会红。）")
 
 
 def read_prices() -> dict:
@@ -140,6 +164,13 @@ def main() -> int:
     print(f"采集            : {args.days} 天 · 种子 {args.seeds}")
     print(f"要扫的 X        : {args.x}")
     print()
+
+    # 用 --prices 指定了别的价格表 ⇒ 那是一次性的实验覆盖，
+    # **不能**把提交在仓库里的内置兜底改掉（否则仓库状态被实验污染）。
+    if args.prices:
+        print(">> 跳过同步内置兜底（--prices 是一次性覆盖，不该改仓库里的兜底表）", flush=True)
+    else:
+        sync_fallback()
 
     build_and_test(args.skip_build)
 

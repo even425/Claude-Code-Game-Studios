@@ -54,7 +54,7 @@ public class PlaceStallPositionTests
         alice.RestoreWallet(aliceWallet);
         heroes[Alice] = alice;
 
-        var svc = new StallService(village, PriceBook.Default, id => heroes.TryGetValue(id, out var h) ? h : null);
+        var svc = new StallService(village, TestPrices.Book, id => heroes.TryGetValue(id, out var h) ? h : null);
         return (heroes, village, svc);
     }
 
@@ -124,7 +124,7 @@ public class PlaceStallPositionTests
         heroes[Alice].AssignId(Alice);
         heroes[Alice].RestoreBag(new Inventory().TryAdd(Stone, 10)!);
         heroes[Alice].RestoreWallet(new Wallet(new Dictionary<DomainResourceId, long> { { Gold, 100L } }));
-        var svc2 = new StallService(village2, PriceBook.Default, id => heroes.TryGetValue(id, out var h) ? h : null);
+        var svc2 = new StallService(village2, TestPrices.Book, id => heroes.TryGetValue(id, out var h) ? h : null);
 
         var r = svc2.PlaceStall(Alice, Stone, 1, 10.0, 6, 6);
         Assertions.AssertThat(r).IsNull();   // 未建成 → 影响区不算
@@ -148,7 +148,7 @@ public class PlaceStallPositionTests
             new DomainBuildingId("house"), gridX: 3, gridY: 3, footprintW: 1, footprintH: 1);
         // 默认 affectsAreaW/H = 0
         village.TryPlace(oldBuilding);
-        var svc = new StallService(village, PriceBook.Default, id => heroes.TryGetValue(id, out var h) ? h : null);
+        var svc = new StallService(village, TestPrices.Book, id => heroes.TryGetValue(id, out var h) ? h : null);
 
         // (3,3) 在 house footprint 内 → 占用 → 拒
         var r1 = svc.PlaceStall(Alice, Stone, 1, 10.0, 3, 3);

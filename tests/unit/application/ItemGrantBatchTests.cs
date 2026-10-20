@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using GdUnit4;
+using ClaudeCodeGameStudios.Tests;
 using ClaudeCodeGameStudios.Application;
 using ClaudeCodeGameStudios.Domain.Heroes;
 using ClaudeCodeGameStudios.Domain.Items;
@@ -53,7 +54,7 @@ public class ItemGrantBatchTests
             Bob = bob,
             Service = new ItemGrantService(
                 id => heroes.TryGetValue(id, out var h) ? h : null,
-                catalog ?? PriceBook.Default),
+                catalog ?? TestPrices.Book),
         };
     }
 

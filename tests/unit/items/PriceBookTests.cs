@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using GdUnit4;
 using ClaudeCodeGameStudios.Domain.Items;
 
@@ -11,7 +13,7 @@ namespace ClaudeCodeGameStudios.Tests.Items;
 /// <list type="bullet">
 /// <item>负价防线：构造期拒收负数（不能"以后再处理"）。</item>
 /// <item>未登记 = 0（语义："不卖"，不是"免费"）。</item>
-/// <item>默认价格表 3 项商品、价格与 D-021 占位一致（占位=故意圆整数，3 / 5 / 8）。</item>
+/// <item>默认价格表<b>装着那三个可售物品</b>（<b>不写死价格</b> —— 那是 T-007 的占位值，见下方那条测试的说明）。</item>
 /// <item><see cref="PriceBook.WithPrices"/>：读档专用，整张表替换。</item>
 /// </list>
 ///
@@ -189,18 +191,31 @@ public class PriceBookTests
     // ── 默认表 ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 默认表的<b>占位价格</b>必须是 D-021 写下的值（3 / 5 / 8）。
+    /// 默认兜底表必须<b>装着那三个可售物品，且价格非负</b>。
     /// </summary>
     /// <remarks>
-    /// 未来若调成 "石料 4 / 木料 4 / 布匹 12"，<b>同时</b>改本测试与
-    /// <c>PriceBook.Default</c> —— 不要分开调，让"占位值"始终在测试里也有记录。
+    /// <para><b>这里刻意不写死具体价格</b>（曾经是 3 / 5 / 8）。
+    /// 那是 <b>T-007</b> 的占位值，开发者随时会改 —— 而写死它的后果是：
+    /// 开发者改完价格，这条测试就红，而 <c>production/qa/recalibrate.py</c>
+    /// 的第 2 步正是 <c>dotnet test</c> ⇒ <b>「改价格 → 重跑标定」那条路
+    /// 恰好在最需要它的地方断掉</b>。</para>
+    /// <para><b>「具体是多少钱」不是断言，是开发者的决定</b>；
+    /// 「默认表里那三个物品在、且价格合法」才是这张表的性质。
+    /// 两份副本不许分叉，由 <c>PriceBookConfigConsistencyTests</c> 守。</para>
     /// </remarks>
     [TestCase]
-    public void Default_HasThreeItems_AtThePlaceholderPrices()
+    public void Default_RegistersTheThreeSellableItems_WithNonNegativePrices()
     {
-        Assertions.AssertThat(PriceBook.Default.PriceOf(Stone)).IsEqual(5L);
-        Assertions.AssertThat(PriceBook.Default.PriceOf(Wood)).IsEqual(3L);
-        Assertions.AssertThat(PriceBook.Default.PriceOf(Cloth)).IsEqual(8L);
+        var registered = PriceBook.Default.Items
+            .Select(kv => kv.Key.Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var id in new[] { Stone, Wood, Cloth })
+        {
+            Assertions.AssertThat(registered.Contains(id.Value))
+                .IsTrue();   // 物品**集合**是稳定的；价格不是
+            Assertions.AssertThat(PriceBook.Default.PriceOf(id)).IsGreaterEqual(0L);
+        }
     }
 
     /// <summary>默认表里**没有**"翡翠"。验证未登记行为一致：未登记 = 0。</summary>

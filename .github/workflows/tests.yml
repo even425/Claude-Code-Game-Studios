@@ -41,15 +41,28 @@ jobs:
       - name: Build game assembly (Debug, for the headless self-checks)
         run: dotnet build Claude-Code-Game-Studios.csproj
 
-      - name: Run tests
-        run: dotnet test tests/Claude-Code-Game-Studios.Tests.csproj -c Release --logger "console;verbosity=normal" --no-restore
-
-      # A run that discovers nothing also exits 0 on some runners. Force that
-      # case to be a failure rather than a green build with no tests in it.
-      - name: Guard against an empty suite
+      # The test run AND the empty-suite guard live in one step.
+      #
+      # ⚠️ Why they were merged: the guard used to be a separate step that ran
+      # `dotnet test --list-tests` and grepped for a known test name.
+      # gdUnit4 does not implement the VSTest list-tests contract, so that
+      # command produced no listing at all — the step threw, and the job went
+      # red on a *green* test suite (run #5: "Run tests" succeeded, the guard
+      # failed). One run, one verdict.
+      #
+      # The count is matched in both locales: this runner image prints
+      # "Total tests: N"; a Chinese-localised runner prints "测试总数: N".
+      # A run that discovers nothing also exits 0 on some runners — refusing
+      # to report that as a pass is the whole point of this guard.
+      - name: Run tests (and refuse an empty suite)
+        shell: pwsh
         run: |
-          $out = dotnet test tests/Claude-Code-Game-Studios.Tests.csproj -c Release --no-restore --list-tests
-          if ($out -notmatch 'FrameworkTests') { throw "No tests discovered — refusing to report a pass" }
+          $out = dotnet test tests/Claude-Code-Game-Studios.Tests.csproj -c Release --no-restore --logger "console;verbosity=normal" 2>&1 | Out-String
+          Write-Host $out
+          if ($LASTEXITCODE -ne 0) { throw "dotnet test failed (exit $LASTEXITCODE)" }
+          if ($out -notmatch '(?m)^\s*(Total tests|测试总数)\s*:\s*([1-9]\d*)') {
+            throw "No tests discovered — refusing to report a pass"
+          }
 
       # The parameter ledger: every numeric constant in src/ must be claimed,
       # and every parameter's value must match the ledger. A new hardcoded
@@ -70,16 +83,18 @@ jobs:
     name: Runtime self-checks (Godot headless)
     runs-on: windows-latest
 
-    # ⚠️ **探针作业（canary）**：这一作业在**真实 runner 上还没跑过**（本机没有 CI runner），
-    # 所以它**暂时不阻断**整个工作流 —— 万一环境上有意外（例如项目首次导入需要更久、
-    # 或某个 runner 镜像缺东西），不该让整条流水线变红。
-    # **它跑通过一次之后，请把下面的 continue-on-error 删掉**，
-    # 让它与上面的主作业一样成为硬门槛。
+    # ✅ **这一作业已经在真实 runner 上跑通过一次**（run #5，commit 15b4657：
+    # 9 个步骤全部 success，含「Run the runtime self-checks」，耗时 6 分 35 秒）
+    # ⇒ 它不再是「探针」，**已经是硬门槛**。
     #
-    # 为什么值得单独一个作业：11 个自检开关**只存在于运行中的游戏里**，
+    # 为什么值得单独一个作业：7 个自检开关**只存在于运行中的游戏里**，
     # `dotnet test` 够不到它们 —— 而它们守的正是「玩家存档没被碰」
     # 「结算只发生一次」这类**跑起来才暴露**的问题。
-    continue-on-error: true
+    #
+    # ⚠️ 保留 `continue-on-error` 反而更糟：作业红着没人看，
+    # 就等于「它其实没在守任何东西，却看起来在守」——
+    # 那正是本仓库反复在治的病（工具跑不动 vs 工具跑了没发现问题）。
+    # **跑通过一次，就把那条线删掉** —— 这一条已经执行。
 
     steps:
       - name: Checkout
@@ -123,6 +138,19 @@ jobs:
 
       - name: Build game assembly (Debug)
         run: dotnet build Claude-Code-Game-Studios.csproj
+
+      # Godot headless loads .godot/mono/temp/bin/Debug/ - the Debug build.
+      # If a csproj change ever redirects the output path, the self-checks
+      # below would silently run the wrong assembly (or none at all) and
+      # still report a pass. Assert the file is where the engine looks.
+      - name: Assert the engine's assembly path is the one we built
+        shell: pwsh
+        run: |
+          $dll = ".godot/mono/temp/bin/Debug/Claude-Code-Game-Studios.dll"
+          if (-not (Test-Path $dll)) {
+            throw "Debug assembly is not at $dll - Godot headless would load stale code"
+          }
+          Write-Host "Debug assembly: $dll"
 
       - name: Run the runtime self-checks
         shell: pwsh

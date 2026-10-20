@@ -70,14 +70,17 @@ jobs:
     name: Runtime self-checks (Godot headless)
     runs-on: windows-latest
 
-    # The 11 self-check switches (--save / --relations / --market / ...) only
-    # exist inside the running game, so `dotnet test` cannot reach them. This
-    # job installs the pinned Godot (.NET build) and runs them.
+    # ⚠️ **探针作业（canary）**：这一作业在**真实 runner 上还没跑过**（本机没有 CI runner），
+    # 所以它**暂时不阻断**整个工作流 —— 万一环境上有意外（例如项目首次导入需要更久、
+    # 或某个 runner 镜像缺东西），不该让整条流水线变红。
+    # **它跑通过一次之后，请把下面的 continue-on-error 删掉**，
+    # 让它与上面的主作业一样成为硬门槛。
     #
-    # It also asserts the thing a human cannot easily prove: the self-checks
-    # never touch the player's save file. They use their own port
-    # (selftest-village-save.json), and the script hashes the player's save
-    # before and after.
+    # 为什么值得单独一个作业：11 个自检开关**只存在于运行中的游戏里**，
+    # `dotnet test` 够不到它们 —— 而它们守的正是「玩家存档没被碰」
+    # 「结算只发生一次」这类**跑起来才暴露**的问题。
+    continue-on-error: true
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -105,6 +108,14 @@ jobs:
           if (-not $exe) { throw "Godot executable not found in the extracted archive" }
           "GODOT=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "Godot: $($exe.FullName)"
+
+      # 首次运行 Godot 会**导入整个项目**（.godot/ 不在版本库里），可能要一会儿。
+      # 这一步只做导入，把「导入」与「跑自检」分开 —— 后者的失败才是真问题。
+      - name: Import the project (first run creates .godot/)
+        shell: pwsh
+        run: |
+          & $env:GODOT --headless --path . --quit-after 60 2>&1 | Select-Object -Last 20
+          if ($LASTEXITCODE -ne 0) { throw "Godot project import failed (exit $LASTEXITCODE)" }
 
       # Godot headless loads .godot/mono/temp/bin/Debug/ - the Debug build.
       - name: Build game assembly (Release)

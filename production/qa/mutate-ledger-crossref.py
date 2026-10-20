@@ -132,6 +132,10 @@ def main() -> int:
     #    这正是设计：值不用人跟，措辞必须人跟，而「措辞没跟上」机器会喊。
     src = ROOT / "src" / "Application" / "PlaceholderCombat.cs"
     src_backup = src.read_bytes()
+    # ⚠️ 清单文档是**生成**的 —— `--sync-values` 会顺手重写它 ⇒ 必须一起备份/复原，
+    # 否则一次变异跑完，仓库里就多一份「不该在」的文档改动。
+    doc = ROOT / "production" / "36_当前实现参数清单_V1.0.md"
+    doc_backup = doc.read_bytes()
     try:
         text = src_backup.decode("utf-8")
         src.write_text(text.replace("0.65", "0.66"), encoding="utf-8", newline="")
@@ -153,6 +157,16 @@ def main() -> int:
             [sys.executable, str(ROOT / "production" / "qa" / "param-inventory.py"),
              "--sync-values"], cwd=ROOT, capture_output=True, text=True,
             encoding="utf-8", errors="replace")
+        # 文档是生成的 ⇒ 复原成变异前的那一份（别把生成物留在工作区）
+        doc.write_bytes(doc_backup)
+
+    # ── ⑦ `07` §2 点名的常量值与台账不符 ⇒ 断言 4 红 ─────────────────
+    #    「规则层的台账在撒谎」—— §2 说 `MaxTier = 5`，台账里是别的数。
+    results.append(mutate_decision(
+        "`07` §2 里点名的常量值与台账不符（规则层的台账在撒谎）",
+        "`MaxTier = 5`",
+        "`MaxTier = 7`",
+    ))
 
     print("---")
     bad = results.count(False)

@@ -223,4 +223,75 @@ public class ParameterLedgerCrossReferenceTests
         }
         return v;
     }
+
+    /// <summary>
+    /// <c>07</c> §2 的 P 表里<b>点名了常量并写了它的值</b>（<c>`MaxTier = 5`</c>）
+    /// —— 那些值必须与台账一致。
+    ///
+    /// <para><b>为什么这条不能省</b>：开发者改代码里的常量（T-004 的战斗数值、
+    /// D-003 的层级数）之后，<c>--sync-values</c> 会把**台账**的值跟上去，
+    /// 而 §2 的 P 表是**人写的散文** ⇒ 它会停在旧值上。
+    /// 而 §2 是**规则层的台账** —— 它说「村庄最高层级 = 5」，而代码已经是 7，
+    /// 那它就在**撒谎**，而且撒的是「规则」层面的谎。</para>
+    ///
+    /// <para><b>为什么是「按常量名比对」而不是「按数字是否存在于台账」</b>：
+    /// 后者太弱 —— <c>5</c> 换个参数也仍然是台账里的某个值（背包上限就是 5），
+    /// 于是「MaxTier 从 5 变成 7」这种最该被抓的情况会**溜过去**。
+    /// 按名字比对就没有这个问题。</para>
+    /// </summary>
+    [TestCase]
+    public void RuleLedger_QuotedConstantValues_MatchTheLedger()
+    {
+        var ledger = LoadLedger();
+
+        // 常量名 → 台账里的值（同名多份时必须**都**一致）
+        var byName = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var row in ledger)
+        {
+            if (!byName.TryGetValue(row.Name, out var list))
+            {
+                list = new List<string>();
+                byName[row.Name] = list;
+            }
+            list.Add(row.Value);
+        }
+
+        string path = Path.Combine(RepoRoot(), DecisionRelPath.Replace('/', Path.DirectorySeparatorChar));
+        string text = File.ReadAllText(path).Replace("\r\n", "\n");
+        int from = text.IndexOf("## 2. 临时参数台账", StringComparison.Ordinal);
+        int to = text.IndexOf("## 3. 待定规则台账", StringComparison.Ordinal);
+        Assertions.AssertThat(from).IsGreaterEqual(0);
+        Assertions.AssertThat(to).IsGreater(from);
+
+        // §2 里形如 `常量名 = 数字` 的引用
+        var quoted = new Regex(@"`(?<n>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?<v>-?\d+(?:\.\d+)?)`",
+                               RegexOptions.Compiled);
+
+        var offenders = new List<string>();
+        int checkedRefs = 0;
+        foreach (Match m in quoted.Matches(text[from..to]))
+        {
+            string name = m.Groups["n"].Value;
+            string stated = m.Groups["v"].Value;
+            checkedRefs++;
+
+            if (!byName.TryGetValue(name, out var values))
+            {
+                offenders.Add($"§2 提到 `{name} = {stated}`，但台账里没有这个常量");
+                continue;
+            }
+            foreach (string actual in values)
+            {
+                if (NormalizeNumber(actual) != NormalizeNumber(stated))
+                {
+                    offenders.Add($"§2 说 `{name} = {stated}`，台账里是 {actual} —— "
+                                  + "**规则层的台账在撒谎**（改了代码记得 `--sync-values` 并改这里）");
+                }
+            }
+        }
+
+        // 防空转：§2 必须真的点了几个常量的名，否则本条什么也没守。
+        Assertions.AssertThat(checkedRefs).IsGreaterEqual(2);
+        Assertions.AssertThat(string.Join(" | ", offenders)).IsEmpty();
+    }
 }

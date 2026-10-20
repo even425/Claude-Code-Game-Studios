@@ -25,9 +25,10 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def run_tests():
+def run_tests(filter=FILTER):
     r = subprocess.run(
-        ["dotnet", "test", str(TESTS), "-c", "Release", "--nologo", "-v", "q"],
+        ["dotnet", "test", str(TESTS), "-c", "Release", "--nologo", "-v", "q",
+         "--filter", filter],
         cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
     out = r.stdout + r.stderr
     m = re.search(r"失败:\s*(\d+)", out)
@@ -42,12 +43,16 @@ def run_tests():
 class Mutation:
     """一次变异：改文件 → 跑测试 → 复原 → 校验复原到位。"""
 
-    def __init__(self, label, path, old, new, expect_red=True):
+    def __init__(self, label, path, old, new, expect_red=True, filter=None):
         self.label = label
         self.path = path
         self.old = old
         self.new = new
         self.expect_red = expect_red
+        # 默认只跑 MainStructureTests；有些变异守的是**别的**守卫
+        # （例如「领域层不许依赖 Godot」那条在 DomainLayerPurityTests 里，
+        #  它比本文件里的那条更强 ⇒ 本文件那条是弱重复，已删）。
+        self.filter = filter or FILTER
 
     def apply(self):
         p = ROOT / self.path
@@ -65,7 +70,7 @@ class Mutation:
         before = sha(p)
         try:
             self.apply()
-            failed, out = run_tests()
+            failed, out = run_tests(self.filter)
             color = "RED  " if failed > 0 else ("GREEN" if failed == 0 else "???  ")
             want = "RED" if self.expect_red else "GREEN"
             ok = (failed > 0) == self.expect_red
@@ -127,11 +132,14 @@ def main():
     )
 
     # ── 4. 领域层引入 Godot 依赖 ──────────────────────────────────────
+    # 这条守的是 `DomainLayerPurityTests`（**更强**的那份：它剥注释与字符串，
+    # 还自带「扫描器非空转」自检）⇒ 变异要对着**那条**跑。
     m4 = Mutation(
         "给 src/Domain/Items/ItemId.cs 加 using Godot",
         "src/Domain/Items/ItemId.cs",
         "namespace ClaudeCodeGameStudios.Domain.Items;",
         "using Godot;\nnamespace ClaudeCodeGameStudios.Domain.Items;",
+        filter="FullyQualifiedName~DomainLayerPurityTests",
     )
 
     # ── 5. 领域层出现 static 可变字段 ────────────────────────────────

@@ -172,24 +172,18 @@ public class MainStructureTests
         Directory.EnumerateFiles(dir, "*.cs", SearchOption.AllDirectories);
 
     // ── 断言 1：领域层不得依赖 Godot（UT-01 (b)）─────────────────────
+    // ⚠️ **这条不写在这里** —— 它已由 `DomainLayerPurityTests` 覆盖，
+    // 而且那份**更严**：它会剥掉注释与字符串再扫（否则 `// 这里提到 Godot`
+    // 会被当成违规），还自带一条「扫描器不是空转」的自检。
+    // **弱重复比没有守卫更糟** —— 它让人以为这一条有人盯着，
+    // 实际盯着的却是另一条更容易被改弱的规则。详见该文件。
     [TestCase]
-    public void DomainLayer_DoesNotDependOnGodot()
+    public void GodotPurity_IsGuardedByTheStrongerExistingTest()
     {
-        var offenders = new List<string>();
-        foreach (var file in CsFiles(Path.Combine(SrcDir(), "Domain")))
-        {
-            foreach (var line in File.ReadAllLines(file))
-            {
-                var t = line.Trim();
-                if (t.StartsWith("using Godot") || t == "using Godot;")
-                {
-                    offenders.Add(Path.GetFileName(file));
-                    break;
-                }
-            }
-        }
-
-        Assertions.AssertThat(string.Join(" | ", offenders)).IsEmpty();
+        // 本测试只负责「指路」：确认那条更强的守卫**还在**（文件没被删掉）。
+        var path = Path.Combine(SrcDir(), "..", "tests", "unit", "architecture",
+                                "DomainLayerPurityTests.cs");
+        Assertions.AssertThat(File.Exists(path)).IsTrue();
     }
 
     // ── 断言 2：领域层不得有 static 可变状态（UT-01 (a)）────────────

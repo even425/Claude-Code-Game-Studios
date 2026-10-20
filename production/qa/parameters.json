@@ -37,8 +37,8 @@
       "file": "Application/DungeonFlow.cs",
       "name": "DeclaredStageCount",
       "kind": "参数",
-      "status": "【待定】基线 §8",
-      "note": "副本有几个阶段（3）—— **台账未登记，见 §3**",
+      "status": "【待定】P-12（基线 §8）",
+      "note": "副本有几个阶段（3）—— 已登记在 `07` §2 的 P-12（2026-10-21 补登）",
       "value": "3"
     },
     {
@@ -77,8 +77,8 @@
       "file": "Application/VillageUpgradeService.cs",
       "name": "MaxTier",
       "kind": "参数",
-      "status": "【待定】D-003",
-      "note": "村庄最高层级（5）—— **台账未登记，见 §3**",
+      "status": "【待定】P-13（D-003）",
+      "note": "村庄最高层级（5）—— 已登记在 `07` §2 的 P-13（2026-10-21 补登）",
       "value": "5"
     },
     {
@@ -253,8 +253,8 @@
       "file": "VillageView.cs",
       "name": "MaxTier",
       "kind": "参数",
-      "status": "【待定】D-003",
-      "note": "村庄最高层级（5）—— **与 `VillageUpgradeService.MaxTier` 重复**，见 §3",
+      "status": "【待定】P-13（D-003）",
+      "note": "村庄最高层级（5）—— 已登记在 `07` §2 的 P-13；与 `VillageUpgradeService.MaxTier` **重复**（两处分叉的隐患：测试盯着，但不是台账）",
       "value": "5"
     }
   ],

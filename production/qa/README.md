@@ -97,6 +97,7 @@ except ImportError:
 | `mutate-ledger-consistency.py` | `07` 台账自身（两处状态表不许互相矛盾 / 现状必须是真的） |
 | `mutate-doc-citations.py` | 活文档点名的测试必须真的存在（文件 / 类 / 方法） |
 | `mutate-price-fallback.py` | 价格表两份副本不许分叉 + 同步脚本不许帮倒忙 |
+| `mutate-ledger-crossref.py` | 两张参数台账之间的链接不许悬空 / 占位值不许无主 |
 
 全部一起跑（**很慢** —— 每个脚本都要重建 + 重跑测试，建议过夜跑）：
 

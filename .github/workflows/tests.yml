@@ -1,0 +1,118 @@
+name: Automated Tests
+
+on:
+  push:
+    branches: [main, mytown]
+  pull_request:
+    branches: [main, mytown]
+
+jobs:
+  test:
+    name: Run gdUnit4 (C#)
+    runs-on: windows-latest
+
+    # godotengine/godot is NOT used here. This is a C# project: tests run through
+    # `dotnet test` against the gdUnit4 NuGet packages, not through the GDScript
+    # addon runner. The Godot editor is only needed if game code is built here.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Fails the job on a restore error. Without it, a NU1605 package
+      # downgrade (see tests/README.md) surfaces later as a confusing build
+      # failure instead of a dependency failure.
+      - name: Restore
+        run: dotnet restore tests/Claude-Code-Game-Studios.Tests.csproj
+
+      # The game project excludes tests/ via <Compile Remove="tests/**/*.cs" />,
+      # so the two assemblies stay separate and a test-only reference cannot
+      # break the shipped build.
+      - name: Build game assembly
+        run: dotnet build Claude-Code-Game-Studios.csproj -c Release
+
+      # The Debug build is NOT optional: Godot headless loads
+      # .godot/mono/temp/bin/Debug/, so a Release-only build leaves the
+      # headless path running stale code - silently, with no error.
+      - name: Build game assembly (Debug, for the headless self-checks)
+        run: dotnet build Claude-Code-Game-Studios.csproj
+
+      - name: Run tests
+        run: dotnet test tests/Claude-Code-Game-Studios.Tests.csproj -c Release --logger "console;verbosity=normal" --no-restore
+
+      # A run that discovers nothing also exits 0 on some runners. Force that
+      # case to be a failure rather than a green build with no tests in it.
+      - name: Guard against an empty suite
+        run: |
+          $out = dotnet test tests/Claude-Code-Game-Studios.Tests.csproj -c Release --no-restore --list-tests
+          if ($out -notmatch 'FrameworkTests') { throw "No tests discovered — refusing to report a pass" }
+
+      # The parameter ledger: every numeric constant in src/ must be claimed,
+      # and every parameter's value must match the ledger. A new hardcoded
+      # number, a changed value, a stale entry or a document that drifted from
+      # the code all fail here.
+      - name: Check the parameter ledger against the code
+        shell: pwsh
+        run: python production/qa/param-inventory.py --check
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: tests/**/TestResults/
+
+  runtime-selfchecks:
+    name: Runtime self-checks (Godot headless)
+    runs-on: windows-latest
+
+    # The 11 self-check switches (--save / --relations / --market / ...) only
+    # exist inside the running game, so `dotnet test` cannot reach them. This
+    # job installs the pinned Godot (.NET build) and runs them.
+    #
+    # It also asserts the thing a human cannot easily prove: the self-checks
+    # never touch the player's save file. They use their own port
+    # (selftest-village-save.json), and the script hashes the player's save
+    # before and after.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # The .NET ("mono") build is required: this is a C# Godot project.
+      # Pinned to the exact engine version the repo pins (4.7.2).
+      - name: Install Godot 4.7.2 (.NET build)
+        shell: pwsh
+        run: |
+          $url = "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_mono_win64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\godot.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\godot.zip" -DestinationPath "$env:RUNNER_TEMP\godot"
+          $exe = Get-ChildItem -Path "$env:RUNNER_TEMP\godot" -Recurse -Filter "*.exe" |
+                 Where-Object { $_.Name -notlike "*console*" } | Select-Object -First 1
+          if (-not $exe) { throw "Godot executable not found in the extracted archive" }
+          "GODOT=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Godot: $($exe.FullName)"
+
+      # Godot headless loads .godot/mono/temp/bin/Debug/ - the Debug build.
+      - name: Build game assembly (Release)
+        run: dotnet build Claude-Code-Game-Studios.csproj -c Release
+
+      - name: Build game assembly (Debug)
+        run: dotnet build Claude-Code-Game-Studios.csproj
+
+      - name: Run the runtime self-checks
+        shell: pwsh
+        run: python production/qa/run-selfchecks.py

@@ -23,6 +23,11 @@
 「分布要不要加约束」是开发者的决定。脚本只负责把数**量出来**。
 """
 
+try:
+    import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
+except ImportError:
+    pass
+
 import argparse
 import json
 import os

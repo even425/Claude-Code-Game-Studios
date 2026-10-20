@@ -11,6 +11,11 @@ I10：跨模块的状态改变，只经由拥有该数据的模块。
 
 用法：python production/qa/mutate-write-points.py
 """
+try:
+    import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
+except ImportError:
+    pass
+
 import hashlib
 import re
 import subprocess

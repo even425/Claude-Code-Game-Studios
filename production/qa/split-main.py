@@ -18,6 +18,11 @@
 
 用法：python production/qa/split-main.py [--dry]
 """
+try:
+    import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
+except ImportError:
+    pass
+
 import re
 import sys
 from pathlib import Path

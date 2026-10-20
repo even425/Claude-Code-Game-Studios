@@ -9,12 +9,13 @@
 | 文件 | 干什么 | 什么时候跑 |
 |---|---|---|
 | `verify-all.py` | **一条命令**跑完所有验证（构建 ×2 → 单元测试 → 真机自检 → 参数台账） | 每次改动之后 |
-| `run-selfchecks.py` | 跑 11 个**真机自检**开关，并**证明它们没碰玩家存档** | 改了游戏逻辑之后 |
+| `run-selfchecks.py` | 跑 7 个**真机自检**开关，并**证明它们没碰玩家存档** | 改了游戏逻辑之后 |
 | `param-inventory.py` | 生成 / 校验**参数台账**（代码里的每个数值常量） | 改了任何数值之后 |
 | `parameters.json` | 参数台账的**单一真源**（标量参数 + 表类参数） | 跟上面的脚本一起 |
 | `shot-check.py` | 截真图并检查**画面不是空图** | 改了表现层之后（需要显示器） |
 | `recalibrate.py` | 重跑经济标定（扫 X → 稳态 / 分布） | 改了价格 / 掉落 / 报酬之后 |
 | `mutate-*.py` | **变异矩阵**：把代码改坏，确认对应的守卫会红 | 改了守卫之后 |
+| `_utf8out.py` | 让本目录的脚本在**任何**控制台编码下都能把话说出来 | 不是工具，是**每个工具的前置**（见约定 ⑤） |
 
 ## 验收计划的覆盖现状（2026-10-21 核实）
 
@@ -53,11 +54,30 @@ Godot headless 加载的是 `.godot/mono/temp/bin/Debug/` 的程序集。
 `verify-all.py` 里因前提缺失被跳过的项会**明确打印**（跳过了什么、为什么），
 `--require-all` 可以把「跳过」也变成失败。
 
+### ⑤ 脚本必须**在控制台上说得出来**
+
+本机 Windows 控制台默认是 **GBK（cp936）**，而脚本里满是「✓ / ✗ / ⇒ / ✅」这类符号 ——
+**GBK 里没有它们** ⇒ `print` 抛 `UnicodeEncodeError` ⇒ 脚本**直接崩**。
+
+这曾真实发生：`run-selfchecks.py` 跑到**第一个通过项**就炸，
+后面 6 个自检**一个都没跑**，而它最后那句「全部 7 个自检通过」压根没机会打印。
+**「工具跑不动」和「工具跑了但没发现问题」在日志上看起来一模一样** —— 所以这是守卫级别的事。
+
+修法：每个脚本开头
+
+```python
+try:
+    import _utf8out  # noqa: F401
+except ImportError:
+    pass
+```
+
+由 `QaToolingTests`（`tests/unit/architecture/`）守住 —— **新脚本忘了加就红**。
+
 ## 变异矩阵一览
 
 | 脚本 | 守的是什么 |
 |---|---|
-| `mutate-worldtable.py` | 世界表加载器的校验（权重 / 名字 / 数组 / 兜底） |
 | `mutate-structure.py` | UT-01 结构断言（职责分布 / 穷尽分类 / 自检文件纯净） |
 | `mutate-acceptance.py` | UT-02 / UT-04 / UT-10 验收断言 |
 | `mutate-static-defs.py` | UT-07 静态定义不得被运行时写回 |
@@ -69,6 +89,8 @@ Godot headless 加载的是 `.godot/mono/temp/bin/Debug/` 的程序集。
 | `mutate-param-ledger.py` | 参数台账与代码一致（标量 + 四张表） |
 | `mutate-config-fallback.py` | 外部配置与内置兜底不许分叉（价格表 / 世界表） |
 | `mutate-death-cost.py` | IT-16 死亡代价：领域层不许有「永久损失」字段 |
+| `mutate-mt04-visible.py` | MT-04 存档重载后的可见状态（**含「界面没跟着刷新」那一档**） |
+| `mutate-qa-tooling.py` | QA 工具箱自身（脚本能说话 / README 与磁盘一致） |
 
 全部一起跑（很慢，约 20 分钟）：
 

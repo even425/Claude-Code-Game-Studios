@@ -11,6 +11,11 @@ D-006 三条：① 模拟时间继续推进 ② 未随队英雄照常行动 ③ 
 
 用法：python production/qa/mutate-freeze-village.py
 """
+try:
+    import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
+except ImportError:
+    pass
+
 import hashlib
 import re
 import subprocess

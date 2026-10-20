@@ -16,6 +16,11 @@
 
 用法：python production/qa/shot-check.py [--keep <输出路径>]
 """
+try:
+    import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
+except ImportError:
+    pass
+
 import argparse
 import struct
 import subprocess

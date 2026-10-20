@@ -15,6 +15,11 @@
   python production/qa/param-inventory.py            # 生成 Markdown 表
   python production/qa/param-inventory.py --check    # 校验（不一致即退出码 1）
 """
+try:
+    import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
+except ImportError:
+    pass
+
 import re
 import sys
 from pathlib import Path

@@ -2,7 +2,7 @@
 **一条命令验证整个仓库**。
 
 **为什么需要它**：验证步骤散落在好几处（两个配置的构建、`dotnet test`、
-11 个真机自检、参数台账校验、截图检查、10 个变异矩阵）——
+7 个真机自检、参数台账校验、截图检查、全部变异矩阵）——
 散落的意思是**每次都会漏掉几个**。尤其：Godot headless 加载的是
 `.godot/mono/temp/bin/Debug/` 的程序集 ⇒ **只构建 Release 时跑的是旧代码**，
 而症状是「跑通了、没报错、数据却对不上」。
@@ -11,7 +11,7 @@
 1. `dotnet build`（**Debug**）—— headless 自检加载的就是它
 2. `dotnet build -c Release`
 3. `dotnet test -c Release`
-4. `production/qa/run-selfchecks.py` —— 11 个真机自检 + 「玩家存档未被碰」断言
+4. `production/qa/run-selfchecks.py` —— 7 个真机自检 + 「玩家存档未被碰」断言
 5. `production/qa/param-inventory.py --check` —— 参数台账与代码一致
 6. （可选 `--with-screenshot`）截图自检 —— **需要显示器**，无头机器上跑不了
 7. （可选 `--with-mutations`）全部变异矩阵 —— 很慢（约 20 分钟），建议过夜跑
@@ -25,6 +25,11 @@
   python production/qa/verify-all.py --with-mutations
   python production/qa/verify-all.py --require-all
 """
+try:
+    import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
+except ImportError:
+    pass
+
 import argparse
 import os
 import subprocess

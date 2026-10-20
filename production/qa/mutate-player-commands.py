@@ -12,6 +12,11 @@
 
 用法：python production/qa/mutate-player-commands.py
 """
+try:
+    import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
+except ImportError:
+    pass
+
 import hashlib
 import re
 import subprocess

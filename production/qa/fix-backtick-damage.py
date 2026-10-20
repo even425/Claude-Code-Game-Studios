@@ -10,6 +10,11 @@
 
 跑完必须**零控制字符**（除 \\r \\n \\t）。
 """
+try:
+    import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
+except ImportError:
+    pass
+
 import re
 import sys
 from pathlib import Path

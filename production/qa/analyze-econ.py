@@ -35,6 +35,11 @@
 脚本只读，不修改任何数据文件。
 """
 
+try:
+    import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
+except ImportError:
+    pass
+
 import json
 import sys
 from collections import Counter, defaultdict

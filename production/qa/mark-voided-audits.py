@@ -14,6 +14,11 @@
 
 用法：python production/qa/mark-voided-audits.py [--check]
 """
+try:
+    import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
+except ImportError:
+    pass
+
 import sys
 from pathlib import Path
 

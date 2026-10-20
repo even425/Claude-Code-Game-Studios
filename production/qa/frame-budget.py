@@ -5,13 +5,16 @@ CI 现在用 `--quit-after 8000`（≈ 8000 帧），而自检其实在**第一�
 
 用法：python production/qa/frame-budget.py [帧数]
 """
+try:
+    import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
+except ImportError:
+    pass
+
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
-
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parents[2]
 GODOT = r"C:\Tools\Godot\4.7.2\godot.exe"

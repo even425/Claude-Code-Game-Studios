@@ -282,16 +282,20 @@ public partial class Main : Node2D
     /// 开局召唤多少英雄。
     /// </summary>
     /// <remarks>
-    /// <b>正常玩法是 3 人</b>；<b>采集模式默认 37 人</b>（设计目标的村庄规模，D-054 阶段 4 拍板）。
+    /// <b>正常玩法是 3 人</b>；<b>采集模式默认 37 人</b>（放大规模的代理值，D-054 阶段 4）。
     /// <br>为什么采集要更多：货物地板 = 人数 × 80 金 —— 3 人时地板 240 金，
     /// 「目标 150 金」比地板还低、<b>物理上不可达</b>；37 人时地板 2960 金，
     /// 目标才落在可讨论的区间里。
+    /// <br><b>⚠️ 37 不是「设计确定的目标规模」</b> —— 设计文档只说「人口会涨（召唤）」
+    /// 与「村庄的目标是超大城市」，<b>没有给出具体人数</b>。
+    /// 37 是为了把村庄放大到「一座大城市」而取的<b>代理值</b>；
+    /// 因此所有基于它的结论都按<b>人均 / 比率</b>表述，不按绝对值。
     /// <br>可用 <c>--collectheroes=N</c> 覆盖。
     /// </remarks>
     private static int InitialHeroCount()
     {
         const int normalCount = 3;
-        const int collectCount = 37;   // 设计目标的村庄规模
+        const int collectCount = 37;   // 放大规模的代理值（设计未定具体人数）
 
         var args = OS.GetCmdlineUserArgs();
         if (!args.Any(a => a.StartsWith("--collect=", StringComparison.Ordinal)))

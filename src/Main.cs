@@ -2542,6 +2542,16 @@ public partial class Main : Node2D
 
         PublishShoppingResults(results);
 
+        // R-05 三轮（D-053）：把「想买没买成」的原因**落进经济流水**。
+        //
+        // **不能走事件**：未成交没有状态变化（钱没动、货没动、库存没动），
+        // 而 DomainEvent 构造期就会拒绝「声明不出状态变化」的事件
+        // （「不改变任何状态的事件按定义就是装饰」）。这里是**读数**，不是事件。
+        //
+        // 不记就没有分母 —— R-05 二轮发现的「成交笔数腰斩」，
+        // 根因一直只能靠代码推断，因为流水里根本没记未成原因。
+        RecordShoppingMissed(results);
+
         // R-07：每天一条「想买没买成」的汇总。
         //
         // 这条**没有改变任何状态** —— 它是「今天有多少人没买成、卡在哪儿」的**读数**，
@@ -2570,6 +2580,43 @@ public partial class Main : Node2D
             }
 
             EmitTradeCompleted(result);
+        }
+    }
+
+    /// <summary>
+    /// 把「想买没买成」的原因写进经济流水（<b>每英雄每原因一行</b>）。
+    /// </summary>
+    /// <param name="results">当天的逐人购物结果。</param>
+    /// <remarks>
+    /// <para><b>只记「值得给玩家看」那几类</b>：口径与 R-07 的花名册行尾、每日汇总
+    /// <b>同一份规则</b>（<c>ShoppingFeedback.IsWorthShowing</c>）——
+    /// 钱不够 / 背包满 / 没成交 / 只有自己的摊。
+    /// 「今天不想买 / 不在场 / 已经买过 / 村里没摊」是<b>噪音</b>，
+    /// 记进去会让分母失真，结论就废了。</para>
+    ///
+    /// <para><b>为什么必须落盘</b>：R-05 二轮采集发现成交笔数腰斩，
+    /// 根因却只能靠代码推断 —— 因为流水里<b>没记未成原因</b>。
+    /// 本项补上这个测量缺口，让「背包满占未成原因多少」从<b>假设</b>变成<b>实测</b>。</para>
+    /// </remarks>
+    private void RecordShoppingMissed(
+        IReadOnlyList<ClaudeCodeGameStudios.Application.Stall.HeroBehaviorService.ShoppingResult> results)
+    {
+        if (_economyLog is null) return;
+
+        foreach (var result in results)
+        {
+            if (!ClaudeCodeGameStudios.Application.Stall.ShoppingFeedback.IsWorthShowing(result.SkipReason))
+            {
+                continue;
+            }
+            if (result.Buyer is not { } buyer) continue;
+
+            _economyLog.AppendShoppingMissed(
+                _clock.Now,
+                NameOfHero(buyer),
+                result.SkipReason.ToString(),
+                result.Seller is { } seller ? NameOfHero(seller) : null,
+                result.ItemId?.Value);
         }
     }
 

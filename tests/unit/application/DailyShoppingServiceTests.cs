@@ -20,7 +20,9 @@ public class DailyShoppingServiceTests
 {
     private static readonly HeroId Alice = new("h-alice");
     private static readonly HeroId Bob = new("h-bob");
+    private static readonly HeroId Carol = new("h-carol");
     private static readonly ItemId Stone = new("石料");
+    private static readonly ItemId Wood = new("木料");
     private static readonly DomainResourceId Gold = new("金币");
 
     private sealed class Scene
@@ -31,6 +33,12 @@ public class DailyShoppingServiceTests
     }
 
     /// <summary>Alice 有 10 石料，Bob 有 100 金；市场在影响区。</summary>
+    /// <remarks>
+    /// <b>为什么还要一个 Carol（卖木料）</b>：D-053 之后自主购物「一次买尽可能多」，
+    /// Bob 第 1 天会把石料<b>买满 5 份</b>（背包余量上限）→
+    /// 第 2 天石料摊在<b>抽样前</b>被剔除。他还能不能买，取决于村里还有没有别的摊 ——
+    /// 这正是「抽样前过滤」要守的行为，夹具必须具备这个条件才测得到。
+    /// </remarks>
     private static Scene MakeScene(bool openStall = true)
     {
         var village = new DomainVillage("v1");
@@ -48,15 +56,21 @@ public class DailyShoppingServiceTests
         bob.RestoreBag(new Inventory());
         bob.RestoreWallet(new Wallet(new Dictionary<DomainResourceId, long> { [Gold] = 100L }));
 
+        var carol = new HeroAgent { Name = "Carol" };
+        carol.RestoreBag(new Inventory().TryAdd(Wood, 10)!);
+        carol.RestoreWallet(new Wallet());
+
         var heroes = new Dictionary<HeroId, HeroAgent>
         {
             [Alice] = alice,
             [Bob] = bob,
+            [Carol] = carol,
         };
 
         var stall = new StallService(village, PriceBook.Default,
             id => heroes.TryGetValue(id, out var h) ? h : null);
         if (openStall) stall.PlaceStall(Alice, Stone, 10, 10.0);
+        if (openStall) stall.PlaceStall(Carol, Wood, 10, 10.0);   // 跟 Alice 同一开关
 
         var behavior = new HeroBehaviorService(
             stall,
@@ -82,8 +96,9 @@ public class DailyShoppingServiceTests
         Assertions.AssertThat(results[0].Outcome)
             .IsEqual(HeroBehaviorService.ShoppingOutcome.Bought);
         Assertions.AssertThat(s.Heroes[Bob].LastShoppingDay).IsEqual(1);
-        Assertions.AssertThat(s.Heroes[Bob].Bag.Count(Stone)).IsEqual(1L);
-        Assertions.AssertThat(s.Stall.GetStall(Alice)!.Stock).IsEqual(9L);
+        // D-053：一次买尽可能多 —— 背包余量 5 → 买 5 份
+        Assertions.AssertThat(s.Heroes[Bob].Bag.Count(Stone)).IsEqual(5L);
+        Assertions.AssertThat(s.Stall.GetStall(Alice)!.Stock).IsEqual(5L);
     }
 
     /// <summary>同一游戏日第二次调用：直接返回空，不再购物。</summary>
@@ -101,10 +116,17 @@ public class DailyShoppingServiceTests
         Assertions.AssertThat(second.Count).IsEqual(0);
         Assertions.AssertThat(s.Heroes[Bob].Wallet.Amount(Gold)).IsEqual(goldAfterFirst);
         Assertions.AssertThat(s.Stall.GetStall(Alice)!.Stock).IsEqual(stockAfterFirst);
-        Assertions.AssertThat(s.Heroes[Bob].Bag.Count(Stone)).IsEqual(1L);
+        Assertions.AssertThat(s.Heroes[Bob].Bag.Count(Stone)).IsEqual(5L);
     }
 
-    /// <summary>跨天后会再次尝试（不是“一天买过就永久不买”）。</summary>
+    /// <summary>
+    /// 跨天后会再次尝试（不是“一天买过就永久不买”）。
+    /// </summary>
+    /// <remarks>
+    /// <b>D-053 之后的细节</b>：第 1 天 Bob 把石料<b>买满 5 份</b> →
+    /// 第 2 天石料摊在<b>抽样前</b>被剔除 → 他转去买 Carol 的木料。
+    /// 这条用例现在**同时**守住了「跨天会再试」与「背包满会换材料」两件事。
+    /// </remarks>
     [TestCase]
     public void RunDay_NextDay_BuysAgain()
     {
@@ -117,7 +139,9 @@ public class DailyShoppingServiceTests
         Assertions.AssertThat(day2[0].Outcome)
             .IsEqual(HeroBehaviorService.ShoppingOutcome.Bought);
         Assertions.AssertThat(s.Heroes[Bob].LastShoppingDay).IsEqual(2);
-        Assertions.AssertThat(s.Heroes[Bob].Bag.Count(Stone)).IsEqual(2L);
+        // 第 1 天的 5 份石料还在（背满）；第 2 天买的是**木料**
+        Assertions.AssertThat(s.Heroes[Bob].Bag.Count(Stone)).IsEqual(5L);
+        Assertions.AssertThat(s.Heroes[Bob].Bag.Count(Wood)).IsEqual(5L);
     }
 
     /// <summary>没有开放摊位：结果为 Skipped_NoOpenStall；不写 LastShoppingDay。</summary>

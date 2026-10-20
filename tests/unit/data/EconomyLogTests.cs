@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using GdUnit4;
 using ClaudeCodeGameStudios.Data;
@@ -328,6 +329,127 @@ public class EconomyLogTests
                 Assertions.AssertThat(doc.RootElement.GetProperty("Kind").GetString())
                     .IsEqual("TradeCompleted");
             }
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    // ── 未成原因（D-053：补上测量缺口） ───────────────────────────────
+
+    /// <summary>
+    /// 「想买未成」落一行：原因、双方、物品、日期都要在。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么这条必须有</b>：R-05 二轮发现「成交笔数腰斩」，
+    /// 根因一直只能靠代码推断 —— 因为流水里<b>没记未成原因</b>。
+    /// 不记就没有分母，「背包满占未成原因多少」永远算不出来。
+    /// </remarks>
+    [TestCase]
+    public void AppendShoppingMissed_WritesRowWithReasonAndDay()
+    {
+        string path = TempPath("missed");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+            bool written = log.AppendShoppingMissed(
+                7 * SimSecondsPerDay, "甲", "BagFull", "乙", "石料");
+
+            Assertions.AssertThat(written).IsTrue();
+            Assertions.AssertThat(log.RowCount).IsEqual(1L);
+
+            log.Close();   // Windows：活跃写句柄与读冲突 —— 先关再读
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var row = doc.RootElement;
+
+            Assertions.AssertThat(row.GetProperty("Kind").GetString()).IsEqual("ShoppingMissed");
+            Assertions.AssertThat(row.GetProperty("Reason").GetString()).IsEqual("BagFull");
+            Assertions.AssertThat(row.GetProperty("Actor").GetString()).IsEqual("甲");
+            Assertions.AssertThat(row.GetProperty("Buyer").GetString()).IsEqual("甲");
+            Assertions.AssertThat(row.GetProperty("Seller").GetString()).IsEqual("乙");
+            Assertions.AssertThat(row.GetProperty("Item").GetString()).IsEqual("石料");
+            Assertions.AssertThat(row.GetProperty("Day").GetInt64()).IsEqual(8L);   // 7 天整 + 1
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    /// <summary>缺必要字段 → 拒写（不写半行）。</summary>
+    [TestCase]
+    public void AppendShoppingMissed_EmptyHeroOrReason_IsRejected()
+    {
+        string path = TempPath("missed-bad");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+
+            Assertions.AssertThat(log.AppendShoppingMissed(1.0, "", "BagFull")).IsFalse();
+            Assertions.AssertThat(log.AppendShoppingMissed(1.0, "甲", "")).IsFalse();
+            Assertions.AssertThat(log.RowCount).IsEqual(0L);
+
+            log.Close();
+            Assertions.AssertThat(File.ReadAllText(path)).IsEmpty();
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    /// <summary>没有领域事件 ID → 合成的标识必须<b>文件内唯一</b>。</summary>
+    [TestCase]
+    public void AppendShoppingMissed_ManyRows_GetUniqueIds()
+    {
+        string path = TempPath("missed-ids");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+            for (int i = 0; i < 3; i++)
+            {
+                log.AppendShoppingMissed(1.0, "甲", "BagFull");
+            }
+
+            log.Close();
+            string[] lines = File.ReadAllLines(path);
+            var ids = new List<string>();
+            foreach (var line in lines)
+            {
+                using var doc = JsonDocument.Parse(line);
+                ids.Add(doc.RootElement.GetProperty("Id").GetString()!);
+            }
+
+            Assertions.AssertThat(lines.Length).IsEqual(3);
+            Assertions.AssertThat(ids.Distinct().Count()).IsEqual(3);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// 「未成」行<b>不</b>走事件通道：它不是领域事件（没有状态变化）。
+    /// </summary>
+    /// <remarks>
+    /// <c>DomainEvent</c> 构造期就拒绝「声明不出状态变化」的事件，
+    /// 所以未成只能是流水层的<b>直写</b>；这条用例钉住「别哪天把它塞回事件流」。
+    /// </remarks>
+    [TestCase]
+    public void Append_NonEconomicEvent_StillIgnored_AfterMissedSupportAdded()
+    {
+        string path = TempPath("other-after-missed");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+            var e = DomainEvent.Create(
+                new EventId("HeroSummoned:甲:0"), OtherType, "甲",
+                occurredAtSimSeconds: 1.0, changedStates: new[] { StHeroBag });
+
+            Assertions.AssertThat(log.Append(e)).IsFalse();
+            Assertions.AssertThat(log.RowCount).IsEqual(0L);
         }
         finally
         {

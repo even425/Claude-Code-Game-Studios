@@ -171,4 +171,64 @@ public class ShoppingFeedbackTests
         Assertions.AssertThat(
             ShoppingFeedback.MissedSummary(Array.Empty<HeroBehaviorService.ShoppingResult>())).IsNull();
     }
+
+    // ── D-053：未成口径只有一份 ───────────────────────────────────────
+
+    /// <summary>
+    /// 「值得给玩家看」与「值得落进经济流水」<b>必须是同一份规则</b>。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么这条重要</b>：R-07 用「哪些原因值得显示」决定花名册行尾与每日汇总，
+    /// R-05 三轮（D-053）用同一口径决定「哪些未成落进流水」。
+    /// 两边若各写一份，早晚对不上 —— 于是流水里的分母和玩家看到的汇总对不上，
+    /// 「背包满占未成原因多少」这个结论就废了。
+    /// </remarks>
+    [TestCase]
+    public void IsWorthShowing_MatchesShortLabelVisibility_ForEveryReason()
+    {
+        foreach (var reason in Enum.GetValues<HeroBehaviorService.ShoppingSkipReason>())
+        {
+            bool worthShowing = ShoppingFeedback.IsWorthShowing(reason);
+            bool hasShortLabel = !string.IsNullOrEmpty(ShoppingFeedback.ShortLabel(reason));
+
+            Assertions.AssertThat(worthShowing).IsEqual(hasShortLabel);
+        }
+    }
+
+    /// <summary>四种「想买未成」的原因都算未成。</summary>
+    [TestCase]
+    public void IsWorthShowing_ForUnfilledReasons_IsTrue()
+    {
+        var worth = new[]
+        {
+            HeroBehaviorService.ShoppingSkipReason.NotEnoughGold,
+            HeroBehaviorService.ShoppingSkipReason.BagFull,
+            HeroBehaviorService.ShoppingSkipReason.SettlementFailed,
+            HeroBehaviorService.ShoppingSkipReason.OnlyOwnStall,
+        };
+
+        foreach (var reason in worth)
+        {
+            Assertions.AssertThat(ShoppingFeedback.IsWorthShowing(reason)).IsTrue();
+        }
+    }
+
+    /// <summary>四种「噪音」原因都不算未成（记进去会污染分母）。</summary>
+    [TestCase]
+    public void IsWorthShowing_ForNoiseReasons_IsFalse()
+    {
+        var noise = new[]
+        {
+            HeroBehaviorService.ShoppingSkipReason.None,
+            HeroBehaviorService.ShoppingSkipReason.NotPresent,
+            HeroBehaviorService.ShoppingSkipReason.NoDesire,
+            HeroBehaviorService.ShoppingSkipReason.AlreadyShopped,
+            HeroBehaviorService.ShoppingSkipReason.NoOpenStall,
+        };
+
+        foreach (var reason in noise)
+        {
+            Assertions.AssertThat(ShoppingFeedback.IsWorthShowing(reason)).IsFalse();
+        }
+    }
 }

@@ -128,4 +128,21 @@ public static class ShoppingFeedback
         HeroBehaviorService.ShoppingSkipReason.SettlementFailed,
         HeroBehaviorService.ShoppingSkipReason.OnlyOwnStall,
     };
+
+    /// <summary>
+    /// 这个原因<b>是不是「想买没买成」</b>（值得给玩家看、也值得落进经济流水）。
+    /// </summary>
+    /// <param name="reason">结构化原因。</param>
+    /// <returns>是 → true。</returns>
+    /// <remarks>
+    /// <para><b>为什么要有这个公开口</b>：「哪些原因算未成」这条规则**只应有一份**。
+    /// R-07 用它决定花名册行尾与每日汇总，R-05 三轮（D-053）用它决定
+    /// 「哪些未成要落进流水」—— 两边口径若各写一份，早晚会对不上，
+    /// 于是流水里的分母和玩家看到的汇总对不上，结论就废了。</para>
+    ///
+    /// <para><b>被排除的四类</b>（噪音）：「今天不想买」「不在场」「已经买过」
+    /// 「村里没摊」—— 它们不是「他想买却没买成」。</para>
+    /// </remarks>
+    public static bool IsWorthShowing(HeroBehaviorService.ShoppingSkipReason reason)
+        => Array.IndexOf(VisibleReasons, reason) >= 0;
 }

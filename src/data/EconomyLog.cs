@@ -91,6 +91,17 @@ public sealed record EconomyRow
 
     /// <summary>村金库抽成。</summary>
     public long? VillageCut { get; init; }
+
+    // ── 未成（想买没买成） ───────────────────────────────────────────
+
+    /// <summary>
+    /// 未成交的<b>结构化原因</b>（仅 <see cref="EconomyLog.ShoppingMissedKind"/> 行有值）。
+    /// </summary>
+    /// <remarks>
+    /// 存<b>枚举名</b>（如 <c>BagFull</c> / <c>NotEnoughGold</c>）而不是自由文本 ——
+    /// 自由文本没法分组统计，而这行的全部意义就是「按原因分组数一数」。
+    /// </remarks>
+    public string? Reason { get; init; }
 }
 
 /// <summary>
@@ -125,6 +136,17 @@ public sealed class EconomyLog : IDisposable
     /// <summary>交易行的类别标识。</summary>
     public const string TradeKind = "TradeCompleted";
 
+    /// <summary>
+    /// 「想买未成」行的类别标识（<b>每英雄每原因一行</b>）。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么单独一类</b>：副本结算 / 掉落 / 交易都对应<b>真实成交</b>，
+    /// 而这一类对应<b>没成交</b>。它不写进杂谈（37 人每天各一条会刷屏），
+    /// 但<b>必须</b>落盘 —— 否则「背包满占未成原因多少」永远算不出来（见
+    /// <see cref="AppendShoppingMissed"/>）。
+    /// </remarks>
+    public const string ShoppingMissedKind = "ShoppingMissed";
+
     /// <summary>条目分隔符（物品名不含逗号）。</summary>
     public const char EntrySeparator = ',';
 
@@ -146,6 +168,9 @@ public sealed class EconomyLog : IDisposable
     private readonly double _simSecondsPerDay;
     private StreamWriter? _writer;
     private long _rows;
+
+    /// <summary>「未成」行的序号（用于拼出行标识；这些行没有领域事件 ID）。</summary>
+    private long _missedSeq;
 
     /// <param name="path">落盘路径（由调用方注入，不写死 <c>user://</c>）。</param>
     /// <param name="simSecondsPerDay">一个模拟日的秒数（用来把模拟时间换算成游戏日）。</param>
@@ -200,6 +225,66 @@ public sealed class EconomyLog : IDisposable
         };
 
         if (row is null) return false;
+
+        _writer.WriteLine(JsonSerializer.Serialize(row, Options));
+        _rows++;
+        return true;
+    }
+
+    /// <summary>
+    /// 追加一条「<b>想买未成</b>」的流水行（<b>每英雄每原因一行</b>）。
+    /// </summary>
+    /// <param name="simTime">发生时间（模拟秒）；游戏日由它换算。</param>
+    /// <param name="hero">想买没买成的英雄（名字或标识都行，只要稳定）。</param>
+    /// <param name="reason">
+    /// <b>结构化原因</b>（枚举名，如 <c>BagFull</c> / <c>NotEnoughGold</c>）。
+    /// 不要传自由文本 —— 这一行的全部意义就是「按原因分组数一数」。
+    /// </param>
+    /// <param name="seller">相关摊主（可空）。</param>
+    /// <param name="item">相关物品（可空）。</param>
+    /// <returns>写入了就 true；文件已关 / 缺必要字段就 false。</returns>
+    /// <remarks>
+    /// <para><b>为什么它是直写入口，而不是走 <see cref="Append(DomainEvent)"/></b>：
+    /// 未成交**没有任何状态变化**（钱没动、货没动、库存没动、
+    /// <c>LastShoppingDay</c> 也不写），而 <c>DomainEvent</c> 在<b>构造期</b>
+    /// 就拒绝 <c>ChangedStates</c> 为空的事件 —— 「不改变任何状态的事件按定义就是装饰」。
+    /// 伪造一个事件来承载它，等于绕过反装饰规则。
+    /// → 它是<b>读数</b>，不是事件；与 R-07 的每日汇总同一先例。</para>
+    ///
+    /// <para><b>为什么需要它</b>：R-05 二轮采集发现「成交笔数从 155 笔/百天降到
+    /// 50–70 笔/百天」，根因一直只是「背包上限」的<b>推断</b> ——
+    /// 因为流水里<b>根本没记未成原因</b>。不记就没有分母，
+    /// 「背包满占未成原因多少」就永远只能靠曲线猜。
+    /// 本方法补上这个<b>测量缺口</b>。</para>
+    ///
+    /// <para><b>只记「想买未成」那几类</b>（调用方负责筛）：
+    /// 「今天不想买 / 不在场 / 已经买过 / 村里没摊」是噪音，
+    /// 记进去会让分母失真。</para>
+    /// </remarks>
+    public bool AppendShoppingMissed(
+        double simTime, string hero, string reason,
+        string? seller = null, string? item = null)
+    {
+        if (_writer is null) return false;
+        if (string.IsNullOrEmpty(hero)) return false;
+        if (string.IsNullOrEmpty(reason)) return false;
+
+        long day = DayOf(simTime);
+        _missedSeq++;
+
+        var row = new EconomyRow
+        {
+            Kind = ShoppingMissedKind,
+            // 没有领域事件 ID 可用 → 合成一个：日号 + 序号（同一文件内唯一）。
+            Id = $"missed-{day}-{_missedSeq}",
+            Day = day,
+            SimTime = simTime,
+            Actor = hero,
+            Buyer = hero,
+            Seller = seller,
+            Item = item,
+            Reason = reason,
+        };
 
         _writer.WriteLine(JsonSerializer.Serialize(row, Options));
         _rows++;

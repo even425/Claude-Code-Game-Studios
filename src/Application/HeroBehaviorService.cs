@@ -48,6 +48,41 @@ public sealed class HeroBehaviorService
     private readonly Func<HeroId, HeroAgent?> _heroLookup;
     private readonly Func<double> _random;   // [0,1) 注入的随机源
 
+    /// <summary>
+    /// 自主购物的<b>单种物品背包上限</b>（份）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么它是 5</b>：原型期定下的数字，本轮<b>不变</b>
+    /// （D-053：「不取消上限」，只把判据挪到抽样前）。</para>
+    ///
+    /// <para><b>⚠️ 它只管自主购物这一条路径</b>：英雄背包的<b>领域层容量是 0 = 无限</b>
+    /// （<c>HeroAgent.Bag = new Inventory()</c> → <c>Inventory.Capacity = 0</c>，
+    /// 于是容量防线 <c>Inventory.TryAdd</c> <b>从不生效</b>）。
+    /// 战利品入包、摆摊卖货、玩家手动购买<b>都不受它约束</b>。
+    /// 「只有一处」这个现状是 D-053 审计的主要发现 —— 本轮<b>不</b>把它提升到领域层
+    /// （那会连带改变战利品发放等范围外路径），但必须记住
+    /// <b>它不是一条全局规则</b>。</para>
+    /// </remarks>
+    public const long BagItemLimit = 5;
+
+    /// <summary>
+    /// 背包里该物品<b>还能再装几份</b>（按 <see cref="BagItemLimit"/> 算）。
+    /// </summary>
+    /// <param name="bag">背包。</param>
+    /// <param name="item">物品。</param>
+    /// <returns>还能装几份；已满则 0。</returns>
+    /// <remarks>
+    /// <b>为什么不用 <see cref="StallMarket.BagRoom"/></b>：那个函数按<b>领域层容量</b>
+    /// （<c>Inventory.Capacity</c>）算，而领域层容量是 0（无限）→ 它永远返回
+    /// <see cref="StallMarket.Unlimited"/>。自主购物要守的是<b>决策层的 5 份上限</b> ——
+    /// 两者是不同的尺子，混用会让「上限」名存实亡。
+    /// </remarks>
+    private static long BagRoom(Inventory bag, ItemId item)
+    {
+        long room = BagItemLimit - bag.Count(item);
+        return room < 0 ? 0 : room;
+    }
+
     /// <summary>购物决策结果（每英雄调用 1 次的产出）。</summary>
     public enum ShoppingOutcome
     {
@@ -57,7 +92,7 @@ public sealed class HeroBehaviorService
         Skipped_NoDesire = 1,
         /// <summary>找不到 Open 摊位 → 跳过。</summary>
         Skipped_NoOpenStall = 2,
-        /// <summary>钱不够 / 背包满 / 摊位被抢空 → 调 <c>BuyFromStall</c> 返 null。</summary>
+        /// <summary>钱不够 / 背包满 / 摊位被抢空 → 前置条件不满足。</summary>
         Skipped_PrecheckFailed = 3,
         /// <summary>实际成交：英雄钱包 + Bag 改，摊位改，村金库改。</summary>
         Bought = 4,
@@ -95,7 +130,11 @@ public sealed class HeroBehaviorService
         /// <summary>村里只有<b>自己</b>开着的摊（同一个人不能自买自卖）。</summary>
         OnlyOwnStall = 5,
 
-        /// <summary>背包里该物品已达上限（5 份）。</summary>
+        /// <summary>背包里该物品已达上限（<see cref="BagItemLimit"/> 份）。</summary>
+        /// <remarks>
+        /// <b>D-053 后有两种触发路径</b>：抽中的摊该物品已背满（现在不会发生 ——
+        /// 抽样前已过滤），或<b>村里所有能买的摊该物品都背满</b>。
+        /// </remarks>
         BagFull = 6,
 
         /// <summary>金币不够。</summary>
@@ -234,23 +273,51 @@ public sealed class HeroBehaviorService
             };
         }
 
-        // 5. R-03：抽样时**排除自己开的摊**。
-        //    抽到自己的摊必然被 BuyFromStall 以 SameHero 拒绝 ——
-        //    等于白白浪费当天的购物机会（不成交 ⇒ LastShoppingDay 不写）；
-        //    村里只有他自己开摊时，更是**永远**抽到自己的摊、永远买不成。
-        //    在这里剔除，英雄才会去买别人的摊。
-        var buyable = new List<DomainStall>(openStalls.Count);
+        // 5. R-03 + D-053：抽样**前**排除两类摊。
+        //
+        //    ① **自己开的摊**（R-03）：抽到必然被 BuyFromStall 以 SameHero 拒绝 ——
+        //       等于白白浪费当天的购物机会（不成交 ⇒ LastShoppingDay 不写）。
+        //
+        //    ② **背包里该物品已满**的摊（D-053）：旧规则是「抽到才发现背满 → 整笔放弃」，
+        //       当天就此白过 —— 村里还有别的摊，英雄却根本没去看。
+        //       把判据挪到抽样前，他就会转去买别的材料。
+        //
+        //    上限**没有取消**（BagItemLimit 仍是 5）：只是不再用它「一票否决」，
+        //    而是让它决定「这个摊买不买」「这一笔买几份」。
+        var notOwn = new List<DomainStall>(openStalls.Count);
         foreach (var s in openStalls)
         {
-            if (s.Owner != buyerId) buyable.Add(s);
+            if (s.Owner != buyerId) notOwn.Add(s);
+        }
+
+        var buyable = new List<DomainStall>(notOwn.Count);
+        int bagFullStalls = 0;
+        foreach (var s in notOwn)
+        {
+            if (BagRoom(buyer.Bag, s.ItemId) < 1)
+            {
+                bagFullStalls++;
+                continue;
+            }
+            buyable.Add(s);
         }
 
         if (buyable.Count == 0)
         {
+            // 「一个摊都买不了」有两种原因，处置完全不同 —— 不能混报。
+            if (notOwn.Count == 0)
+            {
+                return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, null, null, null, null, null)
+                {
+                    Detail = "村里只有自己开着的摊（同一个人不能自买自卖）",
+                    SkipReason = ShoppingSkipReason.OnlyOwnStall,
+                };
+            }
+
             return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, null, null, null, null, null)
             {
-                Detail = "村里只有自己开着的摊（同一个人不能自买自卖）",
-                SkipReason = ShoppingSkipReason.OnlyOwnStall,
+                Detail = $"背包里相关物品都已满（上限 {BagItemLimit}）：{bagFullStalls} 个摊都买不了",
+                SkipReason = ShoppingSkipReason.BagFull,
             };
         }
 
@@ -258,33 +325,30 @@ public sealed class HeroBehaviorService
         if (pickIdx >= buyable.Count) pickIdx = buyable.Count - 1;   // 边界
         var stall = buyable[pickIdx];
 
-        // 6. 选物品：摊位上的 ItemId，且 buyer 背包里数量 < 5
-        if (buyer.Bag.Count(stall.ItemId) >= 5)
-        {
-            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, stall.Owner, stall.ItemId, null, null, null)
-            {
-                Detail = $"背包里已有 {buyer.Bag.Count(stall.ItemId)} 份{stall.ItemId.Value}（上限 5）",
-                SkipReason = ShoppingSkipReason.BagFull,
-            };
-        }
+        // 6. 买多少（D-053）：**尽可能多** = min(摊位库存, 余额 ÷ 单价, 背包余量)。
+        //    背包余量按 BagItemLimit 算 —— 上限仍在起作用（单次最多 5 份）。
+        long gold = buyer.Wallet.Amount(StallService.Gold);
+        long room = BagRoom(buyer.Bag, stall.ItemId);      // 抽样前已保证 ≥ 1
+        long qty = StallMarket.MaxAffordable(stall.Stock, stall.UnitPrice, gold, room);
 
-        // 7. 钱够吗？一次买 1 份
-        if (buyer.Wallet.Amount(StallService.Gold) < stall.UnitPrice)
+        if (qty < 1)
         {
+            // 背包装得下（room ≥ 1）、摊也还有货（Open 摊 Stock ≥ 1）——
+            // 买不成**只可能是钱不够**。
             return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, stall.Owner, stall.ItemId, null, null, null)
             {
-                Detail = $"金币不足：有 {buyer.Wallet.Amount(StallService.Gold)}，需 {stall.UnitPrice}",
+                Detail = $"金币不足：有 {gold}，需 {stall.UnitPrice}",
                 SkipReason = ShoppingSkipReason.NotEnoughGold,
             };
         }
 
-        // 8. 真买
-        var buyResult = _stall.BuyFromStall(stall.Owner, buyerId, stall.ItemId, 1, simTime);
+        // 7. 真买
+        var buyResult = _stall.BuyFromStall(stall.Owner, buyerId, stall.ItemId, qty, simTime);
         if (buyResult is null)
         {
-            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, stall.Owner, stall.ItemId, 1, null, null)
+            return new ShoppingResult(ShoppingOutcome.Skipped_PrecheckFailed, buyerId, stall.Owner, stall.ItemId, qty, null, null)
             {
-                Detail = "结算失败（摊位被抢空 / 背包满 / 钱包不足）",
+                Detail = "结算失败（摊位被抢空 / 钱包不足）",
                 SkipReason = ShoppingSkipReason.SettlementFailed,
             };
         }
@@ -297,11 +361,11 @@ public sealed class HeroBehaviorService
             buyerId,
             stall.Owner,
             stall.ItemId,
-            1L,
+            qty,
             buyResult.SellerNet,
             buyResult.VillageCut)
         {
-            Detail = $"买了 {stall.ItemId.Value}×1，付 {buyResult.SellerNet + buyResult.VillageCut} 金币",
+            Detail = $"买了 {stall.ItemId.Value}×{qty}，付 {buyResult.SellerNet + buyResult.VillageCut} 金币",
         };
     }
 

@@ -57,6 +57,7 @@ Godot headless 加载的是 `.godot/mono/temp/bin/Debug/` 的程序集。
 | `mutate-doc-guard.py` | 文档卫生（控制字符 / 已判死设计线的标记） |
 | `mutate-param-ledger.py` | 参数台账与代码一致（标量 + 四张表） |
 | `mutate-config-fallback.py` | 外部配置与内置兜底不许分叉（价格表 / 世界表） |
+| `mutate-death-cost.py` | IT-16 死亡代价：领域层不许有「永久损失」字段 |
 
 全部一起跑（很慢，约 20 分钟）：
 

@@ -1,5 +1,5 @@
 """
-真机自检跑批 —— 把 11 个自检开关一次跑完，并**证明它们没碰玩家的存档**。
+真机自检跑批 —— 把 7 个自检开关一次跑完，并**证明它们没碰玩家的存档**。
 
 **为什么需要它**：自检开关（`--save` / `--relations` / …）此前只存在于**对话里**
 （我的临时脚本住在 `%TEMP%`），仓库里没有 ⇒ 别人跑不了、也没人监督它们。
@@ -15,6 +15,11 @@
   python production/qa/run-selfchecks.py            # 跑全部
   python production/qa/run-selfchecks.py --only save,trade
 """
+try:
+    import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
+except ImportError:
+    pass
+
 import argparse
 import hashlib
 import os
@@ -36,7 +41,8 @@ CHECKS = [
     {
         "name": "save",
         "args": ["--save"],
-        "require": ["SAVETEST 0.6 PASS", "SAVETEST R-03 PASS", "SAVETEST M4 PASS"],
+        "require": ["SAVETEST 0.6 PASS", "SAVETEST R-03 PASS", "SAVETEST M4 PASS",
+                    "SAVETEST MT-04 PASS"],
         "forbid": ["FAIL"],
         "zeros": [],
     },

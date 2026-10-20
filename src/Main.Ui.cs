@@ -920,6 +920,44 @@ public partial class Main : Node2D
         }
     }
 
+    /// <summary>
+    /// MT-04（存档重载后的可见状态）：把**玩家能看到**的界面文字拍成一段文本。
+    ///
+    /// <para><b>为什么拍文字而不是拍像素</b>：截图像素比对有两处做不到 ——
+    /// ① 视口纹理装的是<b>上一帧</b>的渲染，而存读档往返在<b>同一帧内</b>完成
+    /// ⇒ 想拿到两份<b>不同</b>的渲染就必须跨帧，跨帧时钟就会走（顶栏时间变），
+    /// 而不跨帧就只会拿到**同一张**图 ⇒ 那是**空转**，不是验证；
+    /// ② 界面里还有**图形**（等距村庄、树），它们与「状态是否被还原」无关。
+    /// <para>而 MT-04 的实质是「**玩家看到的**和存档前一致」——
+    /// 界面**文字**正是玩家看到的东西，而且它在同一帧内取 ⇒ 完全确定性。
+    /// 它照样能抓住 MT-04 真正要防的那类缺陷：<b>状态还原了、但界面没跟着刷新</b>
+    /// （自检会在搅乱之后刷新一次界面 ⇒ 屏幕上是「被搅乱的世界」；
+    /// 读档之后若读档路径自己不刷新，屏幕上就还是那个被搅乱的世界 ⇒ 两份快照不同）。
+    /// 它也抓得住「可见状态压根没被还原」：村庄层级、模拟时间、材料、编成、名册行。</para>
+    ///
+    /// <para><b>为什么不含杂谈面板</b>：读档按设计会**重置事件管道并清空杂谈**
+    /// （<c>Main.Save.cs</c>「事件管道重置」，M0 审计 R-04：「读档是换一个世界」）。
+    /// 事件 ID 不入档 ⇒ 旧杂谈继续参与去重会被 EventLog 静默丢弃
+    /// ⇒ 杂谈**必须**清空。MT-04 因此比的是<b>村庄资源 / 英雄持有物 / 任务进度</b>。</para>
+    /// </summary>
+    private string VisibleTextSnapshot()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("stats|").Append(_stats?.Text ?? "").Append('\n');
+        sb.Append("squad|").Append(_squadInfo?.Text ?? "").Append('\n');
+        sb.Append("relation|").Append(_relationInfo?.Text ?? "").Append('\n');
+        if (_roster != null)
+        {
+            // ⚠️ Godot 4.7 的 C# API **没有** `GetItemTexts()`，
+            // 只有 `ItemCount` + `GetItemText(i)`。
+            for (int i = 0; i < _roster.ItemCount; i++)
+            {
+                sb.Append("roster|").Append(_roster.GetItemText(i)).Append('\n');
+            }
+        }
+        return sb.ToString();
+    }
+
     private void ProcessShot(float dt)
     {
         if (_shotFrame < 0)

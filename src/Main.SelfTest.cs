@@ -646,6 +646,17 @@ public partial class Main : Node2D
             _states[2].MarkFirstDungeonCompleted();
         }
 
+        // ── MT-04 需要一支**非空**的队伍 ──
+        //
+        // 队伍为空时，「编成有没有被读档找回来」这件事**在界面上看不出来**：
+        // 花名册行首全是空占位，队伍栏写着「没派人」⇒ 那时 MT-04 比的是一份
+        // **空**的对照，覆盖不到编成 —— 而「编成按存档恢复，不是取前 N 个重建」
+        // 恰恰是读档最容易悄悄做错的地方（它做错了也不报错，只是队伍换了人）。
+        //
+        // 这里放一个人进队伍：行首标记变成「▸」、队伍栏变成人名，
+        // 于是「编成有没有被恢复」就成了**看得见**的状态。
+        if (_squad.Count == 0 && _heroes.Count > 0) _squad.Add(_heroes[0]);
+
         // ── M4：先摆出「必须被读档恢复」的经济状态 ──
         // 开一个摊（货从背包挪进 Stall.Stock），用固定请求键买一次，
         // 再把买家的 LastShoppingDay 设成今天（模拟“今天已经自主购物过”）。
@@ -734,6 +745,17 @@ public partial class Main : Node2D
 
         GD.Print($"SAVETEST 写盘成功，文件 {new FileInfo(selfTestSaves.FilePath).Length} 字节");
 
+        // ── MT-04（存档重载后的可见状态）：**搅乱之前**先拍一张「玩家看到的文字」──
+        //
+        // 整个存读档往返都在**同一帧内**完成 ⇒ 时钟不走 ⇒ 前后两份快照应当**完全相同**。
+        // （杂谈面板按设计会被清空 —— 读档是换一个世界 —— 所以它不在快照里。）
+        //
+        // ⚠️ 快照必须在**搅乱之前**拍。搅乱之后再拍，比的就是「搅乱后 vs 读档后」，
+        // 差异本来就是**预期的**（材料被花掉了、时间被推进了）⇒ 每次都红 ⇒ 等于没有守卫。
+        // 这里要回答的是另一个问题：**玩家存档前看到的，和读档后看到的，是不是同一个世界**。
+        Refresh();
+        string visibleBefore = VisibleTextSnapshot();
+
         // ── 存之前把游戏搅乱：材料花掉、队伍拆散、时间走一段 ──
         long matBefore = Mat;
         string squadBefore = string.Join("、", _squad.Select(h => h.Name));
@@ -763,6 +785,13 @@ public partial class Main : Node2D
         GD.Print($"SAVETEST 0.6 账本科目搅乱：待发零头 {CarrySeed} → 7，累计发放 {GrantedSeed} → 1，" +
                  $"累计销毁 {SpentSeed} → 2，村庄层级 {TierSeed} → 4，累计升级 {UpgradesSeed} → 1");
 
+        // ⚠️ 搅乱之后**必须刷新界面**。
+        //
+        // 不刷新的话，屏幕上的字还是存档前那一版 ⇒「读档之后屏幕变了没有」这个问题
+        // 就没有答案（比的是同一张皮，永远「一致」）⇒ 那是空转，不是守卫。
+        // 刷新之后，屏幕显示的是**被搅乱的世界** —— 这才是读档要「换回来」的那张皮。
+        Refresh();
+
         // ── 读档 ──
         var loaded = selfTestSaves.Read();
         GD.Print($"SAVETEST 读档结果 Loaded={loaded.Loaded}" +
@@ -770,6 +799,31 @@ public partial class Main : Node2D
         if (!loaded.Loaded) return;
 
         ApplySave(loaded.Save!);
+
+        // ── MT-04（存档重载后的可见状态）：读档后拍两张，缺一不可 ──
+        //
+        // A：**不额外刷新** —— 这一版回答的是「**读档路径自己**有没有把界面带回来」。
+        //    状态还原了但界面没跟着刷新 ⇒ 屏幕上还是被搅乱的世界 ⇒ A ≠ 存档前 ⇒ 抓得到。
+        //    （这是 MT-04 真正要防的那类缺陷，也是最容易漏的一类：
+        //    状态字段全对、断言全绿，而玩家看到的是上一个世界。）
+        string visibleAfterRead = VisibleTextSnapshot();
+        //
+        // B：**再刷新一次** —— 这一版回答的是「界面**最终**显示的是什么」。
+        //    A ≠ B 说明「刷新一次还不够」，那也是缺陷（界面上有一处要两帧才跟上）。
+        Refresh();
+        string visibleAfter = VisibleTextSnapshot();
+
+        bool visibleSame = visibleBefore == visibleAfterRead && visibleBefore == visibleAfter;
+        GD.Print($"SAVETEST MT-04 可见状态一致 = {visibleSame}" +
+                 $"（存档前 == 读档后未额外刷新：{visibleBefore == visibleAfterRead}；" +
+                 $"存档前 == 读档后已刷新：{visibleBefore == visibleAfter}）");
+        if (!visibleSame)
+        {
+            GD.Print($"SAVETEST MT-04 存档前：{visibleBefore.Replace("\n", " ／ ")}");
+            GD.Print($"SAVETEST MT-04 读档后（未额外刷新）：{visibleAfterRead.Replace("\n", " ／ ")}");
+            GD.Print($"SAVETEST MT-04 读档后（已刷新）：{visibleAfter.Replace("\n", " ／ ")}");
+        }
+        GD.Print(visibleSame ? "SAVETEST MT-04 PASS" : "SAVETEST MT-04 FAIL");
 
         GD.Print($"SAVETEST 读档后：材料 {Mat}（应为 {matBefore}）" +
                  $" 模拟时间 {_clock.Now:0.###}（应为 {save.SimTime:0.###}）" +

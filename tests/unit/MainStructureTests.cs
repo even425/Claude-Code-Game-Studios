@@ -86,6 +86,7 @@ public class MainStructureTests
         "Refresh", "RefreshRoster", "RosterLine", "ShoppingNoteFor",
         "RefreshRelationSummary", "TierName",
         "_UnhandledInput", "ProcessShot",
+        "VisibleTextSnapshot",        // MT-04：玩家可见的界面文字快照（表现层）
         // 事件管道：领域事件 → 杂谈条目
         "Add", "PublishEvent", "Emit",
         // 存档：组装 / 读回 / 枚举解析

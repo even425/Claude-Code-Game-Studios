@@ -1,0 +1,337 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
+using GdUnit4;
+using ClaudeCodeGameStudios.Data;
+using ClaudeCodeGameStudios.Domain.Events;
+
+namespace ClaudeCodeGameStudios.Tests.Data;
+
+/// <summary>
+/// 经济流水落盘的契约（运行闭环验证与经济数据采集准备）。
+/// </summary>
+/// <remarks>
+/// <para><b>为什么测它</b>：流水是 R-05 二轮的**唯一数据来源** ——
+/// 掉落分布、成交价分布、货币流动全靠它。落错了、漏了、写成半行，
+/// 分析脚本就会得到「看起来有数据、其实不对」的结果。</para>
+/// </remarks>
+[TestSuite]
+public class EconomyLogTests
+{
+    private const double SimSecondsPerDay = 75.0;
+    private const string Dungeon = "北境旧堡";
+
+    private static readonly EventTypeId LootType = new("DungeonLooted");
+    private static readonly EventTypeId TradeType = new("TradeCompleted");
+    private static readonly EventTypeId OtherType = new("HeroSummoned");
+
+    private static readonly StateKey StHeroBag = new("hero.bag");
+
+    /// <summary>一个临时文件路径（每个用例一份，避免互相干扰）。</summary>
+    private static string TempPath(string tag)
+        => Path.Combine(Path.GetTempPath(), $"econ-log-test-{tag}-{Guid.NewGuid():N}.jsonl");
+
+    private static DomainEvent LootEvent(
+        string runId, string loot, string grants, string participants = "h-0,h-1")
+        => DomainEvent.Create(
+            new EventId($"DungeonLooted:{runId}:0"), LootType, runId,
+            occurredAtSimSeconds: 7 * SimSecondsPerDay,
+            changedStates: new[] { StHeroBag },
+            payload: new Dictionary<string, string>
+            {
+                ["runId"] = runId,
+                ["place"] = Dungeon,
+                ["won"] = "1",
+                ["participants"] = participants,
+                ["loot"] = loot,
+                ["grants"] = grants,
+            });
+
+    private static DomainEvent TradeEvent(
+        string buyer, string seller, string item, long qty, long amount, long sellerNet, long cut)
+        => DomainEvent.Create(
+            new EventId($"TradeCompleted:{buyer}:0"), TradeType, buyer,
+            occurredAtSimSeconds: 7 * SimSecondsPerDay,
+            changedStates: new[] { StHeroBag },
+            payload: new Dictionary<string, string>
+            {
+                ["buyer"] = buyer,
+                ["seller"] = seller,
+                ["item"] = item,
+                ["qty"] = qty.ToString(),
+                ["amount"] = amount.ToString(),
+                ["sellerNet"] = sellerNet.ToString(),
+                ["villageCut"] = cut.ToString(),
+            });
+
+    // ── 紧凑格式往返 ─────────────────────────────────────────────────────
+
+    [TestCase]
+    public void FormatLoot_ThenParse_RoundTrips()
+    {
+        var items = new[]
+        {
+            new LootLine("石料", 2),
+            new LootLine("木料", 1),
+        };
+
+        string text = EconomyLog.FormatLoot(items);
+        var parsed = EconomyLog.ParseLoot(text);
+
+        Assertions.AssertThat(text).IsEqual("石料×2,木料×1");
+        Assertions.AssertThat(parsed.Length).IsEqual(2);
+        Assertions.AssertThat(parsed[0].Item).IsEqual("石料");
+        Assertions.AssertThat(parsed[0].Qty).IsEqual(2L);
+        Assertions.AssertThat(parsed[1].Item).IsEqual("木料");
+    }
+
+    [TestCase]
+    public void FormatGrants_ThenParse_RoundTrips()
+    {
+        var items = new[]
+        {
+            new GrantLine("h-0", "石料", 2),
+            new GrantLine("h-1", "木料", 1),
+        };
+
+        string text = EconomyLog.FormatGrants(items);
+        var parsed = EconomyLog.ParseGrants(text);
+
+        Assertions.AssertThat(text).IsEqual("h-0:石料×2,h-1:木料×1");
+        Assertions.AssertThat(parsed.Length).IsEqual(2);
+        Assertions.AssertThat(parsed[0].Hero).IsEqual("h-0");
+        Assertions.AssertThat(parsed[0].Item).IsEqual("石料");
+        Assertions.AssertThat(parsed[0].Qty).IsEqual(2L);
+    }
+
+    [TestCase]
+    public void ParseLoot_Garbage_ReturnsEmptyRatherThanJunk()
+    {
+        Assertions.AssertThat(EconomyLog.ParseLoot("石料").Length).IsEqual(0);     // 缺数量
+        Assertions.AssertThat(EconomyLog.ParseLoot("石料×abc").Length).IsEqual(0);  // 数量不是数
+        Assertions.AssertThat(EconomyLog.ParseLoot("石料×0").Length).IsEqual(0);    // 数量为 0
+        Assertions.AssertThat(EconomyLog.ParseLoot(null).Length).IsEqual(0);
+    }
+
+    [TestCase]
+    public void ParseGrants_Garbage_ReturnsEmptyRatherThanJunk()
+    {
+        Assertions.AssertThat(EconomyLog.ParseGrants("石料×2").Length).IsEqual(0);   // 缺英雄
+        Assertions.AssertThat(EconomyLog.ParseGrants(":石料×2").Length).IsEqual(0);  // 英雄为空
+        Assertions.AssertThat(EconomyLog.ParseGrants("h-0:石料×x").Length).IsEqual(0);
+    }
+
+    // ── 事件 → 行 ────────────────────────────────────────────────────────
+
+    [TestCase]
+    public void Append_DungeonLootEvent_BuildsRowWithParsedLists()
+    {
+        string path = TempPath("loot");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+            bool written = log.Append(LootEvent(
+                "d10.1.tok", "石料×2,木料×1", "h-0:石料×2,h-1:木料×1"));
+
+            Assertions.AssertThat(written).IsTrue();
+            Assertions.AssertThat(log.RowCount).IsEqual(1L);
+
+            log.Close();   // Windows：活跃写句柄与读冲突 —— 先关再读（真实用法也是采完再分析）
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var row = doc.RootElement;
+
+            Assertions.AssertThat(row.GetProperty("Kind").GetString()).IsEqual("DungeonLooted");
+            Assertions.AssertThat(row.GetProperty("RunId").GetString()).IsEqual("d10.1.tok");
+            Assertions.AssertThat(row.GetProperty("Won").GetBoolean()).IsTrue();
+            Assertions.AssertThat(row.GetProperty("Day").GetInt64()).IsEqual(8L);   // 7 天整 + 1
+            Assertions.AssertThat(row.GetProperty("Loot").GetArrayLength()).IsEqual(2);
+            Assertions.AssertThat(row.GetProperty("Grants").GetArrayLength()).IsEqual(2);
+            Assertions.AssertThat(row.GetProperty("Participants").GetArrayLength()).IsEqual(2);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [TestCase]
+    public void Append_TradeEvent_BuildsRowWithNumericFields()
+    {
+        string path = TempPath("trade");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+            bool written = log.Append(TradeEvent("甲", "乙", "石料", 3, 15, 14, 1));
+
+            Assertions.AssertThat(written).IsTrue();
+
+            log.Close();
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var row = doc.RootElement;
+
+            Assertions.AssertThat(row.GetProperty("Kind").GetString()).IsEqual("TradeCompleted");
+            Assertions.AssertThat(row.GetProperty("Buyer").GetString()).IsEqual("甲");
+            Assertions.AssertThat(row.GetProperty("Seller").GetString()).IsEqual("乙");
+            Assertions.AssertThat(row.GetProperty("Item").GetString()).IsEqual("石料");
+            Assertions.AssertThat(row.GetProperty("Qty").GetInt64()).IsEqual(3L);
+            Assertions.AssertThat(row.GetProperty("Amount").GetInt64()).IsEqual(15L);
+            Assertions.AssertThat(row.GetProperty("SellerNet").GetInt64()).IsEqual(14L);
+            Assertions.AssertThat(row.GetProperty("VillageCut").GetInt64()).IsEqual(1L);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [TestCase]
+    public void Append_NonEconomicEvent_IsIgnored()
+    {
+        string path = TempPath("other");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+            var e = DomainEvent.Create(
+                new EventId("HeroSummoned:甲:0"), OtherType, "甲",
+                occurredAtSimSeconds: 1.0, changedStates: new[] { StHeroBag });
+
+            Assertions.AssertThat(log.Append(e)).IsFalse();
+            Assertions.AssertThat(log.RowCount).IsEqual(0L);
+            log.Close();
+            Assertions.AssertThat(File.ReadAllText(path)).IsEmpty();
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [TestCase]
+    public void Append_IncompletePayload_IsSkippedRatherThanHalfWritten()
+    {
+        string path = TempPath("partial");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+
+            // 交易事件缺 item 与 qty —— 写出去会是半行，分析脚本读不了。
+            var broken = DomainEvent.Create(
+                new EventId("TradeCompleted:甲:0"), TradeType, "甲",
+                occurredAtSimSeconds: 1.0, changedStates: new[] { StHeroBag },
+                payload: new Dictionary<string, string>
+                {
+                    ["buyer"] = "甲",
+                    ["seller"] = "乙",
+                });
+
+            Assertions.AssertThat(log.Append(broken)).IsFalse();
+            Assertions.AssertThat(log.RowCount).IsEqual(0L);
+            log.Close();
+            Assertions.AssertThat(File.ReadAllText(path)).IsEmpty();
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [TestCase]
+    public void Append_DungeonSettledEvent_BuildsOneRowPerDungeon()
+    {
+        string path = TempPath("settled");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+
+            // 失败的一局也要有行 —— 否则副本成功率算不出来（战利品只在成功时才有）。
+            var failed = DomainEvent.Create(
+                new EventId("DungeonSettled:北境旧堡:0"), new EventTypeId("DungeonSettled"), "北境旧堡",
+                occurredAtSimSeconds: 3 * SimSecondsPerDay,
+                changedStates: new[] { StHeroBag },
+                payload: new Dictionary<string, string>
+                {
+                    ["place"] = Dungeon,
+                    ["won"] = "0",
+                    ["names"] = "甲、乙",
+                    ["runId"] = "d10.1.tokA",
+                    ["participants"] = "h-0,h-1",
+                });
+
+            Assertions.AssertThat(log.Append(failed)).IsTrue();
+
+            log.Close();
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var row = doc.RootElement;
+
+            Assertions.AssertThat(row.GetProperty("Kind").GetString()).IsEqual("DungeonSettled");
+            Assertions.AssertThat(row.GetProperty("RunId").GetString()).IsEqual("d10.1.tokA");
+            Assertions.AssertThat(row.GetProperty("Won").GetBoolean()).IsFalse();
+            Assertions.AssertThat(row.GetProperty("Participants").GetArrayLength()).IsEqual(2);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [TestCase]
+    public void Append_DungeonSettledEvent_WithoutRunId_IsSkipped()
+    {
+        string path = TempPath("settled-norun");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+
+            // 同名的另一条（队伍归来 / 带回战利品 / 白跑一趟）—— 没有 runId，不是副本结算行。
+            var other = DomainEvent.Create(
+                new EventId("DungeonSettled:甲:0"), new EventTypeId("DungeonSettled"), "甲",
+                occurredAtSimSeconds: 3 * SimSecondsPerDay,
+                changedStates: new[] { StHeroBag },
+                payload: new Dictionary<string, string>
+                {
+                    ["place"] = Dungeon,
+                    ["names"] = "甲、乙",
+                    ["loot"] = "甲 石料×1",
+                });
+
+            Assertions.AssertThat(log.Append(other)).IsFalse();
+            Assertions.AssertThat(log.RowCount).IsEqual(0L);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [TestCase]
+    public void Append_ManyEvents_WritesOneJsonLineEach()
+    {
+        string path = TempPath("many");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+            for (int i = 0; i < 5; i++)
+            {
+                log.Append(TradeEvent("甲", "乙", "石料", 1, 5, 5, 0));
+            }
+
+            log.Close();
+            string[] lines = File.ReadAllLines(path);
+
+            Assertions.AssertThat(lines.Length).IsEqual(5);
+            Assertions.AssertThat(log.RowCount).IsEqual(5L);
+            foreach (var line in lines)
+            {
+                // 每行都必须是**独立合法**的 JSON —— 半行会让分析脚本整份报错。
+                using var doc = JsonDocument.Parse(line);
+                Assertions.AssertThat(doc.RootElement.GetProperty("Kind").GetString())
+                    .IsEqual("TradeCompleted");
+            }
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+}

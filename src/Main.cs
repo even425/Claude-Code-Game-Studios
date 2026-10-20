@@ -604,6 +604,24 @@ public partial class Main : Node2D
         savePath = Godot.ProjectSettings.GlobalizePath(savePath);
         _saves = new ClaudeCodeGameStudios.Data.SavePort(savePath);
 
+        // 经济流水落盘（运行闭环验证与经济数据采集准备）：
+        // 只有命令行给了 --econlog=<路径> 才有它；正常游戏**不写盘**。
+        // 路径照 --savepath= 的先例：先 GlobalizePath，再交给端口。
+        var econLogPath = OS.GetCmdlineUserArgs()
+            .FirstOrDefault(a => a.StartsWith("--econlog=", StringComparison.Ordinal))?
+            .Substring("--econlog=".Length);
+        if (string.IsNullOrWhiteSpace(econLogPath)
+            && OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--collect=", StringComparison.Ordinal)))
+        {
+            // 采集模式没给路径 → 用默认名（并把真实路径打出来）。
+            econLogPath = "user://economy-collect.jsonl";
+        }
+        if (!string.IsNullOrWhiteSpace(econLogPath))
+        {
+            econLogPath = Godot.ProjectSettings.GlobalizePath(econLogPath);
+            _economyLog = new ClaudeCodeGameStudios.Data.EconomyLog(econLogPath, _clock.SimSecondsPerDay);
+        }
+
         // M7 摆摊服务 —— 依赖 _villageModel + PriceBook + _heroes
         // heroLookup 委托：用 HeroAgent.Id（已设）查 —— D-0…（略）
         _stallService = new ClaudeCodeGameStudios.Application.Stall.StallService(
@@ -895,6 +913,28 @@ public partial class Main : Node2D
                 GD.Print($"SOAK 第{_clock.Day}天 {_clock.Clock} 在村{_heroes.Count(h => h.Present)}/{_heroes.Count} " +
                          $"材料{Mat} 层级{_tier} 杂谈{_chronicle.Count}条 | " +
                          string.Join(" ", _chronicle.Recent(3)));
+
+            // 采集：副本 → 摆摊。**挂在日切上** —— 跟着真实游戏循环走，
+            // 采集器只在日界插一脚，不自己推进时间（自己推进会跳过
+            // 「英雄在工地干活」那段状态机，结果永远挑不出人）。
+            if (_collectTargetDays > 0)
+            {
+                CollectOneDay();
+                _collectDays++;
+
+                GD.Print($"COLLECT 第{(int)_clock.Day}天 事件{_events.Count}条 杂谈{_chronicle.Count}条 " +
+                         $"摊位{_stallService.Stalls.Count}个 流水{_economyLog?.RowCount ?? 0}行 " +
+                         $"村金{_villageModel.Get(ClaudeCodeGameStudios.Application.Stall.StallService.Gold)}");
+
+                if (_collectDays >= _collectTargetDays)
+                {
+                    GD.Print($"COLLECT 完成：{_collectDays} 天 · 事件 {_events.Count} 条 · " +
+                             $"流水 {_economyLog?.RowCount ?? 0} 行 · 跳过副本 {_collectSkippedDungeons} 次");
+                    _economyLog?.Close();
+                    GetTree().Quit();
+                    return;
+                }
+            }
         }
 
         // 4. 每日自主购物（第四阶段 3B）：按游戏日触发一次。
@@ -917,6 +957,12 @@ public partial class Main : Node2D
         if (OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--grant=", StringComparison.Ordinal)) && !_grantTestDone)
             RunGrantSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--trade") && !_tradeTestDone) RunTradeSelfTest();
+        if (OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--collect=", StringComparison.Ordinal)) && !_collectDone)
+        {
+            // 采集驱动器**先跑**：它跑完就退出，后面的自检不该再插进来。
+            RunCollect();
+            return;
+        }
         if (OS.GetCmdlineUserArgs().Contains("--market") && !_marketTestDone) RunMarketSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--shop") && !_shopTestDone) RunShoppingSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a is "--save" or "--load") && !_saveTestDone)
@@ -1334,12 +1380,21 @@ public partial class Main : Node2D
         }
 
         // 整场结论：副本状态变了（EncounterX → Succeeded/Failed），是真状态变化
+        //
+        // 【经济数据采集】补 runId + 参战名单：这条**每场副本都发**（成功失败都发），
+        // 落盘后就能算出**副本成功率** —— 而战利品只在成功时才有，
+        // 只记掉落的话失败场次永远采不到，成功率就无从谈起。
+        // 判据是「有 runId」：同样叫 DungeonSettled 的另外几条（队伍归来、
+        // 带回战利品、白跑一趟）没有 runId，落盘时会自然被跳过。
         Emit(EvDungeonSettled, DungeonName, new[] { StDungeonRun, StSettlement },
             new Dictionary<string, string>
             {
                 ["place"] = DungeonName,
                 ["won"] = outcome.Succeeded ? "1" : "0",
                 ["names"] = string.Join("、", names),
+                ["runId"] = outcome.Run.Id.Value,
+                ["participants"] = ClaudeCodeGameStudios.Data.EconomyLog.FormatIds(
+                    outcome.Run.Participants.ToArray()),
             },
             ev => Chronicle.DungeonDecided(
                 (int)_clock.Day, ev.Payload["place"],
@@ -1396,6 +1451,16 @@ public partial class Main : Node2D
         if (granted && outcome.Succeeded)
         {
             foreach (var h in crew) h.DoneCount++;
+
+            // 运行闭环验证与经济数据采集准备：把「这次副本产出了什么、分给了谁」
+            // 记成一条**可落盘**的事件。
+            //
+            // 为什么必须有它：掉落原先只存在于内存事件里，存一次档就全没了 ——
+            // 经济流水无从采集，R-05 二轮的掉落分布也就无从谈起。
+            //
+            // 它**不进杂谈**（渲染委托返回 null，与「日常劳作」同一路）：
+            // 37 人每天一两条「某某捡到了石料」会把村庄杂谈淹掉。
+            EmitDungeonLooted(outcome, loot);
 
             // 第三阶段 M3：同队成功 = 一次真实合作经历（P3-D04）。
             // 以副本实例为幂等键 —— 重复结算不会二次加关系（P3-D08）。
@@ -2108,6 +2173,156 @@ public partial class Main : Node2D
     private bool _dungeonTestDone;
     private bool _tradeTestDone;
     private bool _marketTestDone;
+    private bool _collectDone;
+
+    /// <summary>采集目标天数（0 = 不采集）。</summary>
+    private int _collectTargetDays;
+
+    /// <summary>已采集的天数。</summary>
+    private int _collectDays;
+
+    /// <summary>因为「没人可派」而跳过的副本次数。</summary>
+    private int _collectSkippedDungeons;
+
+    /// <summary>
+    /// <c>--collect=N</c>：headless 采集驱动器（运行闭环验证与经济数据采集准备）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>它为什么存在</b>：正常玩法下经济的关键环节（副本、摆摊）**全靠玩家点按钮**
+    /// —— 「英雄自动开摆」是从第二阶段 M4 就挂账的 P3/V2 项。
+    /// 所以「让游戏自己跑几天」采不到任何经济数据：soak 554 天里
+    /// 副本 0 次、摊位 0 个、成交 0 笔，只有采集在涨材料。</para>
+    ///
+    /// <para><b>它做什么</b>：<b>挂在日切上</b>，跟着真实游戏循环走 ——
+    /// 每天副本一次、摆摊一次，自主购物本来就是每日自动的。
+    /// 它<b>不改任何规则</b>，只是替玩家按按钮。</para>
+    ///
+    /// <para><b>为什么挂在日切而不是自己推进时间</b>：自己推进时间会跳过
+    /// 「英雄在工地干活」这段状态机 —— 于是每次都挑不出人，副本永远开不了
+    /// （第一版就是这么写的：前 6 天零副本）。挂在日切上，
+    /// 干活、完工、空闲的节奏由游戏自己走，采集器只在日界插一脚。</para>
+    ///
+    /// <para><b>它验的是什么</b>：「规则驱动的经济」，不是「玩家操作产生的经济」。
+    /// 两者走的是同一套规则（同一个 <c>ResolveDungeon</c>、同一个
+    /// <c>StallService.TryBuy</c>、同一个 <c>HeroBehaviorService</c>），
+    /// 所以采到的掉落分布与成交价分布对 R-05 二轮是有用的；
+    /// 但它<b>不</b>代表玩家的真实操作节奏（玩家不会每天恰好两次副本）。</para>
+    /// </remarks>
+    private void RunCollect()
+    {
+        _collectDone = true;
+
+        int days = 30;
+        var arg = OS.GetCmdlineUserArgs()
+            .FirstOrDefault(a => a.StartsWith("--collect=", StringComparison.Ordinal));
+        if (arg is not null
+            && int.TryParse(arg.Substring("--collect=".Length), out var parsed) && parsed > 0)
+        {
+            days = parsed;
+        }
+
+        _collectTargetDays = days;
+        GD.Print($"COLLECT 开始：目标 {days} 天 · 流水路径 = {_economyLog?.FilePath ?? "（无）"}");
+    }
+
+    /// <summary>
+    /// 采集的一天：副本 → 摆摊。自主购物由每帧的每日闸门自动跑。
+    /// </summary>
+    /// <remarks>
+    /// <b>顺序要紧</b>：先副本（今天的战利品进背包）→ 再摆摊（把战利品上架）
+    /// → 然后当天的自主购物就能买到今天刚掉的东西。
+    /// 反过来的话，战利品要等到第二天才上架。
+    /// </remarks>
+    private void CollectOneDay()
+    {
+        DispatchDungeonForCollection();
+        OpenStallsForCollection();
+    }
+
+    /// <summary>
+    /// 采集用副本：像玩家点「发布任务」那样，先建任务再打副本。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么走任务流程而不是直接调 <c>ResolveDungeon</c></b>：
+    /// 直接调会跳过领域层的「随队 → 归队」状态迁移，
+    /// 英雄的 <c>Presence</c> 会卡在 <c>OnMission</c> —— 之后谁都不敢再派他。
+    /// 走 <c>Mission</c> 那套，状态迁移由领域层负责（不变量 I2 / I14）。
+    /// </remarks>
+    private void DispatchDungeonForCollection()
+    {
+        var crew = new List<HeroAgent>();
+        foreach (var h in _heroes)
+        {
+            if (h.Away || h.ToSite) continue;               // 不在场 / 在工地的不派
+            if (IsOnMission(_states[_heroes.IndexOf(h)])) continue;   // 已在别的任务里
+            crew.Add(h);
+            if (crew.Count >= 2) break;
+        }
+
+        if (crew.Count == 0)
+        {
+            _collectSkippedDungeons++;
+            return;
+        }
+
+        var memberStates = crew.Select(h => _states[_heroes.IndexOf(h)]).ToArray();
+        try
+        {
+            _mission = Mission.Create(
+                new MissionId($"cm{_clock.AbsoluteHour:0}"), DungeonName,
+                new Squad(_squadRules, memberStates), _squadRules);
+            _mission.Start(IsOnMission);
+            foreach (var h in crew) h.Away = true;
+
+            ResolveDungeon(new Job(DungeonName, "铁料", 38, 11f, true), crew);
+        }
+        catch (ArgumentException)
+        {
+            // 无效队伍不能启动任务（02 F-01）—— 静默拒绝，不打断采集。
+            _mission = null;
+        }
+        catch (InvalidOperationException)
+        {
+            // 有成员已在别的任务里（不变量 I2）。
+            _mission = null;
+        }
+        finally
+        {
+            _mission = null;
+        }
+    }
+
+    /// <summary>
+    /// 采集用摆摊：让每个有可售物品的英雄开一个摊。
+    /// </summary>
+    /// <remarks>
+    /// <b>一人一摊</b>（D-023）：先收旧摊再开新摊。
+    /// <b>一次摆 3 份</b>：留出多次成交的余地 —— 摆完就卖光，采不到价格分布。
+    /// </remarks>
+    private void OpenStallsForCollection()
+    {
+        var book = ClaudeCodeGameStudios.Domain.Items.PriceBook.Default;
+
+        foreach (var h in _heroes)
+        {
+            if (h.Away || h.ToSite) continue;
+
+            var existing = _stallService.GetStall(h.Id);
+            if (existing is not null && existing.Status != ClaudeCodeGameStudios.Domain.Stall.StallStatus.Closed)
+            {
+                _stallService.CloseStall(h.Id);
+            }
+
+            foreach (var (item, count) in h.Bag.Snapshot())
+            {
+                if (!book.IsSellable(item) || count < 1) continue;
+
+                long qty = Math.Min(3, count);
+                _stallService.PlaceStall(h.Id, item, qty, _clock.Now);
+                break;
+            }
+        }
+    }
 
     /// <summary>
     /// <c>--trade</c>：第四阶段 3A 真机自检 —— 发物品 → 开摊 → 手动购买 → 失败场景。
@@ -2471,6 +2686,53 @@ public partial class Main : Node2D
                 result.TotalAmount, result.SellerNet, result.VillageCut));
     }
 
+    /// <summary>
+    /// 发一条「副本战利品已结算」事件（可落盘；不进杂谈）。
+    /// </summary>
+    /// <param name="outcome">副本结果。</param>
+    /// <param name="loot">战利品分配结果。</param>
+    /// <remarks>
+    /// <para><b>「掉落清单」由分配结果汇总而来</b>：分配是<b>数量守恒</b>的
+    /// （R-01 的 <c>LootSplit</c> 保证总量不变），所以按物品汇总回去
+    /// 就是掉落前的原始清单 —— 不必为此改 <c>ComputeLoot</c> 的签名。</para>
+    ///
+    /// <para><b>紧凑格式</b>（<c>石料×2,木料×1</c> / <c>h-0:石料×2</c>）：
+    /// 事件的 payload 是 <c>string→string</c>，放不进嵌套结构；
+    /// 格式与解析器都住在 <see cref="ClaudeCodeGameStudios.Data.EconomyLog"/>，
+    /// **只有一处定义**，不会出现「写的和读的不是一套」。</para>
+    /// </remarks>
+    private void EmitDungeonLooted(
+        ClaudeCodeGameStudios.Application.DungeonFlowOutcome outcome,
+        ClaudeCodeGameStudios.Domain.Settlement.LootAllocation loot)
+    {
+        if (loot.Grants.Count == 0) return;
+
+        var lootLines = loot.Grants
+            .GroupBy(g => g.Item)
+            .Select(g => new ClaudeCodeGameStudios.Data.LootLine(
+                g.Key.Value, g.Sum(x => x.Quantity)))
+            .ToArray();
+
+        var grantLines = loot.Grants
+            .Select(g => new ClaudeCodeGameStudios.Data.GrantLine(
+                g.Hero.Value, g.Item.Value, g.Quantity))
+            .ToArray();
+
+        var participants = outcome.Run.Participants.ToArray();
+
+        Emit(EvDungeonLooted, outcome.Run.Id.Value, new[] { StHeroBag },
+            new Dictionary<string, string>
+            {
+                ["runId"] = outcome.Run.Id.Value,
+                ["place"] = DungeonName,
+                ["won"] = outcome.Succeeded ? "1" : "0",
+                ["participants"] = ClaudeCodeGameStudios.Data.EconomyLog.FormatIds(participants),
+                ["loot"] = ClaudeCodeGameStudios.Data.EconomyLog.FormatLoot(lootLines),
+                ["grants"] = ClaudeCodeGameStudios.Data.EconomyLog.FormatGrants(grantLines),
+            },
+            _ => null);   // 不进杂谈 —— 见 EvDungeonLooted 的说明
+    }
+
     /// <summary>按 HeroId 找显示名；找不到时回落为 Id。</summary>
     private string NameOfHero(HeroId id)
     {
@@ -2764,6 +3026,15 @@ public partial class Main : Node2D
     private ClaudeCodeGameStudios.Domain.Events.ChronicleFeed _feed = new();
     private ClaudeCodeGameStudios.Domain.Events.EventIdGenerator _eventIds = new();
 
+    /// <summary>
+    /// 经济流水落盘（运行闭环验证与经济数据采集准备）。<b>为 null = 不落盘</b>。
+    /// </summary>
+    /// <remarks>
+    /// 只有命令行给了 <c>--econlog=&lt;路径&gt;</c> 才有它 —— 正常游戏不写盘。
+    /// 它收的是<b>已记录</b>的经济事件（副本掉落 / 交易），不收全事件流。
+    /// </remarks>
+    private ClaudeCodeGameStudios.Data.EconomyLog? _economyLog;
+
     // ── 事件类型（对应基线 §7.2 的名单）──
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvSummoned =
         new("HeroSummoned");                 // §7.2「召唤到新英雄」
@@ -2783,6 +3054,22 @@ public partial class Main : Node2D
         new("SquadBonded");                    // 第三阶段 M5：同队副本合作（一条聚合）
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvTradeCompleted =
         new("TradeCompleted");                 // 第四阶段 3B：英雄自主购物成交
+
+    /// <summary>
+    /// 副本战利品结算（运行闭环验证与经济数据采集准备）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>它确实改了背包</b>（<c>hero.bag</c>），所以它<b>符合</b>反装饰规则 ——
+    /// 声明得出状态变化，事件成立。</para>
+    /// <para><b>但它不进杂谈</b>（渲染委托返回 null，与「日常劳作」同一路）：
+    /// 37 人每天一两条「某某捡到了石料」会把村庄杂谈淹掉。
+    /// 玩家要看的成交信息由 <see cref="EvTradeCompleted"/> 承担。</para>
+    /// <para><b>为什么要它</b>：原先副本掉落了什么<b>只存在于内存事件里</b>，
+    /// 存一次档就全没了 —— 经济流水无从采集。它把「这次副本产出了什么、
+    /// 分给了谁」变成一条<b>可落盘</b>的事实。</para>
+    /// </remarks>
+    private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvDungeonLooted =
+        new("DungeonLooted");
 
     // ── 状态键 ──
     // 反装饰规则（03 §5.2 / 基线 §7.3）靠它们在**构造期**生效：
@@ -2846,6 +3133,11 @@ public partial class Main : Node2D
             _eventIds.Next(type, actor), type, actor, _clock.Now, changed, payload);
 
         if (!_events.Record(e)) return false;   // I5：同一事件只记一次
+
+        // 经济流水落盘（运行闭环验证与经济数据采集准备）。
+        // 挂在这里 —— 事件**已记录**之后：落盘的是「确实发生过的事」，
+        // 不是「打算发生的事」。EconomyLog 自己只收经济类事件，其余一律忽略。
+        _economyLog?.Append(e);
 
         string text = "";
         bool published = _feed.Publish(e, _events, ev =>

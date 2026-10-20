@@ -9,7 +9,7 @@
     - 村抽合计与**税务口径**核对（Σ村抽 + 在途余数 = 5% × 成交额，**无 floor**）
     - **货币守恒**逐日核对（不含税额余数、不含待发零头 —— 两者都不是钱包里的钱）
     - **待发零头自洽性**（每英雄 < 100（1/100 金））
-    - **未成原因分布**
+    - **未成原因分布**（含「钱不够」的**细分**：抽样运气 vs 真 scarcity）
     - 每日经济快照轨迹（流通金 / 金库 / 升级 / 施工人手）
 
 守恒律的口径（**流通口径**）：
@@ -82,6 +82,25 @@ def analyze(path, label, verbose=True):
     # ── 未成原因 ──
     missed = [r for r in rows if r.get("Kind") == "ShoppingMissed"]
     reason_counter = Counter(r.get("Reason") for r in missed)
+
+    # 「未成·钱不够」到底是不是**真的没钱**（D-054 阶段 5 的测量补强）：
+    #   有 BuyerGold / CheapestPrice 的样本才能分。
+    #     BuyerGold >= CheapestPrice ⇒ **有便宜选项却没抽中**（抽样运气；抽样不按购买力过滤）
+    #     BuyerGold <  CheapestPrice ⇒ **全场都买不起**（真 scarcity）
+    # 旧样本没有这两个字段 → 记为「无法判定」，不混进任何一边。
+    ng = [r for r in missed if r.get("Reason") == "NotEnoughGold"]
+    ng_judged = [r for r in ng
+                 if r.get("BuyerGold") is not None and r.get("CheapestPrice") is not None]
+    ng_luck = [r for r in ng_judged if (r.get("BuyerGold") or 0) >= (r.get("CheapestPrice") or 0)]
+    ng_real = [r for r in ng_judged if (r.get("BuyerGold") or 0) < (r.get("CheapestPrice") or 0)]
+    ng_unknown = len(ng) - len(ng_judged)
+    ng_balances = sorted(r.get("BuyerGold") or 0 for r in ng_judged)
+
+    def _pct(vals, q):
+        if not vals:
+            return None
+        k = min(len(vals) - 1, max(0, int(round(q * (len(vals) - 1)))))
+        return vals[k]
 
     # ── 每日快照 ──
     snaps = [r for r in rows if r.get("Kind") == "EconomySnapshot"]
@@ -158,7 +177,10 @@ def analyze(path, label, verbose=True):
     days = max((r.get("Day") or 0) for r in rows) if rows else 0
     per100 = Counter()
     for t in trades:
-        per100[min(9, ((t.get("Day") or 1) - 1) // 100)] += 1
+        # ⚠️ 这里**不能**给桶号封顶（旧版写死 min(9, ...)）——
+        #    超过 1000 天的样本会把后面所有天挤进最后一个桶，
+        #    看起来像「某一段成交暴涨」。桶号按实际天数算。
+        per100[((t.get("Day") or 1) - 1) // 100] += 1
 
     m = {
         "label": label, "path": path, "rows": len(rows), "kinds": dict(kinds), "days": days,
@@ -201,6 +223,17 @@ def analyze(path, label, verbose=True):
               + ("  " + "  ".join(f"{k} {v}({v / sum(reason_counter.values()) * 100:.1f}%)"
                                  for k, v in reason_counter.most_common())
                  if reason_counter else ""))
+        if ng:
+            if ng_judged:
+                luck_pct = len(ng_luck) / len(ng_judged) * 100
+                print(f"  └「钱不够」细分: 抽样运气 {len(ng_luck)} 条({luck_pct:.1f}%)"
+                      f"（有钱但抽中买不起的摊）/ 真 scarcity {len(ng_real)} 条"
+                      f"（全场都买不起）"
+                      + (f" / 旧样本无字段 {ng_unknown} 条" if ng_unknown else "")
+                      + f"；失败时余额 p25={_pct(ng_balances, 0.25)}"
+                      f" 中位={_pct(ng_balances, 0.5)} p75={_pct(ng_balances, 0.75)}")
+            else:
+                print("  └「钱不够」细分: 旧样本无 BuyerGold/CheapestPrice 字段，无法判定")
         if snaps:
             checked = conserve_ok + len(conserve_bad)
             print(f"每日快照      : {len(snaps)} 天   守恒律成立 {conserve_ok}/{checked}"
@@ -214,6 +247,21 @@ def analyze(path, label, verbose=True):
             if growth is not None:
                 verdict = "稳态（≈0）" if abs(growth) < 0.5 else ("仍在涨" if growth > 0 else "仍在缩")
                 print(f"流通金增长率  : {growth:+.2f} 金/天（后半段最小二乘）→ {verdict}")
+            # 人均金币的**分布**（D-054 阶段 5）：合计稳 ≠ 钱分得匀。
+            dist = [s for s in snaps if s.get("HeroGoldMedian") is not None]
+            if dist:
+                s = dist[-1]
+                print(f"金币分布(末次): 最小 {s.get('HeroGoldMin')} / p25 {s.get('HeroGoldP25')}"
+                      f" / 中位 {s.get('HeroGoldMedian')} / p75 {s.get('HeroGoldP75')}"
+                      f" / 最大 {s.get('HeroGoldMax')}（人均合计 "
+                      f"{(s.get('HeroGoldTotal') or 0) / max(1, s.get('HeroCount') or 1):.1f}）")
+                # 最富的是不是同一个人？（「个体囤积」vs「系统性集中」——修法完全不同）
+                tops = [x.get("HeroGoldTopId") for x in snaps if x.get("HeroGoldTopId")]
+                if tops:
+                    c = Counter(tops)
+                    top_name, top_n = c.most_common(1)[0]
+                    print(f"最富英雄     : {len(set(tops))} 人轮流当过；"
+                          f"最常的是 {top_name}（{top_n}/{len(tops)} 天 = {top_n / len(tops) * 100:.0f}%）")
             s = m["last_snap"]
             print(f"末次快照      : 流通金 {s.get('HeroGoldTotal')} / 金库 {s.get('VillageGold')}"
                   f" / 材料 {s.get('VillageMaterial')} / 累计发放 {s.get('GoldGranted')}"

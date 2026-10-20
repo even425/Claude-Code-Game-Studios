@@ -154,6 +154,14 @@ public sealed class HeroBehaviorService
     /// <see cref="SkipReason"/> 是 R-07 补的：<b>结构化</b>的同一件事，
     /// 供表现层生成给玩家看的短文案（花名册行尾、每日汇总）。
     /// </para>
+    /// <para>
+    /// <see cref="BuyerGold"/> / <see cref="CheapestPrice"/> 是 D-054 阶段 5 补的
+    /// <b>测量缺口</b>（2026-10-21）：「未成·钱不够」这个原因**分不清两件完全不同的事**——
+    /// ① 英雄**真的没钱**；② 英雄有钱，但**随机抽中了一个买不起的摊**（抽样<b>不</b>按购买力过滤）。
+    /// ① 是经济事实，② 是**抽样运气**。两者的设计含义完全相反，
+    /// 而没有这两个字段就**永远分不开**（实测固定点处「未成」占 53%，
+    /// 若其中大半是②，则「市场死了一半」这个结论就是错的）。
+    /// </para>
     /// </remarks>
     public readonly record struct ShoppingResult(
         ShoppingOutcome Outcome,
@@ -169,6 +177,26 @@ public sealed class HeroBehaviorService
 
         /// <summary>本结果的结构化原因（给表现层用；成交时为 <see cref="ShoppingSkipReason.None"/>）。</summary>
         public ShoppingSkipReason SkipReason { get; init; } = ShoppingSkipReason.None;
+
+        /// <summary>
+        /// 买家在这次尝试时的<b>钱包余额</b>（金币；买之前）。
+        /// </summary>
+        /// <remarks>
+        /// <b>它回答的是「英雄到底穷到什么程度」</b> ——
+        /// 有余额 0 的（有 → 真是没钱）也有余额 40 的（→ 是抽签运气差）。
+        /// </remarks>
+        public long? BuyerGold { get; init; }
+
+        /// <summary>
+        /// 本次尝试里<b>买得起的那批摊中最便宜的单价</b>（金币）。
+        /// </summary>
+        /// <remarks>
+        /// <b>它回答的是「当时有没有买得起的选项」</b> ——
+        /// 若 <see cref="BuyerGold"/> ≥ 它，说明**有便宜选项却没抽中**（抽样运气），
+        /// 否则说明**全场都买不起**（真 scarcity）。
+        /// 为 null = 当时**没有任何可买的摊**（摊全被自己占 / 背包满 / 没开摊）。
+        /// </remarks>
+        public long? CheapestPrice { get; init; }
     }
 
     /// <param name="stall">摆摊/买摊应用层。</param>
@@ -229,6 +257,10 @@ public sealed class HeroBehaviorService
                 Detail = "找不到这位英雄",
             };
         }
+
+        // 钱包余额：**先读一次**（纯读，无副作用），后面每条结果都带着它 ——
+        // 「未成·钱不够」要能分清「真没钱」与「抽中了一个买不起的摊」，就靠这个数。
+        long buyerGold = buyer.Wallet.Amount(StallService.Gold);
 
         // 1. 频率上限：今天已购过
         if (buyer.LastShoppingDay == today)
@@ -311,6 +343,7 @@ public sealed class HeroBehaviorService
                 {
                     Detail = "村里只有自己开着的摊（同一个人不能自买自卖）",
                     SkipReason = ShoppingSkipReason.OnlyOwnStall,
+                    BuyerGold = buyerGold,
                 };
             }
 
@@ -318,7 +351,16 @@ public sealed class HeroBehaviorService
             {
                 Detail = $"背包里相关物品都已满（上限 {BagItemLimit}）：{bagFullStalls} 个摊都买不了",
                 SkipReason = ShoppingSkipReason.BagFull,
+                BuyerGold = buyerGold,
             };
+        }
+
+        // 最便宜的可买摊单价（买得起的那批里最低的）——
+        // 有了它，「钱不够」才能分清「真没钱」与「抽签抽到了贵的」。
+        long cheapestPrice = long.MaxValue;
+        foreach (var s in buyable)
+        {
+            if (s.UnitPrice < cheapestPrice) cheapestPrice = s.UnitPrice;
         }
 
         var pickIdx = (int)(_random() * buyable.Count);
@@ -327,7 +369,7 @@ public sealed class HeroBehaviorService
 
         // 6. 买多少（D-053）：**尽可能多** = min(摊位库存, 余额 ÷ 单价, 背包余量)。
         //    背包余量按 BagItemLimit 算 —— 上限仍在起作用（单次最多 5 份）。
-        long gold = buyer.Wallet.Amount(StallService.Gold);
+        long gold = buyerGold;
         long room = BagRoom(buyer.Bag, stall.ItemId);      // 抽样前已保证 ≥ 1
         long qty = StallMarket.MaxAffordable(stall.Stock, stall.UnitPrice, gold, room);
 
@@ -339,6 +381,8 @@ public sealed class HeroBehaviorService
             {
                 Detail = $"金币不足：有 {gold}，需 {stall.UnitPrice}",
                 SkipReason = ShoppingSkipReason.NotEnoughGold,
+                BuyerGold = buyerGold,
+                CheapestPrice = cheapestPrice,
             };
         }
 
@@ -350,6 +394,8 @@ public sealed class HeroBehaviorService
             {
                 Detail = "结算失败（摊位被抢空 / 钱包不足）",
                 SkipReason = ShoppingSkipReason.SettlementFailed,
+                BuyerGold = buyerGold,
+                CheapestPrice = cheapestPrice,
             };
         }
 
@@ -366,6 +412,8 @@ public sealed class HeroBehaviorService
             buyResult.VillageCut)
         {
             Detail = $"买了 {stall.ItemId.Value}×{qty}，付 {buyResult.SellerNet + buyResult.VillageCut} 金币",
+            BuyerGold = buyerGold,
+            CheapestPrice = cheapestPrice,
         };
     }
 

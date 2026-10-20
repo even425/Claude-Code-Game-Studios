@@ -266,8 +266,22 @@ public partial class Main : Node2D
     /// <summary>本次副本要发的数量。<b>【待定 T-004】无出处。</b></summary>
     private long _pendingRewardAmount;
 
-    /// <summary>副本金币报酬的默认值（D-054-01 基准候选值；单位 1/100 金 = 1 金）。</summary>
-    private const long DefaultGoldRewardUnits = 100L;
+    /// <summary>
+    /// 副本金币报酬的默认值（单位 1/100 金）。
+    /// </summary>
+    /// <remarks>
+    /// <b>X = 0.10 金</b>（D-054 第三次追加裁决 ⑬；`07` §5.6）。
+    /// <br><b>它是实测标定出来的</b>：37 人 / **2000 天** / 种子 4242，流通金增长率
+    /// **−0.01 金/天** —— 池子从 day 602 的 1 555 走到 day 1999 的 1 549，**完全平**。
+    /// 相邻两档：X=0.12 是 **+0.33**（缓慢上飘）、X=0.15 是 **+0.57**（仍在涨）
+    /// ⇒ **0.10 是唯一真正平的取值**。
+    /// <br>⚠️ **这个值改过一次**：最初按 **1000 天**双种子数据定成 0.12
+    /// （当时均值 −0.16 最接近 0）—— **2000 天复测把它推翻了**：
+    /// 1000 天里 0.10 与 0.12 的差（0.075）**小于种子噪声（±0.14）**，根本分不开。
+    /// <br><b>边界二仍然有效</b>（D-054 §5.2）：X 不得用「限制钱包」之类的手段去制造曲线；
+    /// 这个值是**算出来的**，不是用夹具凑出来的。
+    /// </remarks>
+    private const long DefaultGoldRewardUnits = 10L;
 
     /// <summary>
     /// 副本金币报酬率 X（单位 <b>1/100 金</b>）—— 每人每次实际参战获得多少。
@@ -2610,10 +2624,29 @@ public partial class Main : Node2D
 
         long heroGold = 0;
         int builders = 0;
+        var perHero = new List<(string Id, long Gold)>(_heroes.Count);
         foreach (var h in _heroes)
         {
-            heroGold += h.Wallet.Amount(ClaudeCodeGameStudios.Application.Stall.StallService.Gold);
+            long g = h.Wallet.Amount(ClaudeCodeGameStudios.Application.Stall.StallService.Gold);
+            heroGold += g;
+            perHero.Add((h.Id.Value, g));
             if (h.ToSite) builders++;
+        }
+
+        // 人均金币的**分布**（D-054 阶段 5）：「合计稳」≠「钱分得匀」。
+        // 只有 5 个分位点，但足以看出「人人 40 金」与「3 个人 500 金、其余 0 金」的区别。
+        perHero.Sort((a, b) => a.Gold.CompareTo(b.Gold));
+        long? min = null, p25 = null, med = null, p75 = null, max = null;
+        string? topId = null;
+        if (perHero.Count > 0)
+        {
+            var sorted = perHero.Select(p => p.Gold).ToList();
+            min = sorted[0];
+            max = sorted[^1];
+            topId = perHero[^1].Id;
+            med = Percentile(sorted, 0.5);
+            p25 = Percentile(sorted, 0.25);
+            p75 = Percentile(sorted, 0.75);
         }
 
         _economyLog.AppendSnapshot(
@@ -2627,7 +2660,27 @@ public partial class Main : Node2D
             _stallService.VillageCutCarry,
             _heroes.Count,
             builders,
-            _walletWriter.TotalPending);
+            _walletWriter.TotalPending,
+            min, p25, med, p75, max, topId);
+    }
+
+    /// <summary>取有序数组的**线性插值**分位数（q ∈ [0,1]）。</summary>
+    /// <remarks>
+    /// 用「最近秩」会跳格（37 人时 p25 只能取到第 10 个或第 9 个），
+    /// 线性插值给出的数更接近直觉，**同一份数据的分位数也更稳定**。
+    /// </remarks>
+    private static long Percentile(List<long> sorted, double q)
+    {
+        if (sorted.Count == 0) return 0L;
+        if (sorted.Count == 1) return sorted[0];
+
+        double pos = q * (sorted.Count - 1);
+        int lo = (int)Math.Floor(pos);
+        int hi = (int)Math.Ceiling(pos);
+        if (lo == hi) return sorted[lo];
+
+        double frac = pos - lo;
+        return (long)Math.Round(sorted[lo] + (sorted[hi] - sorted[lo]) * frac);
     }
 
     /// <summary>
@@ -2922,7 +2975,9 @@ public partial class Main : Node2D
                 NameOfHero(buyer),
                 result.SkipReason.ToString(),
                 result.Seller is { } seller ? NameOfHero(seller) : null,
-                result.ItemId?.Value);
+                result.ItemId?.Value,
+                result.BuyerGold,
+                result.CheapestPrice);
         }
     }
 

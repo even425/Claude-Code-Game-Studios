@@ -37,6 +37,8 @@ public class HeroBehaviorServiceTests
     private static readonly HeroId Carol = new("h-carol");
     private static readonly ItemId Stone = new("石料");
     private static readonly ItemId Wood = new("木料");
+    private static readonly ItemId Cloth = new("布匹");
+    private static readonly HeroId Dave = new("h-dave");
 
     /// <summary>固定 random = 0.0（最小值） —— 必触发（任何 desire > 0 都满足 r &lt; desire）。</summary>
     private static readonly Func<double> AlwaysZero = () => 0.0;
@@ -95,6 +97,16 @@ public class HeroBehaviorServiceTests
         carol.RestoreWallet(new Wallet());
         heroes[Carol] = carol;
         svc.PlaceStall(Carol, Wood, 5, 10.0);
+    }
+
+    /// <summary>加一个卖<b>布匹</b>的摊主 Dave（摆 5 份）。</summary>
+    private static void AddClothSeller(Dictionary<HeroId, HeroAgent> heroes, StallService svc)
+    {
+        var dave = new HeroAgent { Name = "Dave" };
+        dave.RestoreBag(new Inventory().TryAdd(Cloth, 5)!);
+        dave.RestoreWallet(new Wallet());
+        heroes[Dave] = dave;
+        svc.PlaceStall(Dave, Cloth, 5, 10.0);
     }
 
     // ── 性格权重（纯函数） ───────────────────────────────────────────
@@ -258,6 +270,128 @@ public class HeroBehaviorServiceTests
         Assertions.AssertThat((r.Detail ?? "").Contains("金币不足")).IsTrue();
         Assertions.AssertThat(r.SkipReason)
             .IsEqual(HeroBehaviorService.ShoppingSkipReason.NotEnoughGold);
+    }
+
+    // ── D-054 阶段 5：「钱不够」的测量补强 ────────────────────────────
+
+    /// <summary>
+    /// 「钱不够」要能分清<b>两件完全不同的事</b>：
+    /// ① 英雄<b>真的没钱</b>；② 英雄有钱，但<b>随机抽中了一个买不起的摊</b>。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么必须分清</b>：抽样**不按购买力过滤**（D-053 只把「背满的」摊剔掉）。
+    /// 所以「未成·钱不够」这个计数里，有多少是<b>经济事实</b>、有多少是<b>抽样运气</b>，
+    /// 原本**分不开** —— 而两者的设计含义完全相反。
+    /// 场景：Alice 有 4 金；Bob 卖石料（5 金）、Carol 卖木料（3 金）。
+    /// 抽样下标 0 → 摊主按 Id 排序 → <c>h-bob</c> 在前 → 抽中 5 金的那个 → 买不起。
+    /// 但**全场有 3 金的木料** ⇒ 这是<b>抽样运气</b>，不是真没钱。
+    /// </remarks>
+    [TestCase]
+    public void SimulateShopping_NotEnoughGold_ReportsBalanceAndCheapestPrice()
+    {
+        var (heroes, _, svc) = MakeScene(aliceGold: 4L);
+        svc.PlaceStall(Bob, Stone, 5, 10.0);     // 5 金
+        AddCarol(heroes, svc);                    // Carol 卖木料 = 3 金
+        var hbs = new HeroBehaviorService(svc, id => heroes.TryGetValue(id, out var h) ? h : null, AlwaysZero);
+
+        var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
+
+        Assertions.AssertThat(r.SkipReason)
+            .IsEqual(HeroBehaviorService.ShoppingSkipReason.NotEnoughGold);
+        Assertions.AssertThat(r.BuyerGold).IsEqual(4L);
+        Assertions.AssertThat(r.CheapestPrice).IsEqual(3L);
+        // 余额 ≥ 最便宜的可买摊价 ⇒ **抽样运气**（有便宜选项却没抽中）
+        Assertions.AssertThat(r.BuyerGold!.Value >= r.CheapestPrice!.Value).IsTrue();
+    }
+
+    /// <summary>英雄<b>真的没钱</b>（全场都买不起）→ 余额 &lt; 最便宜价。</summary>
+    [TestCase]
+    public void SimulateShopping_NotEnoughGold_BrokeHero_HasNoAffordableOption()
+    {
+        var (heroes, _, svc) = MakeScene(aliceGold: 1L);
+        svc.PlaceStall(Bob, Stone, 5, 10.0);     // 5 金
+        AddCarol(heroes, svc);                    // Carol 卖木料 = 3 金
+        var hbs = new HeroBehaviorService(svc, id => heroes.TryGetValue(id, out var h) ? h : null, AlwaysZero);
+
+        var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
+
+        Assertions.AssertThat(r.SkipReason)
+            .IsEqual(HeroBehaviorService.ShoppingSkipReason.NotEnoughGold);
+        Assertions.AssertThat(r.BuyerGold).IsEqual(1L);
+        Assertions.AssertThat(r.CheapestPrice).IsEqual(3L);
+        // 余额 < 最便宜的可买摊价 ⇒ **真 scarcity**
+        Assertions.AssertThat(r.BuyerGold!.Value < r.CheapestPrice!.Value).IsTrue();
+    }
+
+    /// <summary>成交时也带这两个数（余额是**买之前**的）。</summary>
+    [TestCase]
+    public void SimulateShopping_Bought_AlsoReportsBalanceAndCheapestPrice()
+    {
+        var (heroes, _, svc) = MakeScene(aliceGold: 100L);
+        svc.PlaceStall(Bob, Stone, 5, 10.0);
+        var hbs = new HeroBehaviorService(svc, id => heroes.TryGetValue(id, out var h) ? h : null, AlwaysZero);
+
+        var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
+
+        Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Bought);
+        Assertions.AssertThat(r.BuyerGold).IsEqual(100L);
+        Assertions.AssertThat(r.CheapestPrice).IsEqual(5L);
+    }
+
+    /// <summary>没有可买摊（背包全满）→ <b>没有「最便宜价」这回事</b>（null）。</summary>
+    [TestCase]
+    public void SimulateShopping_BagFull_ReportsBalanceButNoCheapestPrice()
+    {
+        var (heroes, _, svc) = MakeScene();
+        heroes[Alice].RestoreBag(new Inventory().TryAdd(Stone, 5)!);
+        svc.PlaceStall(Bob, Stone, 5, 10.0);
+        var hbs = new HeroBehaviorService(svc, id => heroes.TryGetValue(id, out var h) ? h : null, AlwaysZero);
+
+        var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
+
+        Assertions.AssertThat(r.SkipReason).IsEqual(HeroBehaviorService.ShoppingSkipReason.BagFull);
+        Assertions.AssertThat(r.BuyerGold).IsEqual(100L);
+        Assertions.AssertThat(r.CheapestPrice).IsNull();
+    }
+
+    // ── D-054 阶段 5：背包上限造成的「只卖不买」单向阀 ──────────────────
+
+    /// <summary>
+    /// 🔴 <b>三种材料都背满 → 有钱也买不了任何东西</b> —— 英雄从此<b>只卖不买</b>。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>这是 2000 天采集里「一个人攥着 46% 的钱」的机制候选</b>：
+    /// 实测（X = 0.10 / 2000 天）里，<b>同一个英雄 h-28 在 97% 的日子是最富的</b>，
+    /// 持有 **46%** 的钱 —— 而中位英雄只有 1 ~ 2 金。</para>
+    /// <para><b>机制（这条测试就是它的证据）</b>：D-053 把「5 份上限」放在<b>决策层</b>，
+    /// 抽样前就把「该物品已满」的摊剔掉 ⇒ <b>三种材料都满时，一个摊都买不了</b>。
+    /// 于是这个英雄<b>卖出的收入永远花不出去</b> → 他变成一个<b>只进不出的钱袋子</b>，
+    /// 而村庄里的钱就这么一点点集中到他身上。</para>
+    /// <para><b>注意</b>：领域层背包容量是 0（无限）—— 满的只是<b>决策层</b>的判据，
+    /// 所以「买不进」不代表「拿不走」。</para>
+    /// </remarks>
+    [TestCase]
+    public void SimulateShopping_BagFullOnEveryItem_BuysNothing_EvenWithPlentyOfGold()
+    {
+        var (heroes, _, svc) = MakeScene(aliceGold: 999L);
+        // 三种材料各 5 份 → 决策层的「余量」全为 0
+        var bag = new Inventory().TryAdd(Stone, 5)!
+            .TryAdd(Wood, 5)!
+            .TryAdd(Cloth, 5)!;
+        heroes[Alice].RestoreBag(bag);
+        svc.PlaceStall(Bob, Stone, 5, 10.0);
+        AddCarol(heroes, svc);                     // Carol 卖木料
+        AddClothSeller(heroes, svc);              // 还有人卖布匹
+        var hbs = new HeroBehaviorService(svc, id => heroes.TryGetValue(id, out var h) ? h : null, AlwaysZero);
+
+        var r = hbs.SimulateShopping(Alice, today: 1, simTime: 20.0);
+
+        // 有 999 金，却**一个都买不了**
+        Assertions.AssertThat(r.Outcome).IsEqual(HeroBehaviorService.ShoppingOutcome.Skipped_PrecheckFailed);
+        Assertions.AssertThat(r.SkipReason).IsEqual(HeroBehaviorService.ShoppingSkipReason.BagFull);
+        Assertions.AssertThat(r.BuyerGold).IsEqual(999L);
+        Assertions.AssertThat(heroes[Alice].Wallet.Amount(GoldResource)).IsEqual(999L);
+        Assertions.AssertThat(heroes[Alice].LastShoppingDay).IsEqual(0);   // 没成交 → 不写「今天买过」
     }
 
     // ── D-053：背包上限判据移到抽样前 ────────────────────────────────

@@ -103,6 +103,27 @@ public sealed record EconomyRow
     /// </remarks>
     public string? Reason { get; init; }
 
+    /// <summary>
+    /// 买家在这次尝试时的<b>钱包余额</b>（金币；买之前）。<b>D-054 阶段 5 新增</b>。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么要有它</b>：「未成·钱不够」这个原因<b>分不清</b>
+    /// ① 英雄<b>真的没钱</b>（余额 0~2）② 英雄有钱但<b>抽中了一个买不起的摊</b>（余额 40）。
+    /// ① 是经济事实，② 是<b>抽样运气</b>（抽样不按购买力过滤）——
+    /// 两者的设计含义完全相反。没有这个字段就永远分不开。
+    /// </remarks>
+    public long? BuyerGold { get; init; }
+
+    /// <summary>
+    /// 当时<b>买得起的那批摊中最便宜的单价</b>（金币）。<b>D-054 阶段 5 新增</b>。
+    /// </summary>
+    /// <remarks>
+    /// 与 <see cref="BuyerGold"/> 合起来就能判定：
+    /// <c>BuyerGold ≥ CheapestPrice</c> ⇒ <b>有便宜选项却没抽中</b>（抽样运气）；
+    /// 否则 ⇒ <b>全场都买不起</b>（真 scarcity）。
+    /// </remarks>
+    public long? CheapestPrice { get; init; }
+
     // ── 每日经济快照（D-054 阶段 3）─────────────────────────────────────
     //
     // 守恒律的每一项都要能在流水里查到，否则「逐日核对」只能靠推算：
@@ -137,6 +158,37 @@ public sealed record EconomyRow
 
     /// <summary>快照日<b>待发零头</b>（单位 1/100 金；已挣到但还没进钱包的钱）。</summary>
     public long? GoldPending { get; init; }
+
+    // ── 人均金币的分布（D-054 阶段 5）────────────────────────────────────
+    //
+    // 「流通池稳态」只管**合计**稳不稳；**合计稳 ≠ 钱分得匀**。
+    // 快照只记合计 ⇒ 分不清「人人 40 金」与「3 个人 500 金、34 个人 0 金」——
+    // 而这两种经济体感天差地别。
+    // ⇒ 记 5 个分位点（最小 / p25 / 中位 / p75 / 最大），足以看出集中度。
+
+    /// <summary>快照日<b>最穷</b>的英雄的钱包余额（金）。</summary>
+    public long? HeroGoldMin { get; init; }
+
+    /// <summary>快照日英雄钱包余额的 <b>p25</b>（下四分位；金）。</summary>
+    public long? HeroGoldP25 { get; init; }
+
+    /// <summary>快照日英雄钱包余额的<b>中位数</b>（金）。</summary>
+    public long? HeroGoldMedian { get; init; }
+
+    /// <summary>快照日英雄钱包余额的 <b>p75</b>（上四分位；金）。</summary>
+    public long? HeroGoldP75 { get; init; }
+
+    /// <summary>快照日<b>最富</b>的英雄的钱包余额（金）。</summary>
+    public long? HeroGoldMax { get; init; }
+
+    /// <summary>快照日<b>最富</b>的英雄的标识。</summary>
+    /// <remarks>
+    /// <b>为什么要有它</b>：分布字段只说「钱集中了」，<b>不说是谁</b>。
+    /// 若**始终是同一个人**在攒钱 ⇒ 是<b>规则/个体</b>层面的问题（一个人可以无限囤、
+    /// 别人买不动）；若**在轮换** ⇒ 是<b>系统性</b>的（每个人轮流富一阵）。
+    /// **两者的修法完全不同**，而只靠分布分不开。
+    /// </remarks>
+    public string? HeroGoldTopId { get; init; }
 }
 
 /// <summary>
@@ -304,6 +356,8 @@ public sealed class EconomyLog : IDisposable
     /// </param>
     /// <param name="seller">相关摊主（可空）。</param>
     /// <param name="item">相关物品（可空）。</param>
+    /// <param name="buyerGold">买家当时的<b>钱包余额</b>（可空）。</param>
+    /// <param name="cheapestPrice">当时<b>买得起的摊里最便宜的单价</b>（可空）。</param>
     /// <returns>写入了就 true；文件已关 / 缺必要字段就 false。</returns>
     /// <remarks>
     /// <para><b>为什么它是直写入口，而不是走 <see cref="Append(DomainEvent)"/></b>：
@@ -325,7 +379,8 @@ public sealed class EconomyLog : IDisposable
     /// </remarks>
     public bool AppendShoppingMissed(
         double simTime, string hero, string reason,
-        string? seller = null, string? item = null)
+        string? seller = null, string? item = null,
+        long? buyerGold = null, long? cheapestPrice = null)
     {
         if (_writer is null) return false;
         if (string.IsNullOrEmpty(hero)) return false;
@@ -346,6 +401,8 @@ public sealed class EconomyLog : IDisposable
             Seller = seller,
             Item = item,
             Reason = reason,
+            BuyerGold = buyerGold,
+            CheapestPrice = cheapestPrice,
         };
 
         _writer.WriteLine(JsonSerializer.Serialize(row, Options));
@@ -366,6 +423,13 @@ public sealed class EconomyLog : IDisposable
     /// <param name="taxCarry">税额余数（单位 1/100 金）。</param>
     /// <param name="heroCount">英雄人数。</param>
     /// <param name="builders">在工地的人手数。</param>
+    /// <param name="goldPending">待发零头（单位 1/100 金）。</param>
+    /// <param name="heroGoldMin">最穷英雄的钱包余额（金）。</param>
+    /// <param name="heroGoldP25">钱包余额 p25（金）。</param>
+    /// <param name="heroGoldMedian">钱包余额中位数（金）。</param>
+    /// <param name="heroGoldP75">钱包余额 p75（金）。</param>
+    /// <param name="heroGoldMax">最富英雄的钱包余额（金）。</param>
+    /// <param name="heroGoldTopId">最富英雄的标识。</param>
     /// <returns>写入了就 true；文件已关就 false。</returns>
     /// <remarks>
     /// <b>为什么是「直写」而不是事件</b>：快照是<b>读数</b>（某一刻的经济状态），
@@ -382,7 +446,13 @@ public sealed class EconomyLog : IDisposable
         long taxCarry,
         long heroCount,
         long builders,
-        long goldPending = 0)
+        long goldPending = 0,
+        long? heroGoldMin = null,
+        long? heroGoldP25 = null,
+        long? heroGoldMedian = null,
+        long? heroGoldP75 = null,
+        long? heroGoldMax = null,
+        string? heroGoldTopId = null)
     {
         if (_writer is null) return false;
 
@@ -405,6 +475,12 @@ public sealed class EconomyLog : IDisposable
             HeroCount = heroCount,
             Builders = builders,
             GoldPending = goldPending,
+            HeroGoldMin = heroGoldMin,
+            HeroGoldP25 = heroGoldP25,
+            HeroGoldMedian = heroGoldMedian,
+            HeroGoldP75 = heroGoldP75,
+            HeroGoldMax = heroGoldMax,
+            HeroGoldTopId = heroGoldTopId,
         };
 
         _writer.WriteLine(JsonSerializer.Serialize(row, Options));

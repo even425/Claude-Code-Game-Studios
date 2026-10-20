@@ -377,6 +377,64 @@ public class EconomyLogTests
         }
     }
 
+    /// <summary>
+    /// D-054 阶段 5：未成行还要记<b>买家余额</b>与<b>最便宜可买价</b>。
+    /// </summary>
+    /// <remarks>
+    /// 没有这两个字段，「未成·钱不够」就<b>分不清</b>
+    /// ① 英雄真没钱（经济事实）② 英雄有钱但抽签抽到贵的（抽样运气）。
+    /// </remarks>
+    [TestCase]
+    public void AppendShoppingMissed_WritesBuyerGoldAndCheapestPrice()
+    {
+        string path = TempPath("missed-afford");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+            bool written = log.AppendShoppingMissed(
+                7 * SimSecondsPerDay, "甲", "NotEnoughGold", "乙", "石料",
+                buyerGold: 4L, cheapestPrice: 3L);
+
+            Assertions.AssertThat(written).IsTrue();
+
+            log.Close();   // Windows：活跃写句柄与读冲突 —— 先关再读
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var row = doc.RootElement;
+
+            Assertions.AssertThat(row.GetProperty("BuyerGold").GetInt64()).IsEqual(4L);
+            Assertions.AssertThat(row.GetProperty("CheapestPrice").GetInt64()).IsEqual(3L);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    /// <summary>不传这两个数 → 字段为 <c>null</c>（旧样本没有它们，分析脚本据此判「无法判定」）。</summary>
+    [TestCase]
+    public void AppendShoppingMissed_WithoutAffordability_LeavesFieldsNull()
+    {
+        string path = TempPath("missed-noafford");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+            log.AppendShoppingMissed(1.0, "甲", "BagFull");
+
+            log.Close();
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var row = doc.RootElement;
+
+            Assertions.AssertThat(row.GetProperty("BuyerGold").ValueKind)
+                .IsEqual(System.Text.Json.JsonValueKind.Null);
+            Assertions.AssertThat(row.GetProperty("CheapestPrice").ValueKind)
+                .IsEqual(System.Text.Json.JsonValueKind.Null);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
     /// <summary>缺必要字段 → 拒写（不写半行）。</summary>
     [TestCase]
     public void AppendShoppingMissed_EmptyHeroOrReason_IsRejected()
@@ -493,6 +551,79 @@ public class EconomyLogTests
             Assertions.AssertThat(row.GetProperty("TaxCarry").GetInt64()).IsEqual(10L);
             Assertions.AssertThat(row.GetProperty("HeroCount").GetInt64()).IsEqual(3L);
             Assertions.AssertThat(row.GetProperty("Builders").GetInt64()).IsEqual(1L);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// 快照行还要记<b>人均金币的分布</b>（D-054 阶段 5）——
+    /// 「合计稳」不等于「钱分得匀」。
+    /// </summary>
+    /// <remarks>
+    /// 只有 5 个分位点，但足以区分「人人 40 金」与「3 个人 500 金、其余 0 金」——
+    /// 而这两种经济体感天差地别，**只看合计是看不出来的**。
+    /// </remarks>
+    [TestCase]
+    public void AppendSnapshot_WritesHeroGoldDistribution()
+    {
+        string path = TempPath("snapshot-dist");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+            bool written = log.AppendSnapshot(
+                7 * SimSecondsPerDay,
+                heroGoldTotal: 160, villageGold: 35, villageMaterial: 482,
+                goldGranted: 80, goldSpent: 50, upgrades: 1,
+                taxCarry: 10, heroCount: 3, builders: 1,
+                goldPending: 12,
+                heroGoldMin: 0, heroGoldP25: 20, heroGoldMedian: 40,
+                heroGoldP75: 80, heroGoldMax: 100,
+                heroGoldTopId: "h-7");
+
+            Assertions.AssertThat(written).IsTrue();
+
+            log.Close();
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var row = doc.RootElement;
+
+            Assertions.AssertThat(row.GetProperty("HeroGoldMin").GetInt64()).IsEqual(0L);
+            Assertions.AssertThat(row.GetProperty("HeroGoldP25").GetInt64()).IsEqual(20L);
+            Assertions.AssertThat(row.GetProperty("HeroGoldMedian").GetInt64()).IsEqual(40L);
+            Assertions.AssertThat(row.GetProperty("HeroGoldP75").GetInt64()).IsEqual(80L);
+            Assertions.AssertThat(row.GetProperty("HeroGoldMax").GetInt64()).IsEqual(100L);
+            // 最富的是谁 —— 「同一个人一直囤」vs「轮流富」，修法完全不同
+            Assertions.AssertThat(row.GetProperty("HeroGoldTopId").GetString()).IsEqual("h-7");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    /// <summary>不传分布 → 字段为 <c>null</c>（旧样本没有它们）。</summary>
+    [TestCase]
+    public void AppendSnapshot_WithoutDistribution_LeavesFieldsNull()
+    {
+        string path = TempPath("snapshot-nodist");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+            log.AppendSnapshot(1.0, 1, 1, 1, 1, 1, 1, 1, 1, 1);
+
+            log.Close();
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var row = doc.RootElement;
+
+            foreach (var name in new[] { "HeroGoldMin", "HeroGoldP25", "HeroGoldMedian", "HeroGoldP75", "HeroGoldMax" })
+            {
+                Assertions.AssertThat(row.GetProperty(name).ValueKind)
+                    .IsEqual(System.Text.Json.JsonValueKind.Null);
+            }
+            Assertions.AssertThat(row.GetProperty("HeroGoldTopId").ValueKind)
+                .IsEqual(System.Text.Json.JsonValueKind.Null);
         }
         finally
         {

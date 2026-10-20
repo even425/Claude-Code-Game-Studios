@@ -150,8 +150,22 @@ public static class Chronicle
     {
         "从{w}来的{n}今天到了村里。{s}。",
         "{w}那边又送来一个。{a}{n}站在村口没进来，{o}过去拉的。",
-        "{n}是{w}来的。村里第一次见这种{s}的人。",
+        // ⚠️ 特征是**句子**（"手永远是咸的"），不是名词短语 ——
+        // 所以不能包进「这种{s}的人」：**那样会吃掉特征结尾的「的」**
+        // （B6a：曾经渲染出「村里第一次见这种手永远是咸的人」）。
+        // 改用「破折号 + 特征」把它当**从句**用，与上一条模板一致。
+        "{n}是{w}来的。村里第一次见这样的——{s}。",
     };
+
+    /// <summary>「到场」模板（**internal 只为测试**能枚举 —— 守卫见 <c>ChronicleTests</c>）。</summary>
+    internal static IReadOnlyList<string> ArriveTemplates => Arrive;
+
+    /// <summary>把一个「到场」模板套上给定的人/来处/特征（**internal 只为测试**）。</summary>
+    internal static string RenderArriveForTest(string template, string name, string world, string trait)
+        => template
+            .Replace("{n}", name)
+            .Replace("{w}", world)
+            .Replace("{s}", trait);
 
     public static Entry Summoned(int day, HeroAgent h, string world, string trait)
     {

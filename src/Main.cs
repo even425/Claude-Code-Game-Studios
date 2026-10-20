@@ -267,6 +267,68 @@ public partial class Main : Node2D
     private long _pendingRewardAmount;
 
     /// <summary>
+    /// 本局使用的<b>价格表</b>（D-054 阶段 7：从 <c>config/prices.json</c> 读，读不到则用占位表）。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么要外部化</b>：价格本身是【待定 T-007】（开发者与 ChatGPT 商定），
+    /// 而<b>货币侧的全部标定</b>（X 的固定点、稳态、分布）都随价格变。
+    /// 把表放外面 ⇒ 「开发者定价格 → 重跑标定」= 改一个文件 + 跑一条命令。
+    /// </remarks>
+    private ClaudeCodeGameStudios.Domain.Items.PriceBook _priceBook =
+        ClaudeCodeGameStudios.Domain.Items.PriceBook.Default;
+
+    /// <summary>价格表的<b>来源说明</b>（写进采集日志，便于溯源）。</summary>
+    private string _priceBookSource = "内置占位表（T-007 未定）";
+
+    /// <summary>
+    /// 载入价格表：<b>外部文件优先</b>，读不到 / 解析失败 ⇒ <b>退回占位表</b>。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>查找顺序</b>：① <c>--prices=&lt;路径&gt;</c>（命令行显式指定）
+    /// ② <c>res://config/prices.json</c>（仓库里的那份）
+    /// ③ <c>user://prices.json</c>（导出后的运行时覆盖）
+    /// ④ 内置占位表。</para>
+    /// <para><b>为什么解析失败不中止游戏</b>：价格表坏了应该退回占位表继续跑，
+    /// 而不是让游戏起不来（与「掉落表配错不发放」同一条原则）。</para>
+    /// </remarks>
+    private void LoadPriceBook()
+    {
+        var candidates = new List<string>();
+        var explicitPath = OS.GetCmdlineUserArgs()
+            .FirstOrDefault(a => a.StartsWith("--prices=", StringComparison.Ordinal))?
+            .Substring("--prices=".Length);
+        if (!string.IsNullOrWhiteSpace(explicitPath))
+        {
+            candidates.Add(explicitPath);
+        }
+
+        candidates.Add(Godot.ProjectSettings.GlobalizePath("res://config/prices.json"));
+        candidates.Add(Path.Combine(OS.GetUserDataDir(), "prices.json"));
+
+        foreach (var path in candidates)
+        {
+            if (!ClaudeCodeGameStudios.Domain.Items.PriceBook.TryLoadFromFile(
+                    path, out var book, out var error))
+            {
+                if (File.Exists(path))
+                {
+                    GD.Print($"PRICEBOOK 忽略 {path}：{error}");
+                }
+                continue;
+            }
+
+            _priceBook = book!;
+            _priceBookSource = path;
+            GD.Print($"PRICEBOOK 使用外部价格表 {path}：{book!.Describe()}");
+            return;
+        }
+
+        _priceBook = ClaudeCodeGameStudios.Domain.Items.PriceBook.Default;
+        _priceBookSource = "内置占位表（config/prices.json 不存在或不可读）";
+        GD.Print($"PRICEBOOK {_priceBookSource}：{_priceBook.Describe()}");
+    }
+
+    /// <summary>
     /// 副本金币报酬的默认值（单位 1/100 金）。
     /// </summary>
     /// <remarks>
@@ -598,6 +660,10 @@ public partial class Main : Node2D
 
     public override void _Ready()
     {
+        // 价格表（D-054 阶段 7）：**必须先于所有用价的服务**装载 ——
+        // 摆摊、掉落、发放都拿同一张表，不能有的用外部表、有的用占位表。
+        LoadPriceBook();
+
         BuildScene();
 
         // 关系应用入口：社交、同队副本都走它（幂等键与双向规则在应用层）。
@@ -608,7 +674,7 @@ public partial class Main : Node2D
         // 不另建一套平行的物品系统。
         _itemGrant = new ClaudeCodeGameStudios.Application.ItemGrantService(
             id => _heroes.FirstOrDefault(h => h.Id == id),
-            ClaudeCodeGameStudios.Domain.Items.PriceBook.Default);
+            _priceBook);
 
         // R-05：战利品内容 = **掉落表**（权重抽取）。物品注册表管「是什么、什么稀有度」，
         // 价格表管「多少钱」；掉落表引用物品 Id，配置有问题时**不发放**并记一笔
@@ -617,7 +683,7 @@ public partial class Main : Node2D
         _lootProvider = new ClaudeCodeGameStudios.Application.DungeonLootProvider(
             new[] { ClaudeCodeGameStudios.Application.DefaultLootTables.For(DungeonName) },
             ClaudeCodeGameStudios.Domain.Items.ItemCatalog.Default,
-            ClaudeCodeGameStudios.Domain.Items.PriceBook.Default,
+            _priceBook,
             error => GD.Print($"LOOTCONFIG {error}"));
 
         // 结算器必须在这里造：它的两个委托是本类的方法组，
@@ -795,7 +861,7 @@ public partial class Main : Node2D
         // heroLookup 委托：用 HeroAgent.Id（已设）查 —— D-0…（略）
         _stallService = new ClaudeCodeGameStudios.Application.Stall.StallService(
             _villageModel,
-            ClaudeCodeGameStudios.Domain.Items.PriceBook.Default,
+            _priceBook,
             id => _heroes.FirstOrDefault(h => h.Id == id));
 
         // D-054-02：村庄升级的扣款（**金币 + 材料**）。
@@ -2406,6 +2472,7 @@ public partial class Main : Node2D
         GD.Print($"COLLECT 开始：目标 {days} 天 · 种子 {BootSeed}" +
                  $"（--seed= 可固定；不固定则每次运行都不同）" +
                  $" · 金币报酬 X = {_goldRewardUnits / 100.0:0.##} 金/参战者" +
+                 $" · 价格表 = {_priceBookSource}（{_priceBook.Describe()}）" +
                  $" · 流水路径 = {_economyLog?.FilePath ?? "（无）"}");
     }
 
@@ -2522,7 +2589,7 @@ public partial class Main : Node2D
     /// </remarks>
     private void OpenStallsForCollection()
     {
-        var book = ClaudeCodeGameStudios.Domain.Items.PriceBook.Default;
+        var book = _priceBook;
         int day = (int)_clock.Day;
 
         for (int i = 0; i < _heroes.Count; i++)

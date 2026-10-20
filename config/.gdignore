@@ -1,0 +1,3 @@
+此目录对 Godot 不可见（.gdignore）。
+其中的文件由程序用 System.IO 直接读写，不走 Godot 的资源导入系统 ——
+所以不会产生 .import 文件，也不会被打进导出包。

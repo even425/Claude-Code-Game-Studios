@@ -140,7 +140,10 @@ public static class HeroFactory
         string dil = roll < liverBar ? "肝"
                    : roll < idleBar  ? "随手" : "挂机";
 
-        var (localAt, hours, tz) = ScheduleFor(p, dil);
+        // ⚠️ 这里原来算「时区 / 作息」（<c>ScheduleFor</c>）—— **算完就丢**
+        // （三个返回值一个都没进下面的对象初始化器）。
+        // 那套「时区作息」设计已由 **D-001** 判死（英雄总在场，不做在线窗口），
+        // 留着它只会让人以为「作息」还在起作用。2026-10-21 清理。
 
         var hero = new HeroAgent
         {
@@ -150,74 +153,8 @@ public static class HeroFactory
             Power = pow,
             Speed = spd,
             Grit = grt,
-
-
-
         };
         return new Summoned(hero, w.Name, w.Traits[_rng.Next(w.Traits.Length)]);
     }
 
-    /// <summary>
-    /// 他们从地球各处来。**时区是最要紧的一栏** —— 地球一边是晚上，另一边就是早上，
-    /// 所以村庄不会天黑。人越多，24 小时越难有空档。
-    ///
-    /// 这里给的只是他们**自己那边**的作息偏好，性格只影响偏好不影响许可：
-    /// 莽爱在本地深夜上线，贪爱在本地白天，傲什么时候都行。
-    /// </summary>
-    private static readonly float[] TimeZones =
-        { -11f, -8f, -5f, -3f, 0f, 1f, 3f, 5f, 8f, 9f, 13f };
-
-    /// <summary>
-    /// 时区是**加权抽，不是按性格切分** —— 裁定（2026-10-17）。
-    ///
-    /// 切分看着更干净，但它会把时区池劈成两半，早先靠「时区一散洞自己就没了」
-    /// 补上的那个清晨空档有可能重新裂开。**池子不动，只压概率。**
-    ///
-    ///  weighting 的理由：莽是夜里肝副本的人，多半在东亚那边；
-    /// 贪是白天做买卖的人，多半在北美。**这是倾向不是规则** ——
-    /// 花名册上你慢慢会看出「莽好像都在东边」，但推不出「今晚一定强」。
-    /// 可读，不可解。这正是这个游戏要的手感。
-    /// </summary>
-    private static int WeightFor(string p, float tz)
-    {
-        bool eastNight = tz >= 8f;      // 东八、东九、新西兰 —— 当地正是深夜
-        bool usDay     = tz <= -3f;      // 北美西/中/东岸 —— 当地正是白天
-        return p switch
-        {
-            "莽" => eastNight ? 10 : 1,
-            "贪" => usDay ? 10 : 1,
-            _    => 1,                    // 傲：什么时候都行
-        };
-    }
-
-    private static float PickTimezone(string p)
-    {
-        int total = 0;
-        foreach (float tz in TimeZones) total += WeightFor(p, tz);
-        int r = _rng.Next(total);
-        foreach (float tz in TimeZones)
-        {
-            r -= WeightFor(p, tz);
-            if (r < 0) return tz;
-        }
-        return TimeZones[TimeZones.Length - 1];
-    }
-
-    private static (float localAt, float hours, float tz) ScheduleFor(string p, string dil)
-    {
-        float localAt = p switch
-        {
-            "莽" => 19f + _rng.NextSingle() * 4f,          // 本地深夜上线
-            "贪" => 9f + _rng.NextSingle() * 6f,           // 本地白天
-            _    => 13f + _rng.NextSingle() * 9f,          // 什么时候都行
-        };
-        float hours = p switch
-        {
-            "莽" => 4f + _rng.NextSingle() * 4f,
-            "贪" => 4f + _rng.NextSingle() * 3f,
-            _    => 2.5f + _rng.NextSingle() * 4f,
-        };
-        hours *= dil switch { "肝" => 1.25f, "挂机" => 0.70f, _ => 1.0f };
-        return (localAt, Math.Clamp(hours, 1.5f, 9f), PickTimezone(p));
-    }
 }

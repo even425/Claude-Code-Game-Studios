@@ -26,6 +26,111 @@ public class PriceBookTests
     private static readonly ItemId Cloth = new("布匹");
     private static readonly ItemId Jade = new("翡翠");   // 故意没在默认表
 
+    // ── 外部价格表（D-054 阶段 7）──────────────────────────────────────────
+
+    /// <summary>外部价格表能读出来，且<b>注释键（<c>_</c> 开头）被忽略</b>。</summary>
+    [TestCase]
+    public void TryLoadFromJson_ReadsItems_AndIgnoresCommentKeys()
+    {
+        const string json = """
+        {
+          "_说明": "这是注释，不该被当成物品",
+          "石料": 5,
+          "木料": 3,
+          "布匹": 8
+        }
+        """;
+
+        bool ok = PriceBook.TryLoadFromJson(json, out var book, out var error);
+
+        Assertions.AssertThat(ok).IsTrue();
+        Assertions.AssertThat(error).IsNull();
+        Assertions.AssertThat(book!.PriceOf(Stone)).IsEqual(5L);
+        Assertions.AssertThat(book!.PriceOf(Wood)).IsEqual(3L);
+        Assertions.AssertThat(book!.PriceOf(Cloth)).IsEqual(8L);
+        // 注释键没被当成商品
+        Assertions.AssertThat(book!.PriceOf(new ItemId("_说明"))).IsEqual(0L);
+    }
+
+    /// <summary>价格表<b>坏了</b> ⇒ 明确失败 + 原因（调用方据此退回占位表）。</summary>
+    [TestCase]
+    public void TryLoadFromJson_BrokenJson_FailsWithReason()
+    {
+        bool ok = PriceBook.TryLoadFromJson("{ 这不是 json", out var book, out var error);
+
+        Assertions.AssertThat(ok).IsFalse();
+        Assertions.AssertThat(book).IsNull();
+        Assertions.AssertThat(error).IsNotNull();
+    }
+
+    /// <summary>负价 ⇒ 拒（与构造期同一条防线：不为负）。</summary>
+    [TestCase]
+    public void TryLoadFromJson_NegativePrice_IsRejected()
+    {
+        bool ok = PriceBook.TryLoadFromJson("""{"石料": -1}""", out var book, out var error);
+
+        Assertions.AssertThat(ok).IsFalse();
+        Assertions.AssertThat(book).IsNull();
+        Assertions.AssertThat(error).IsNotNull();
+    }
+
+    /// <summary>空表 / 只有注释 ⇒ 拒（不然会得到一张「什么都不卖」的表）。</summary>
+    [TestCase]
+    public void TryLoadFromJson_EmptyOrOnlyComments_IsRejected()
+    {
+        bool emptyOk = PriceBook.TryLoadFromJson("{}", out _, out _);
+        bool commentOnlyOk = PriceBook.TryLoadFromJson("""{"_说明": "只有注释"}""", out _, out _);
+
+        Assertions.AssertThat(emptyOk).IsFalse();
+        Assertions.AssertThat(commentOnlyOk).IsFalse();
+    }
+
+    /// <summary>文件不存在 ⇒ 失败但**不抛**（游戏要能退回占位表继续跑）。</summary>
+    [TestCase]
+    public void TryLoadFromFile_MissingFile_FailsWithoutThrowing()
+    {
+        bool ok = PriceBook.TryLoadFromFile(
+            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "no-such-prices-xyz.json"),
+            out var book, out var error);
+
+        Assertions.AssertThat(ok).IsFalse();
+        Assertions.AssertThat(book).IsNull();
+        Assertions.AssertThat(error).IsNotNull();
+    }
+
+    /// <summary>
+    /// 仓库里那份 <c>config/prices.json</c> 必须**能读出来**，且与占位表一致。
+    /// </summary>
+    /// <remarks>
+    /// 这条测试守的是「开发者改了那个文件之后，游戏还是能起来」这条链：
+    /// 格式错 ⇒ 退回占位表（不崩），但**开发者在采集日志里会看到 PRICEBOOK 那行**。
+    /// </remarks>
+    [TestCase]
+    public void ConfigPricesFile_Loads_AndMatchesThePlaceholderUntilItIsDecided()
+    {
+        // 从测试程序集所在目录**向上找**仓库根（不写死层数 —— 改输出目录就会断）
+        var dir = new System.IO.DirectoryInfo(
+            System.IO.Path.GetDirectoryName(
+                System.Reflection.Assembly.GetExecutingAssembly().Location)!);
+        string? path = null;
+        while (dir is not null)
+        {
+            var candidate = System.IO.Path.Combine(dir.FullName, "config", "prices.json");
+            if (System.IO.File.Exists(candidate)) { path = candidate; break; }
+            dir = dir.Parent;
+        }
+
+        Assertions.AssertThat(path).IsNotNull();
+
+        bool ok = PriceBook.TryLoadFromFile(path!, out var book, out var error);
+
+        Assertions.AssertThat(ok).IsTrue();
+        Assertions.AssertThat(error).IsNull();
+        Assertions.AssertThat(book!.PriceOf(Stone)).IsGreater(0L);
+        Assertions.AssertThat(book!.PriceOf(Wood)).IsGreater(0L);
+        Assertions.AssertThat(book!.PriceOf(Cloth)).IsGreater(0L);
+    }
+
     // ── 构造 ────────────────────────────────────────────────────────────────
 
     /// <summary>负价必须被拒 —— 构造期防线，事后改不回去。</summary>

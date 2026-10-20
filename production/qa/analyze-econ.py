@@ -119,6 +119,22 @@ def analyze(path, label, verbose=True):
         if pend < 0 or pend >= 100 * (s.get("HeroCount") or 0):
             pending_bad.append((s.get("Day"), pend))
 
+    # 流通金**增长率**（金/天）：判断「有没有固定点」的**唯一**指标。
+    #   用**后半段**做最小二乘：开局有一段瞬态（升级扣款把池子压下去），
+    #   全程直线会把那段也拉进来，斜率就既不是增长也不是稳态。
+    #   正 = 池子还在涨；负 = 池子还在缩；≈0 = 稳态。
+    growth = None
+    if len(snaps) >= 20:
+        half = snaps[len(snaps) // 2:]
+        xs = [float(s.get("Day") or 0) for s in half]
+        ys = [float(s.get("HeroGoldTotal") or 0) for s in half]
+        n = len(xs)
+        mx = sum(xs) / n
+        my = sum(ys) / n
+        den = sum((x - mx) ** 2 for x in xs)
+        if den > 0:
+            growth = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den
+
     # 税务口径：Σ村抽 + 在途余数 = 5% × 总成交额（**精确，无 floor**）
     #   推导：accumulated_i = carry_{i-1} + 5·total_i
     #         ΣvillageCut = (5·Σtotal - carry_n)/100  ⇒  ΣvillageCut + carry_n/100 = 5·Σtotal/100
@@ -156,6 +172,7 @@ def analyze(path, label, verbose=True):
         "conserve_bad": conserve_bad, "pending_bad": pending_bad,
         "tax_ok": tax_ok, "last_carry": last_carry,
         "tax_amount": tax_amount, "tax_cut": tax_cut,
+        "growth": growth,
         "last_snap": snaps[-1] if snaps else None,
     }
 
@@ -194,6 +211,9 @@ def analyze(path, label, verbose=True):
                 print(f"待发零头自洽  : 不一致（{len(pending_bad)} 天越界），前3个 {pending_bad[:3]}")
             else:
                 print("待发零头自洽  : 一致（每英雄 < 100，合计 < 100x人数）")
+            if growth is not None:
+                verdict = "稳态（≈0）" if abs(growth) < 0.5 else ("仍在涨" if growth > 0 else "仍在缩")
+                print(f"流通金增长率  : {growth:+.2f} 金/天（后半段最小二乘）→ {verdict}")
             s = m["last_snap"]
             print(f"末次快照      : 流通金 {s.get('HeroGoldTotal')} / 金库 {s.get('VillageGold')}"
                   f" / 材料 {s.get('VillageMaterial')} / 累计发放 {s.get('GoldGranted')}"
@@ -212,9 +232,16 @@ def group_summary(name, samples):
     print(f"{'指标':<16}{'最小':>12}{'最大':>12}{'均值':>12}")
     for key in ["rows", "settled", "won", "loot_sessions", "trades", "qty",
                 "amount", "village_cut", "missed", "snaps", "conserve_ok",
-                "conserve_skip"]:
-        vals = [s[key] for s in samples]
-        print(f"{key:<16}{min(vals):>12}{max(vals):>12}{sum(vals) / len(vals):>12.1f}")
+                "conserve_skip", "growth"]:
+        vals = [s[key] for s in samples if s.get(key) is not None]
+        if not vals:
+            print(f"{key:<16}{'(无数据)':>12}")
+            continue
+        if isinstance(vals[0], float):
+            print(f"{key:<16}{min(vals):>12.2f}{max(vals):>12.2f}"
+                  f"{sum(vals) / len(vals):>12.2f}")
+        else:
+            print(f"{key:<16}{min(vals):>12}{max(vals):>12}{sum(vals) / len(vals):>12.1f}")
     rates = [s["won"] / s["settled"] * 100 for s in samples if s["settled"]]
     if rates:
         print(f"{'副本成功率%':<16}{min(rates):>12.2f}{max(rates):>12.2f}"

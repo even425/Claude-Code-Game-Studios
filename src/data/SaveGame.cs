@@ -8,14 +8,17 @@ namespace ClaudeCodeGameStudios.Data;
 /// <summary>存档格式版本。基线 §13.7 要求存档带版本号并有迁移入口。</summary>
 public readonly record struct SaveVersion(int Major, int Minor)
 {
-    /// <summary>当前版本。<b>【已确认】</b>(0,4) —— 第四阶段 M4 升。</summary>
+    /// <summary>当前版本。<b>【已确认】</b>(0,5) —— R-05 第二轮 / D-052 升。</summary>
     /// <remarks>
-    /// <b>0,3 → 0,4</b>（`07` D-044 / 第四阶段 M4）：存档里增
-    /// <see cref="SaveGame.Stalls"/>、<see cref="SaveGame.AppliedPurchaseKeys"/>、
-    /// <see cref="SaveGame.DailyShoppingLastRunDay"/> 与 <see cref="HeroSave.LastShoppingDay"/>。
+    /// <b>0,4 → 0,5</b>（`07` **D-052**）：存档里增
+    /// <see cref="VillageSave.VillageCutRemainder"/>（村庄税额余数，单位 1/100 金）。
+    /// <para>
     /// 旧档<b>整份拒绝</b>（I11 + D-021/D-029/D-036 先例），<b>不</b>写迁移器。
+    /// 余数是<b>已经向买家收走、只是暂时没入账</b>的钱，读档后丢掉它等于让那部分钱凭空消失
+    /// —— 所以它必须跟着存档走。
+    /// </para>
     /// </remarks>
-    public static SaveVersion Current => new(0, 4);
+    public static SaveVersion Current => new(0, 5);
 
     /// <inheritdoc />
     public override string ToString() => $"{Major}.{Minor}";
@@ -252,6 +255,20 @@ public sealed class VillageSave
     public string Id { get; set; } = "";
     /// <summary>资源存量。</summary>
     public Dictionary<string, long> Resources { get; set; } = new();
+
+    /// <summary>
+    /// 村庄税额余数（单位：1/100 金）—— <b>0.5 新增</b>（D-052）。
+    /// </summary>
+    /// <remarks>
+    /// <para>5% 摊位税里<b>还没凑够 1 金</b>的那部分。D-052 把「残差归卖家」
+    /// 改成「残差累计归村庄金库」，于是这笔零头就成了**村庄的账**，
+    /// 必须跟着存档走 —— 否则读档后它会凭空消失（等于少收了玩家的钱）。</para>
+    /// <para><b>不塞进 <see cref="Resources"/></b>：那是「村庄持有的资源」，
+    /// 塞一个记账用的零头进去会让资源池的语义变脏（D-052 明确禁止）。</para>
+    /// <para><b>合法范围 [0, 99]</b>：单位是 1/100 金，满 100 就该入账了。</para>
+    /// </remarks>
+    public long VillageCutRemainder { get; set; }
+
     /// <summary>建筑列表。</summary>
     public List<BuildingSave> Buildings { get; set; } = new();
 }
@@ -739,6 +756,16 @@ public static class SaveValidator
                     $"village.resources['{resourceId}']",
                     $"资源余额 {amount} 为负 —— 不变量 I12。"));
             }
+        }
+
+        // 村庄税额余数：单位是 1/100 金，必须落在 [0, 99]（0.5 新增 · D-052）
+        if (save.Village.VillageCutRemainder < 0
+            || save.Village.VillageCutRemainder >= ClaudeCodeGameStudios.Domain.Stall.StallFee.UnitsPerGold)
+        {
+            errors.Add(new SaveError(
+                "village.villageCutRemainder",
+                $"村庄税额余数 {save.Village.VillageCutRemainder} 超出合法范围 "
+                + $"[0, {ClaudeCodeGameStudios.Domain.Stall.StallFee.UnitsPerGold - 1}]。"));
         }
 
         return errors.Count == 0 ? SaveValidationResult.Ok() : SaveValidationResult.Fail(errors);

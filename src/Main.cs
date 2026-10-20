@@ -2958,13 +2958,16 @@ public partial class Main : Node2D
                  $"（必须 0），当前 {a.Value}→{b.Value} = {_relationship.ValueOf(a, b)}");
 
         // ── 3. 存档：关系与幂等键必须真的装进去 ──
+        //    用**自检专用端口**：默认不写玩家存档（village-save.json）。
+        var selfTestSaves = SelfTestSaves();
         var save = BuildSave();
         GD.Print($"RELTEST BuildSave：版本 {save.Version}，" +
                  $"关系 {save.Relationships.Count} 条，幂等键 {save.AppliedRelationKeys.Count} 个");
+        GD.Print($"RELTEST 存档路径 = {selfTestSaves.FilePath}（自检专用，非玩家存档）");
 
         try
         {
-            _saves.Write(save);
+            selfTestSaves.Write(save);
         }
         catch (Exception ex)
         {
@@ -2981,7 +2984,7 @@ public partial class Main : Node2D
                  $"（应大于存盘时的 {savedForward}）");
 
         // ── 5. 读档：关系必须回到存盘那一刻 ──
-        var loaded = _saves.Read();
+        var loaded = selfTestSaves.Read();
         if (!loaded.Loaded)
         {
             GD.Print($"RELTEST FAIL 读档失败：{loaded.Describe()}");
@@ -3163,6 +3166,36 @@ public partial class Main : Node2D
     private ClaudeCodeGameStudios.Data.SavePort _saves = null!;
 
     /// <summary>
+    /// 自检专用的存档文件名 —— <b>与玩家存档刻意不同名</b>。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么</b>：<c>--save</c> / <c>--relations</c> 自检要真的写一次盘、读一次档。
+    /// 而 <c>_saves</c> 指向的正是<b>玩家存档</b>（<c>village-save.json</c>）——
+    /// 自检覆盖它是「跑个自检把存档清了」这种事故。
+    /// 所以自检用<b>自己的端口</b>，默认写 <c>selftest-village-save.json</c>。
+    /// <para>
+    /// 仍然保留 <c>--savepath=</c> 覆盖能力 —— 显式指定路径是调用方的明确意图
+    /// （例如临时目录、或刻意要验某个具体路径）。
+    /// </para>
+    /// </remarks>
+    private const string SelfTestSaveFileName = "selftest-village-save.json";
+
+    /// <summary>
+    /// 造一个<b>自检专用</b>的存档端口（默认不碰玩家存档）。
+    /// </summary>
+    /// <returns>存档端口。</returns>
+    private ClaudeCodeGameStudios.Data.SavePort SelfTestSaves()
+    {
+        var path = OS.GetCmdlineUserArgs()
+            .FirstOrDefault(a => a.StartsWith("--savepath=", StringComparison.Ordinal))?
+            .Substring("--savepath=".Length)
+            ?? $"user://{SelfTestSaveFileName}";
+
+        path = Godot.ProjectSettings.GlobalizePath(path);
+        return new ClaudeCodeGameStudios.Data.SavePort(path);
+    }
+
+    /// <summary>
     /// 把运行中的状态装进一份 <see cref="ClaudeCodeGameStudios.Data.SaveGame"/>。
     /// </summary>
     /// <remarks>
@@ -3181,6 +3214,9 @@ public partial class Main : Node2D
         {
             Id = _villageModel.Id,
             Resources = new Dictionary<string, long>(_villageModel.Snapshot()),
+            // R-05 第二轮 / D-052：村庄税额余数（0.5 新增）。
+            // 它是「已经向买家收走、还没凑够 1 金」的钱，必须跟着存档走。
+            VillageCutRemainder = _stallService.VillageCutCarry,
             // 建筑：表现层的工地尚未进入领域 Village（属 D-003 / B1-B3），故为空。
             // 这不是「忘了存」——是那边还没有可存的东西。
             Buildings = new List<ClaudeCodeGameStudios.Data.BuildingSave>(),
@@ -3404,6 +3440,11 @@ public partial class Main : Node2D
 
         _stallService.Restore(stallRecords, save.AppliedPurchaseKeys);
 
+        // R-05 第二轮 / D-052：村庄税额余数（0.5 新增）。
+        // 校验器已保证它在 [0, 99]；这里再走一次带检查的入口 ——
+        // 存档被外部改坏时，宁可拒绝读档，也不要带一个非法余数进运行时。
+        _stallService.RestoreVillageCutCarry(save.Village.VillageCutRemainder);
+
         // 每日购物闸门：读档回到存档那天，同一天不应再跑一遍尝试。
         _dailyShopping.RestoreLastRunDay(save.DailyShoppingLastRunDay);
 
@@ -3520,8 +3561,12 @@ public partial class Main : Node2D
                  (idsAligned ? "" :
                      $"：{string.Join("、", _heroes.Select((h, i) => $"{h.Name} {h.Id.Value}/{_states[i].Definition.Id.Value}"))}"));
 
+        // 自检用**自己的**存档端口：默认不写玩家存档（village-save.json）——
+        // 「跑个自检把存档清了」是事故，不是特性。
+        var selfTestSaves = SelfTestSaves();
+
         var save = BuildSave();
-        GD.Print($"SAVETEST 存档路径 = {_saves.FilePath}");
+        GD.Print($"SAVETEST 存档路径 = {selfTestSaves.FilePath}（自检专用，非玩家存档）");
         GD.Print($"SAVETEST 将写入：版本 {save.Version} 模拟时间 {save.SimTime:0.###}" +
                  $" 随机状态 {save.RandomState}");
         GD.Print($"SAVETEST 英雄 {save.Heroes.Count} 名" +
@@ -3536,7 +3581,7 @@ public partial class Main : Node2D
 
         try
         {
-            _saves.Write(save);
+            selfTestSaves.Write(save);
         }
         catch (Exception ex)
         {
@@ -3544,7 +3589,7 @@ public partial class Main : Node2D
             return;
         }
 
-        GD.Print($"SAVETEST 写盘成功，文件 {new FileInfo(_saves.FilePath).Length} 字节");
+        GD.Print($"SAVETEST 写盘成功，文件 {new FileInfo(selfTestSaves.FilePath).Length} 字节");
 
         // ── 存之前把游戏搅乱：材料花掉、队伍拆散、时间走一段 ──
         long matBefore = Mat;
@@ -3560,11 +3605,15 @@ public partial class Main : Node2D
             Array.Empty<string>());
         _dailyShopping.RestoreLastRunDay(int.MinValue);
         if (_heroes.Count >= 2) _heroes[1].LastShoppingDay = 0;
+        // R-05 第二轮 / D-052：税额余数也要搅乱 —— 它必须是被读档「找回来」的。
+        long carryBefore = _stallService.VillageCutCarry;
+        _stallService.RestoreVillageCutCarry(0);
         GD.Print($"SAVETEST 故意搅乱：材料 {matBefore} → {Mat}，队伍「{squadBefore}」已拆散，" +
-                 $"摊位已清空、每日购物闸门与 LastShoppingDay 已清零，随机状态已推进");
+                 $"摊位已清空、每日购物闸门与 LastShoppingDay 已清零，随机状态已推进，" +
+                 $"税额余数 {carryBefore} → 0");
 
         // ── 读档 ──
-        var loaded = _saves.Read();
+        var loaded = selfTestSaves.Read();
         GD.Print($"SAVETEST 读档结果 Loaded={loaded.Loaded}" +
                  (loaded.Loaded ? "" : $" 原因：{loaded.Describe()}"));
         if (!loaded.Loaded) return;
@@ -3579,6 +3628,8 @@ public partial class Main : Node2D
         GD.Print($"SAVETEST 读档后队伍「{string.Join("、", _squad.Select(h => h.Name))}」" +
                  $"（应为「{squadBefore}」——编成必须按存档恢复，不能「取前 N 个」重建）");
         GD.Print($"SAVETEST 已恢复的结算键 {string.Join(" | ", _settlement.AppliedKeys)}");
+        GD.Print($"SAVETEST 读档后税额余数 {_stallService.VillageCutCarry}" +
+                 $"（应为 {carryBefore}）→ {_stallService.VillageCutCarry == carryBefore}");
 
         // ── R-03：在场性 / 行动 / 目标 / 首通标记是否真的恢复 ──
         if (_states.Count >= 3)

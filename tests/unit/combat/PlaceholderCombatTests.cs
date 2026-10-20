@@ -244,22 +244,28 @@ public class PlaceholderCombatTests
             if (combat.DidHeroesWin(combat.Resolve("遭遇一", Crew))) wins++;
         }
 
-        // Assert —— 占位胜率 0.5；400 次抽样下 ±0.12 是极宽松的界
+        // Assert —— 占位胜率 0.65（D-052）；400 次抽样下 ±0.12 是极宽松的界
+        // （期望 260 胜，σ ≈ 9.5，±0.12 相当于 ±3.2σ，不会偶发）
         double rate = (double)wins / Trials;
-        Assertions.AssertThat(rate > 0.38 && rate < 0.62).IsTrue();
+        Assertions.AssertThat(rate > 0.53 && rate < 0.77).IsTrue();
     }
 
-    /// <summary>占位胜率必须是那个一眼可辨的值，而不是一个看起来调过的数。</summary>
+    /// <summary>占位胜率必须是 D-052 确认的那个值，而不是一个看起来调过的数。</summary>
     /// <remarks>
     /// 这条测的是<b>纪律</b>而不是行为：<c>07</c> §2.1 第 1 条说占位符
-    /// 「不得伪装成已定」。把 0.5 换成 0.473 会让人以为它经过调校，
-    /// 而它其实什么都没依据。改成别的整取值时，<b>连同本条断言一起</b>更新。
+    /// 「不得伪装成已定」。改这个数必须是<b>一次有记录的改动</b>（D-052 那样），
+    /// 而不是谁为了让它好看就动一下。
+    /// <para>
+    /// <b>它仍然是占位</b>：战斗公式属 T-004，尚未拍板；
+    /// 0.65 决定的是「副本要连赢几场才拿得到东西」这个经济节流阀，
+    /// <b>不代表最终的战斗平衡</b>。
+    /// </para>
     /// </remarks>
     [TestCase]
-    public void PlaceholderWinRate_IsAnObviouslyRoundNumber_NotAFakeTunedFigure()
+    public void PlaceholderWinRate_IsTheConfirmedValue_AndChangedDeliberately()
     {
         // Assert
-        Assertions.AssertThat(PlaceholderCombat.PlaceholderHeroWinRate).IsEqual(0.5);
+        Assertions.AssertThat(PlaceholderCombat.PlaceholderHeroWinRate).IsEqual(0.65);
     }
 
     // ── 5 · 随机源适配器 ───────────────────────────────────────────────────

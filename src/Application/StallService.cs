@@ -63,6 +63,44 @@ public sealed class StallService
     /// <summary>已处理的购买业务键（只读，供测试与 M4 持久化使用）。</summary>
     public IReadOnlyCollection<string> AppliedRequestIds => _appliedRequestIds;
 
+    /// <summary>
+    /// 村庄税额余数（单位：1/100 金，0..99）—— <b>D-052</b>。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>它是什么</b>：5% 摊位税里<b>还没凑够 1 金</b>的那部分。
+    /// 原实现逐笔 floor，单价 3/5/8 时每笔都 floor 到 0 → 村库永远收不到钱
+    /// （R-08 实测 5088 金成交额抽出 0 金）。累计之后，任何单价都最终能收齐 5%。</para>
+    ///
+    /// <para><b>状态所有者为什么是本类</b>：摊位交易只有这一条写路径
+    /// （<see cref="TryBuy"/>），余数必须和交易在<b>同一次提交</b>里更新，
+    /// 否则会出现「货交了、零头没记」或反之。放在别处就得多一次跨对象协调。</para>
+    /// </remarks>
+    private long _villageCutCarry;
+
+    /// <summary>村庄税额余数（只读；供存档与测试）。</summary>
+    public long VillageCutCarry => _villageCutCarry;
+
+    /// <summary>
+    /// 恢复村庄税额余数 —— <b>仅供读档</b>。
+    /// </summary>
+    /// <param name="carry">余数（单位：1/100 金）。必须 ∈ [0, 99]。</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="carry"/> 不在 [0, 99]。</exception>
+    /// <remarks>
+    /// 走这个口而不是公开 setter —— 与 <see cref="Restore"/> 同一规矩：
+    /// 「只有一个入口」要看得见，否则谁都能在半夜把余数改成 50。
+    /// </remarks>
+    public void RestoreVillageCutCarry(long carry)
+    {
+        if (carry < 0 || carry >= DomainStallFee.UnitsPerGold)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(carry), carry,
+                $"村庄税额余数必须在 [0, {DomainStallFee.UnitsPerGold - 1}] 之间。");
+        }
+
+        _villageCutCarry = carry;
+    }
+
     /// <summary>摊位目录（只读）。</summary>
     public IReadOnlyDictionary<HeroId, DomainStall> Stalls => _stalls;
 
@@ -274,9 +312,17 @@ public sealed class StallService
         var buyerHero = _heroLookup(buyer);
         if (sellerHero is null || buyerHero is null) return new(BuyOutcome.InvalidRequest, null);
 
-        // ── 算金额 + 拆 5% ──
-        long totalAmount = stall.UnitPrice * qty;
-        var (sellerNet, villageCut) = DomainStallFee.Compute(totalAmount);
+        // ── 算金额 + 拆 5%（含余数累计，D-052）──
+        //
+        // 金额乘法**必须溢出安全**：`UnitPrice × qty` 裸乘会溢出 long。
+        // 溢出不是「交易失败」，是「这笔单子根本不存在」→ 判为入参非法，
+        // **不能让异常冒到游戏循环里**（那会打断整个游戏）。
+        if (!TryMultiply(stall.UnitPrice, qty, out long totalAmount))
+        {
+            return new(BuyOutcome.InvalidRequest, null);
+        }
+
+        var (sellerNet, villageCut, newCarry) = DomainStallFee.Compute(totalAmount, _villageCutCarry);
 
         // ── 预检 + 一次性提交（I15）──
         var newSellerWallet = sellerHero.Wallet.TryAdd(Gold, sellerNet);
@@ -291,10 +337,17 @@ public sealed class StallService
         var newStall = stall.AfterSale(qty);
 
         // 村金库先写：它是唯一可能抛的一步。它失败 = 什么都没写。
+        //
+        // ⚠️ **余数必须在它之后写**（D-052）：`Village.Add` 用 checked 算术，
+        // 村金库接近上限时会抛 OverflowException。若先写余数再写金库，
+        // 抛出来就留下「余数记了、钱没入账」的半笔账。
         if (villageCut > 0)
         {
             _village.Add(Gold, villageCut);
         }
+
+        // 余数落定（纯内存赋值，不会抛）—— 与上面的金库入账是同一笔账的两半。
+        _villageCutCarry = newCarry;
 
         // 以下全是不可失败的赋值 —— 到这里已经没有半笔账的路径。
         sellerHero.ApplyTradeResult(newSellerWallet, sellerHero.Bag);   // 只换 Wallet
@@ -313,6 +366,45 @@ public sealed class StallService
             VillageCut = villageCut,
             Quantity = qty,
         });
+    }
+
+    /// <summary>
+    /// 溢出安全的乘法（<c>long × long</c>）。
+    /// </summary>
+    /// <param name="a">左操作数。</param>
+    /// <param name="b">右操作数。</param>
+    /// <param name="result">乘积；溢出时为 0。</param>
+    /// <returns>不溢出返回 true；溢出返回 false。</returns>
+    /// <remarks>
+    /// <b>为什么不直接用 <c>checked</c></b>：<c>checked</c> 会抛
+    /// <see cref="OverflowException"/>，而这条路径上的调用方
+    /// （<c>HeroBehaviorService</c> → <c>DailyShoppingService</c> → 游戏循环）
+    /// 并没有接住它 —— 异常会一路冒到 <c>_Process</c>，把游戏打断。
+    /// 交易金额溢出是「这笔单子不成立」，用<b>返回值</b>表达比用异常合适。
+    /// </remarks>
+    private static bool TryMultiply(long a, long b, out long result)
+    {
+        if (a == 0 || b == 0)
+        {
+            result = 0L;
+            return true;
+        }
+
+        // 负数不参与交易（单价与数量都非负），负数一律判非法。
+        if (a < 0 || b < 0)
+        {
+            result = 0L;
+            return false;
+        }
+
+        result = a * b;   // 默认 unchecked 语义；下面的除法比较负责判定溢出
+        if (result / b != a)
+        {
+            result = 0L;
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>收摊：状态变 Closed。<b>不</b>动英雄背包（库存归 0 时也是 Closed 而非"丢货"）。</summary>

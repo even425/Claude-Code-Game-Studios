@@ -16,15 +16,14 @@ namespace ClaudeCodeGameStudios.Application;
 /// <b>T-004</b>、基线 §16 #13）。规则拍板后<b>整类替换</b>即可，
 /// <see cref="DungeonFlow"/> 的流程与调度顺序一行都不用改。</para>
 ///
-/// <para><b>唯一的数是 <see cref="PlaceholderHeroWinRate"/>，而且它刻意长得像占位符：</b>
+/// <para><b>唯一的数是 <see cref="PlaceholderHeroWinRate"/>：</b>
 /// </para>
 /// <list type="bullet">
-/// <item><b>0.5</b> 而不是 0.473。<b>看起来合理的精度就是伪装成已定</b> ——
-/// 一个 0.473 会让人以为它经过调过。</item>
-/// <item><b>取整到 0.5</b> 是因为它此刻<b>根本不来自任何战斗考虑</b>，
-/// 只是「先让流程能跑起来」的最小值。</item>
+/// <item><b>0.65</b>（D-052 确认的实施参数）。</item>
+/// <item>它<b>仍然只是占位</b> —— 战斗公式尚未存在（T-004），
+/// 它不代表最终的战斗平衡，只决定「副本要连赢几场才拿得到东西」这个经济节流阀。</item>
 /// <item>它<b>集中在一个具名常量</b>上，不是散在代码里的字面量
-/// （<c>07</c> §2.1 第 2 条纪律）。</item>
+/// （<c>07</c> §2.1 第 2 条纪律）；改它必须是<b>一次有记录的改动</b>。</item>
 /// </list>
 ///
 /// <para><b>两个接缝必须自洽，所以判定只写一次。</b>
@@ -50,14 +49,27 @@ public sealed class PlaceholderCombat : IBattleResolver, IBattleOutcomeReader
     private const string LoserMarker = "【敌方胜】";
 
     /// <summary>
-    /// 【待定 T-004】占位胜率。**这不是设计值** —— 战斗公式尚未存在，
-    /// 它只是让 <see cref="DungeonFlow"/> 能跑通的一个最小值。
+    /// 【待定 T-004】占位胜率。<b>0.65</b>（`07` **D-052** 确认的实施参数）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>它不是设计值</b> —— 战斗公式尚未存在，它只是让
+    /// <see cref="DungeonFlow"/> 能跑通、并给经济一个节流阀。</para>
+    /// <para>
+    /// <b>为什么是 0.65</b>：副本要<b>连赢 3 场</b>（`DungeonFlow.DeclaredStageCount = 3`），
+    /// 所以副本成功率 = p³。原先 p=0.5 → 12.5%，实测 1000 模拟天才出 136 份掉落样本 ——
+    /// 产出量被压得太低，掉落数值无从谈起。p=0.65 → **0.65³ = 0.274625 ≈ 27.46%**。
+    /// </para>
+    /// <para>
+    /// <b>⚠️ 共享随机流</b>：本类用的是 <c>Main._rng</c>，与日常活动
+    /// <b>共用同一条随机流</b>。改这个数会<b>改变后续所有随机调用序列</b>，
+    /// 不只是战斗结果 —— 回归说明里必须写清这一点。
+    /// </para>
     /// <para>
     /// <b>删除条件</b>：T-004 拍板、真正的 <see cref="IBattleResolver"/> 落地之后，
     /// 本常量连同整类一起删除。
     /// </para>
-    /// </summary>
-    public const double PlaceholderHeroWinRate = 0.5;
+    /// </remarks>
+    public const double PlaceholderHeroWinRate = 0.65;
 
     private readonly IRandomSource _random;
 

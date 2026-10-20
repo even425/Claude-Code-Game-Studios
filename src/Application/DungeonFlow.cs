@@ -198,6 +198,18 @@ public sealed class DungeonFlow
     /// <summary>阶段 → 遭遇名的映射（注入点；默认见 <see cref="DefaultEncounterName"/>）。</summary>
     private readonly Func<DungeonStage, string> _encounterNaming;
 
+    /// <summary>
+    /// 参战队伍的<b>状态快照</b> —— 战斗解算能看到的「谁在场、什么情况」。
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠️ <b>它为什么是独立的一份，而不是 <c>DungeonRun.Participants</c> 本身</b>：
+    /// <c>05</c> §3.5 明写 <c>DungeonRun</c> 持有「<b>参与英雄 ID 快照</b>」——
+    /// 那是<b>规格</b>，不是实现偷懒。副本实例回答的是「<b>谁去了</b>」
+    /// （结算要对应「谁去了」，不是「读档瞬间队伍里还有谁」），
+    /// 而战斗要回答的是「<b>他们当时什么情况</b>」。<b>两个问题，不塞进一个实体。</b></para>
+    /// </remarks>
+    private readonly CombatPartySnapshot _party;
+
     /// <summary>已完成的阶段记录，按发生顺序。</summary>
     private readonly List<DungeonStageRecord> _records = new();
 
@@ -209,19 +221,28 @@ public sealed class DungeonFlow
     /// <param name="outcomeReader">胜负结论读者。</param>
     /// <param name="modifiers">建筑修饰来源；<c>null</c> 表示<b>无影响</b>（默认）。</param>
     /// <param name="encounterNaming">阶段 → 遭遇名；<c>null</c> 时用 <see cref="DefaultEncounterName"/>。</param>
+    /// <param name="party">
+    /// 参战队伍的<b>状态快照</b>；<c>null</c> 时按参与者标识造一份<b>空状态</b>的快照
+    /// （只有标识，没有特质/偏好）。
+    /// <para>⚠️ <b>空状态快照不是「没有队伍」</b>，而是「队伍状态不明」。
+    /// 它让既有调用点不必改，但也意味着<b>战斗看不到队伍配置</b> ——
+    /// 真要用「队伍配置影响结果」这条规则，调用方必须传真实快照。</para>
+    /// </param>
     /// <exception cref="ArgumentNullException"><paramref name="run"/>、<paramref name="resolver"/> 或 <paramref name="outcomeReader"/> 为 null。</exception>
     public DungeonFlow(
         DungeonRun run,
         IBattleResolver resolver,
         IBattleOutcomeReader outcomeReader,
         IDungeonModifier? modifiers = null,
-        Func<DungeonStage, string>? encounterNaming = null)
+        Func<DungeonStage, string>? encounterNaming = null,
+        CombatPartySnapshot? party = null)
     {
         _run = run ?? throw new ArgumentNullException(nameof(run));
         _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
         _outcomeReader = outcomeReader ?? throw new ArgumentNullException(nameof(outcomeReader));
         _modifiers = modifiers ?? new NoDungeonModifier();
         _encounterNaming = encounterNaming ?? DefaultEncounterName;
+        _party = party ?? CombatPartySnapshot.FromIds(_run.Participants);
     }
 
     /// <summary>创建并<b>进入</b>一次副本，返回它的流程驱动（常规入口）。</summary>
@@ -232,6 +253,12 @@ public sealed class DungeonFlow
     /// <param name="outcomeReader">胜负结论读者。</param>
     /// <param name="modifiers">建筑修饰来源；<c>null</c> 表示无影响（默认）。</param>
     /// <param name="encounterNaming">阶段 → 遭遇名；<c>null</c> 时用 <see cref="DefaultEncounterName"/>。</param>
+    /// <param name="party">
+    /// 参战队伍的<b>状态快照</b>；<c>null</c> 时按参与者标识造一份空状态快照。
+    /// <para>⚠️ 传了它，战斗就<b>能看到队伍配置</b>（成员、特质、偏好）——
+    /// 这是「队伍配置按规则影响副本结果」（IT-31）的<b>前置</b>；
+    /// 规则本身仍属【待定】T-004。</para>
+    /// </param>
     /// <returns>已处于 <see cref="DungeonStage.EncounterOne"/> 的流程。</returns>
     /// <exception cref="ArgumentException">标识为空或参与者为空（由 <see cref="DungeonRun.Create"/> 抛出）。</exception>
     /// <exception cref="ArgumentNullException"><paramref name="resolver"/> 或 <paramref name="outcomeReader"/> 为 null。</exception>
@@ -242,10 +269,12 @@ public sealed class DungeonFlow
         IBattleResolver resolver,
         IBattleOutcomeReader outcomeReader,
         IDungeonModifier? modifiers = null,
-        Func<DungeonStage, string>? encounterNaming = null)
+        Func<DungeonStage, string>? encounterNaming = null,
+        CombatPartySnapshot? party = null)
     {
         var flow = new DungeonFlow(
-            DungeonRun.Create(id, name, participants), resolver, outcomeReader, modifiers, encounterNaming);
+            DungeonRun.Create(id, name, participants), resolver, outcomeReader,
+            modifiers, encounterNaming, party);
 
         flow._run.Enter();
         return flow;
@@ -299,7 +328,7 @@ public sealed class DungeonFlow
 
         // 1. 解算：胜负由注入的 resolver 产出日志、由注入的 reader 读出结论。
         //    本类只转发，不判断。
-        var log = _resolver.Resolve(encounterName, _run.Participants)
+        var log = _resolver.Resolve(encounterName, _party)
                   ?? throw new InvalidOperationException(
                       $"战斗解算器 {nameof(IBattleResolver.Resolve)} 对遭遇「{encounterName}」返回了 null。"
                       + "没有日志的战斗无法被复核（基线 §8.5 D5）。");

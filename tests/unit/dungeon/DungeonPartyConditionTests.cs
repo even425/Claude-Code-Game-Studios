@@ -61,7 +61,7 @@ public class DungeonPartyConditionTests
         public int Calls { get; private set; }
 
         public IReadOnlyList<BattleLogEntry> Resolve(
-            string encounterName, IReadOnlyList<string> participantIds)
+            string encounterName, CombatPartySnapshot party)
         {
             Calls++;
             return new[]

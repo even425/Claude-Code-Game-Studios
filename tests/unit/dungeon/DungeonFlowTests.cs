@@ -68,11 +68,11 @@ public class DungeonFlowTests
         public int Consulted { get; private set; }
 
         public IReadOnlyList<BattleLogEntry> Resolve(
-            string encounterName, IReadOnlyList<string> participantIds)
+            string encounterName, CombatPartySnapshot party)
         {
             Calls++;
             ResolvedEncounters.Add(encounterName);
-            SeenParticipants.Add(participantIds.ToArray());
+            SeenParticipants.Add(party.ParticipantIds.ToArray());
 
             bool won = _verdicts.Count > 0 ? _verdicts.Dequeue() : _afterScript;
 
@@ -111,7 +111,7 @@ public class DungeonFlowTests
         public int Calls { get; private set; }
 
         public IReadOnlyList<BattleLogEntry> Resolve(
-            string encounterName, IReadOnlyList<string> participantIds)
+            string encounterName, CombatPartySnapshot party)
         {
             Calls++;
             return new[]
@@ -142,7 +142,7 @@ public class DungeonFlowTests
         public int Consulted { get; private set; }
 
         public IReadOnlyList<BattleLogEntry> Resolve(
-            string encounterName, IReadOnlyList<string> participantIds)
+            string encounterName, CombatPartySnapshot party)
         {
             Calls++;
             return null;

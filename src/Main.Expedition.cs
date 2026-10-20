@@ -389,9 +389,27 @@ public partial class Main : Node2D
             ? _mission.Members.Select(m => m.Id.Value).ToArray()
             : crew.Select(h => h.Id.Value).ToArray();
 
+        // 参战队伍的**状态快照** —— 战斗解算能看到「谁在场、当时什么情况」。
+        // ⚠️ 它与上面的标识名单**必须来自同一份名单**（任务成员 / 随队者），
+        // 否则战斗看到的队伍与结算认定的队伍就不是同一批人。
+        var party = new ClaudeCodeGameStudios.Domain.Combat.CombatPartySnapshot(
+            (_mission is not null
+                ? _mission.Members.Select(m => m.Id.Value)
+                : crew.Select(h => h.Id.Value))
+            .Select(id =>
+            {
+                var st = _states.FirstOrDefault(s => s.Definition.Id.Value == id);
+                return ClaudeCodeGameStudios.Domain.Combat.CombatantSnapshot.Create(
+                    id,
+                    st?.Definition.Name ?? id,
+                    st?.Definition.TraitModifiers,
+                    st?.Definition.PreferenceWeights);
+            })
+            .ToArray());
+
         var flow = ClaudeCodeGameStudios.Application.DungeonFlow.Begin(
             new ClaudeCodeGameStudios.Domain.Dungeon.DungeonRunId(NextDungeonRunId()),
-            DungeonName, ids, _combat, _combat);
+            DungeonName, ids, _combat, _combat, party: party);
 
         var outcome = flow.RunToCompletion();
         flow.Settle();          // I4：整场只结算一次

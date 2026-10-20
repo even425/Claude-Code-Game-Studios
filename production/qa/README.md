@@ -184,6 +184,7 @@ CI 同时把结果表写进 **job summary**（网页上直接看得到）。
 | `mutate-acceptance-coverage.py` | 验收覆盖摘要不许过期（`06` 正文 ↔ 本文档「覆盖现状」表的两个数字） |
 | `mutate-settlement-atomicity.py` | I15 结算要么全应用要么不应用（三处一起动 / 三处都不动） |
 | `mutate-dungeon-party.py` | IT-05 队伍不满足参与条件时既不建任务也不开副本（+ 正向条件） |
+| `mutate-combat-party-input.py` | 战斗能拿到队伍配置（IT-31 的前置）：快照是值、且真的传到了解算器 |
 
 全部一起跑（**很慢** —— 每个脚本都要重建 + 重跑测试，建议过夜跑）：
 

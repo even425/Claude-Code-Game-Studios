@@ -85,10 +85,16 @@ public sealed class PlaceholderCombat : IBattleResolver, IBattleOutcomeReader
     /// 解算一次遭遇，产出一条过程记录 + <b>一条</b>决定性记录。
     /// </summary>
     /// <param name="encounterName">遭遇名称。</param>
-    /// <param name="participantIds">参与英雄标识。</param>
+    /// <param name="party">
+    /// 参战队伍的<b>状态快照</b>（谁在场、当时什么情况）。
+    /// <para>⚠️ <b>本占位实现不读它</b> —— 战斗公式属【待定】T-004，
+    /// 而「不发明数值」是硬约束。但它<b>拿得到</b>了：
+    /// T-004 落地时，战斗规则要用的队伍配置<b>已经送到手边</b>，
+    /// 不必再改接口（改了接口就要改所有调用方 + 存档的读档路径）。</para>
+    /// </param>
     /// <returns>战斗日志；恰有一条 <c>DecidedOutcome == true</c>。</returns>
     public IReadOnlyList<BattleLogEntry> Resolve(
-        string encounterName, IReadOnlyList<string> participantIds)
+        string encounterName, CombatPartySnapshot party)
     {
         bool won = _random.NextDouble(1.0) < PlaceholderHeroWinRate;
 

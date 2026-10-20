@@ -29,7 +29,13 @@ namespace ClaudeCodeGameStudios.Tests.Combat;
 [TestSuite]
 public class PlaceholderCombatTests
 {
-    private static readonly string[] Crew = { "甲", "乙", "丙" };
+    /// <summary>
+    /// 参战队伍（状态快照）。
+    /// <para>⚠️ 本占位战斗**不读**它（战斗公式属【待定】T-004）——
+    /// 但它**拿得到**，T-004 落地时不必再改接口。</para>
+    /// </summary>
+    private static readonly CombatPartySnapshot Crew = CombatPartySnapshot.FromIds(
+        new[] { "甲", "乙", "丙" });
 
     private static PlaceholderCombat Combat(ulong seed) => new(new DecisionFlow.SeededRandom(seed));
 

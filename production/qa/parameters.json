@@ -1,0 +1,487 @@
+{
+  "_note": "当前实现参数台账的单一真源。Python 脚本 production/qa/param-inventory.py 用它生成文档，C# 守卫 tests/unit/architecture/ParameterLedgerTests.cs 用它校验代码。新增一个数值常量必须在这里登记，否则两个守卫都会红。",
+  "parameters": [
+    {
+      "file": "Application/DailyLife.cs",
+      "name": "PlaceholderActionFractionOfDay",
+      "kind": "参数",
+      "status": "【占位】P-04",
+      "note": "一次日常行动占多少日（0.25 日）",
+      "value": "0.25"
+    },
+    {
+      "file": "Application/DailyLife.cs",
+      "name": "PlaceholderBuildProgressPerAction",
+      "kind": "参数",
+      "status": "【占位】P-04",
+      "note": "一次行动推进多少建造进度（0.25）",
+      "value": "0.25"
+    },
+    {
+      "file": "Application/DailyLife.cs",
+      "name": "PlaceholderModifierCeiling",
+      "kind": "参数",
+      "status": "【占位】P-06",
+      "note": "修正因子上界（10.0）",
+      "value": "10.0"
+    },
+    {
+      "file": "Application/DailyLife.cs",
+      "name": "PlaceholderModifierFloor",
+      "kind": "参数",
+      "status": "【占位】P-06",
+      "note": "修正因子下界（0.10，永不为 0 —— CR-1 硬要求）",
+      "value": "0.10"
+    },
+    {
+      "file": "Application/DungeonFlow.cs",
+      "name": "DeclaredStageCount",
+      "kind": "参数",
+      "status": "【待定】基线 §8",
+      "note": "副本有几个阶段（3）—— **台账未登记，见 §3**",
+      "value": "3"
+    },
+    {
+      "file": "Application/HeroBehaviorService.cs",
+      "name": "BagItemLimit",
+      "kind": "参数",
+      "status": "【已确认】D-053",
+      "note": "背包里同种物品的上限（5 份）",
+      "value": "5"
+    },
+    {
+      "file": "Application/PlaceholderCombat.cs",
+      "name": "PlaceholderHeroWinRate",
+      "kind": "参数",
+      "status": "【占位】P-07",
+      "note": "战斗占位胜率（0.65）",
+      "value": "0.65"
+    },
+    {
+      "file": "Application/SimulationRunner.cs",
+      "name": "PlaceholderSimSecondsPerDay",
+      "kind": "参数",
+      "status": "【占位】P-01 / P-02",
+      "note": "一个模拟日多少模拟秒（100）",
+      "value": "100.0"
+    },
+    {
+      "file": "Application/SimulationRunner.cs",
+      "name": "RequiredCatchUpLimit",
+      "kind": "参数",
+      "status": "【占位】P-03 / T-001",
+      "note": "单步追帧上限（8）",
+      "value": "8"
+    },
+    {
+      "file": "Application/VillageUpgradeService.cs",
+      "name": "MaxTier",
+      "kind": "参数",
+      "status": "【待定】D-003",
+      "note": "村庄最高层级（5）—— **台账未登记，见 §3**",
+      "value": "5"
+    },
+    {
+      "file": "Domain/Clock/SimClock.cs",
+      "name": "_timeScale",
+      "kind": "参数",
+      "status": "【占位】P-03",
+      "note": "时间倍率（1.0）",
+      "value": "1.0"
+    },
+    {
+      "file": "Domain/Relationships/Relationship.cs",
+      "name": "CloseThreshold",
+      "kind": "参数",
+      "status": "【已确认】D-036",
+      "note": "关系亲密到亲近的阈值（20）",
+      "value": "20"
+    },
+    {
+      "file": "Domain/Relationships/Relationship.cs",
+      "name": "CooperationDelta",
+      "kind": "参数",
+      "status": "【已确认】D-036",
+      "note": "一次同队副本的关系增量（+3）",
+      "value": "3"
+    },
+    {
+      "file": "Domain/Relationships/Relationship.cs",
+      "name": "HostileThreshold",
+      "kind": "参数",
+      "status": "【已确认】D-036",
+      "note": "关系恶化到敌意的阈值（-20）",
+      "value": "-20"
+    },
+    {
+      "file": "Domain/Relationships/Relationship.cs",
+      "name": "InitialValue",
+      "kind": "参数",
+      "status": "【已确认】D-036",
+      "note": "关系初值（0）",
+      "value": "0"
+    },
+    {
+      "file": "Domain/Relationships/Relationship.cs",
+      "name": "MaxTargetWeight",
+      "kind": "参数",
+      "status": "【已确认】D-036",
+      "note": "目标权重上界（3.0）",
+      "value": "3.0"
+    },
+    {
+      "file": "Domain/Relationships/Relationship.cs",
+      "name": "MaxValue",
+      "kind": "参数",
+      "status": "【已确认】D-036",
+      "note": "关系值域上界（100）",
+      "value": "100"
+    },
+    {
+      "file": "Domain/Relationships/Relationship.cs",
+      "name": "MinTargetWeight",
+      "kind": "参数",
+      "status": "【已确认】D-036",
+      "note": "目标权重下界（0.1）",
+      "value": "0.1"
+    },
+    {
+      "file": "Domain/Relationships/Relationship.cs",
+      "name": "MinValue",
+      "kind": "参数",
+      "status": "【已确认】D-036",
+      "note": "关系值域下界（-100）",
+      "value": "-100"
+    },
+    {
+      "file": "Domain/Relationships/Relationship.cs",
+      "name": "SocialDelta",
+      "kind": "参数",
+      "status": "【已确认】D-036",
+      "note": "一次社交的关系增量（+2）",
+      "value": "2"
+    },
+    {
+      "file": "Domain/Relationships/Relationship.cs",
+      "name": "TargetWeightScale",
+      "kind": "参数",
+      "status": "【已确认】D-036",
+      "note": "目标权重的基础刻度（50.0）",
+      "value": "50.0"
+    },
+    {
+      "file": "Domain/Stall/StallFee.cs",
+      "name": "RatePer100",
+      "kind": "参数",
+      "status": "【已确认】D-054 ⑩",
+      "note": "摊位费税率（每 100 单位收 5）",
+      "value": "5"
+    },
+    {
+      "file": "Domain/Stall/StallFee.cs",
+      "name": "UnitsPerGold",
+      "kind": "参数",
+      "status": "【已确认】D-054",
+      "note": "1 金 = 100 单位（金的零头精度）",
+      "value": "100"
+    },
+    {
+      "file": "Main.cs",
+      "name": "DefaultGoldRewardUnits",
+      "kind": "参数",
+      "status": "【已确认】D-054 ⑬",
+      "note": "副本金币报酬 X（10 单位 = 0.10 金）",
+      "value": "10"
+    },
+    {
+      "file": "Main.cs",
+      "name": "PlaceholderAttrScale",
+      "kind": "参数",
+      "status": "【占位】P-07",
+      "note": "属性对成功率的缩放（300）",
+      "value": "300"
+    },
+    {
+      "file": "Main.cs",
+      "name": "PlaceholderBaseSuccessRate",
+      "kind": "参数",
+      "status": "【占位】P-07",
+      "note": "战斗占位基础成功率（0.52）",
+      "value": "0.52"
+    },
+    {
+      "file": "Main.cs",
+      "name": "PlaceholderOverrunRate",
+      "kind": "参数",
+      "status": "【占位】P-07",
+      "note": "超时违规的概率（0.35）",
+      "value": "0.35"
+    },
+    {
+      "file": "Main.cs",
+      "name": "PlaceholderPocketRate",
+      "kind": "参数",
+      "status": "【占位】P-07",
+      "note": "顺手牵羊的概率（0.45）",
+      "value": "0.45"
+    },
+    {
+      "file": "Main.cs",
+      "name": "PlaceholderPrideRefusalRate",
+      "kind": "参数",
+      "status": "【占位】P-07",
+      "note": "傲的拒工概率（0.40）",
+      "value": "0.40"
+    },
+    {
+      "file": "Main.cs",
+      "name": "PlaceholderSuccessCap",
+      "kind": "参数",
+      "status": "【占位】P-07",
+      "note": "成功率的封顶（0.95）",
+      "value": "0.95"
+    },
+    {
+      "file": "Main.cs",
+      "name": "SquadMax",
+      "kind": "参数",
+      "status": "【占位】P-10",
+      "note": "队伍人数上限（4）",
+      "value": "4"
+    },
+    {
+      "file": "VillageView.cs",
+      "name": "MaxTier",
+      "kind": "参数",
+      "status": "【待定】D-003",
+      "note": "村庄最高层级（5）—— **与 `VillageUpgradeService.MaxTier` 重复**，见 §3",
+      "value": "5"
+    }
+  ],
+  "nonParameters": [
+    {
+      "file": "Main.cs",
+      "name": "_buildProgress",
+      "kind": "非参数",
+      "status": "初始值",
+      "note": "建造进度初值"
+    },
+    {
+      "file": "Main.cs",
+      "name": "_buildTarget",
+      "kind": "非参数",
+      "status": "哨兵",
+      "note": "建造目标哨兵（-1 = 没在施工）"
+    },
+    {
+      "file": "Main.cs",
+      "name": "_pendingEnd",
+      "kind": "非参数",
+      "status": "初始值",
+      "note": "远征结束时刻初值"
+    },
+    {
+      "file": "Main.cs",
+      "name": "_shotFrame",
+      "kind": "非参数",
+      "status": "哨兵",
+      "note": "截图帧哨兵（-1 = 没在截）"
+    },
+    {
+      "file": "Main.cs",
+      "name": "_tier",
+      "kind": "非参数",
+      "status": "初始值",
+      "note": "村庄层级初值"
+    },
+    {
+      "file": "Presentation/EconomySummary.cs",
+      "name": "DefaultMaxBagKinds",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "摘要里最多列几种物品"
+    },
+    {
+      "file": "Presentation/RelationshipPresenter.cs",
+      "name": "MaxLines",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "关系摘要最多几行"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "ButtonCount",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "按钮个数（布局用）"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "ButtonMinHeight",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "控件高度"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "ChronicleMinHeight",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "控件高度"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "Gutter",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "间距"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "HeaderHeight",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "控件高度"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "LeftW",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "面板位置"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "LeftX",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "面板位置"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "MapLocalMaxX",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "地图可视范围"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "MapLocalMaxY",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "地图可视范围"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "MapLocalMinX",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "地图可视范围"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "MapLocalMinY",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "地图可视范围"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "PanelBottomY",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "面板位置"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "PanelTopY",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "面板位置"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "RightW",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "面板位置"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "RightX",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "面板位置"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "RosterMinHeight",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "控件高度"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "SquadLineHeight",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "控件高度"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "VBoxSeparation",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "控件间距"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "ViewportH",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "窗口尺寸"
+    },
+    {
+      "file": "Presentation/UiLayout.cs",
+      "name": "ViewportW",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "窗口尺寸"
+    },
+    {
+      "file": "VillageView.cs",
+      "name": "MapH",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "地图格高"
+    },
+    {
+      "file": "VillageView.cs",
+      "name": "MapW",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "地图格宽"
+    },
+    {
+      "file": "VillageView.cs",
+      "name": "WALL_H",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "围墙绘制高度"
+    },
+    {
+      "file": "VillageView.cs",
+      "name": "_builtForTier",
+      "kind": "非参数",
+      "status": "哨兵",
+      "note": "「已按哪一级画过」哨兵（-1 = 没画过）"
+    },
+    {
+      "file": "VillageView.cs",
+      "name": "_lastBuildState",
+      "kind": "非参数",
+      "status": "哨兵",
+      "note": "上次建造状态哨兵"
+    }
+  ]
+}

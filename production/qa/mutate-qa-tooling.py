@@ -134,6 +134,44 @@ def main():
         "跑 11 个**真机自检**开关",
     ))
 
+    # ── ⑤ 破坏 annotation 的命令前缀 ────────────────────────────────
+    #    这档打的是「失败原因能不能被机器读到」：前缀坏了 ⇒
+    #    GitHub 不认这条 workflow command ⇒ 失败原因退回到「只有一句 exit code 1」。
+    results.append(mutate(
+        "自检脚本的 annotation 丢掉 :: 前缀（GitHub 不认这条命令了）",
+        QA / "run-selfchecks.py",
+        'print(f"::{kind} title={title}::{flat}")',
+        'print(f"{kind} {title} {flat}")',
+    ))
+
+    # ── ⑥ 让本地也打印 annotation ───────────────────────────────────
+    results.append(mutate(
+        "去掉「不在 Actions 里就不输出」的保护（本地日志被污染）",
+        QA / "run-selfchecks.py",
+        '    if not os.environ.get("GITHUB_ACTIONS"):\n        return\n',
+        "",
+    ))
+
+    # ── ⑦ 不折叠消息里的换行 ───────────────────────────────────────
+    #    GitHub 的 workflow command 是**单行**的：换行会被截断，
+    #    甚至可能注入一条新的 workflow command。
+    results.append(mutate(
+        "annotation 的消息不再折叠换行（多行消息会被截断）",
+        QA / "run-selfchecks.py",
+        'flat = " ".join(str(message).split())',
+        'flat = str(message)',
+    ))
+
+    # ── ⑧ 摘要不再写文件 ───────────────────────────────────────────
+    #    摘要是「CI 红了时人第一眼看到的东西」——它写不出来，
+    #    而那条路径一开始**没有任何测试覆盖**（写不出来也不会红）。
+    results.append(mutate(
+        "摘要不再写文件（CI 的 job summary 会是空的）",
+        QA / "run-selfchecks.py",
+        '        path.write_text("\\n".join(lines) + "\\n", encoding="utf-8", newline="\\n")',
+        "        pass  # 变异：故意不写摘要",
+    ))
+
     print("---")
     bad = results.count(False)
     print(f"变异矩阵：{len(results) - bad}/{len(results)} 符合预期")

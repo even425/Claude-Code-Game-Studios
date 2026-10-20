@@ -104,6 +104,20 @@ CHECKS = [
 # ⚠️ 改这个数之前先跑 `frame-budget.py <帧数>` 量一遍，别凭感觉。
 FRAMES = "600"
 
+# 自检默认用**固定种子** ⇒ 每次运行的结果**可复现** ⇒ CI 不会偶发红。
+#
+# ⚠️ **为什么需要**：自检的随机源来自**英雄生成**（`HeroFactory.Seed`），
+# 每次运行的英雄构成（名字 / 世界 / 性格 / 属性）都不同
+# ⇒ 某些构成会让某个自检失败。
+# 真事（2026-10-21）：CI 的 run #20 绿、**#21 红**、#22 绿，而 #21 那个提交
+# **只改了一处 README** ⇒ 与代码无关 ⇒ **偶发**。
+# ⇒ 固定种子把「偶发」变成「确定」：同一个种子，7 个自检的判定**逐条一致**（实测）。
+#
+# ⚠️ **取舍**：固定种子意味着真机自检只覆盖**一组**英雄构成。
+# **组合覆盖由单元测试负责** —— 它自己造数据、不需要真机、且能一次覆盖很多组。
+# 想跑随机构成用 `--seed=random`。
+DEFAULT_SEED = "20261021"
+
 
 def find_godot():
     for c in GODOT_CANDIDATES:
@@ -127,12 +141,55 @@ def sha_and_mtime(path):
     return (h, path.stat().st_mtime)
 
 
+# ── GitHub Actions 的机器可读输出 ──────────────────────────────────────
+#
+# **为什么需要它**：CI 的 job 日志**要登录才能看**（`/logs` 端点还要求 admin）
+# ⇒ 对自动化环境来说，「CI 红了」等于「只知道红了，**不知道哪一条、为什么**」。
+# 实测：run #21 的 Godot 作业红了，而我能读到的 annotation 只有一句
+# 「Process completed with exit code 1.」—— **零信息量**。
+#
+# 而 workflow command（`::error::`）会被 runner 转成 **check-run annotation**，
+# 公开仓库用**无认证的 API** 就能读到 ⇒ 人一眼看到原因，机器也能直接取到。
+#
+# ⚠️ message 必须**单行**：换行会被截断，甚至可能注入新的 workflow command。
+def _gh_command(kind: str, title: str, message: str) -> None:
+    """在 GitHub Actions 上输出一条机器可读的 annotation（不在 Actions 里就是空操作）。"""
+    if not os.environ.get("GITHUB_ACTIONS"):
+        return
+    flat = " ".join(str(message).split())
+    # workflow command 的转义规则：% → %25，\r → %0D，\n → %0A
+    flat = flat.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    title = " ".join(str(title).split()).replace("%", "%25")
+    print(f"::{kind} title={title}::{flat}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", default="",
                     help="只跑这几个（逗号分隔的名字）")
     ap.add_argument("--timeout", type=int, default=300, help="每个自检的超时（秒）")
+    ap.add_argument("--summary", default="",
+                    help="把结果写成 Markdown 摘要（CI 传 $GITHUB_STEP_SUMMARY）")
+    ap.add_argument("--seed", default="",
+                    help=f"给每个自检传 --seed=N（默认用固定种子 {DEFAULT_SEED} ⇒ 结果可复现；"
+                         "传 random 则每次运行都不同 —— 那正是 CI 偶发红灯的来源）")
+    ap.add_argument("--self-test-annotation", action="store_true",
+                    help="自测两条通道：annotation 与 summary（走与真实运行**同一条**代码路径），不跑自检")
     args = ap.parse_args()
+
+    # 自测开关：走**同一条** _gh_command / _write_summary 代码路径 ⇒ 它们坏了这里就会坏
+    # （不是「另写一份演示代码」那种自欺）
+    if args.self_test_annotation:
+        # 故意让消息**带换行**：workflow command 是单行的，
+        # 换行必须被**折叠成空格**（否则 GitHub 会截断，甚至可能注入新的命令）
+        _gh_command("error", "自检通道自测", "第一行\n第二行")
+        _gh_command("notice", "自检通道自测", "这是一条用于验证 annotation 通道的样例通知")
+        if args.summary:
+            _write_summary(Path(args.summary),
+                           [("sample", False, "自测样例（故意失败）")],
+                           ("<未跑>", "<未跑>"), ("<未跑>", "<未跑>"),
+                           ["sample: 自测样例（故意失败）"])
+        return 0
 
     godot = find_godot()
     checks = CHECKS
@@ -154,15 +211,23 @@ def main():
     tmp_save = tmp_dir / "selftest-village-save.json"
 
     failures = []
+    results = []
+    # 默认固定种子 ⇒ 确定性；--seed=random 才是随机构成（见 DEFAULT_SEED 的说明）
+    if args.seed.lower() == "random":
+        seed_args = []
+    else:
+        seed_args = [f"--seed={args.seed or DEFAULT_SEED}"]
     for c in checks:
         argv = [godot, "--headless", "--path", str(ROOT), "--quit-after", FRAMES, "--"] \
-               + c["args"] + [f"--savepath={tmp_save}"]
+               + c["args"] + [f"--savepath={tmp_save}"] + seed_args
         try:
             proc = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True,
                                   encoding="utf-8", errors="replace", timeout=args.timeout)
         except subprocess.TimeoutExpired:
             failures.append(f"{c['name']}: 超时（{args.timeout}s）")
+            results.append((c["name"], False, f"超时（{args.timeout}s）"))
             print(f"  ✗ {c['name']:<10} 超时")
+            _gh_command("error", f"真机自检失败：{c['name']}", f"超时（{args.timeout}s）")
             continue
 
         out = proc.stdout + proc.stderr
@@ -180,28 +245,67 @@ def main():
                 problems.append(f"计数不对（缺「{marker}」）")
 
         if problems:
-            failures.append(f"{c['name']}: " + "；".join(problems))
-            print(f"  ✗ {c['name']:<10} " + "；".join(problems))
+            detail = "；".join(problems)
+            failures.append(f"{c['name']}: " + detail)
+            results.append((c["name"], False, detail))
+            print(f"  ✗ {c['name']:<10} " + detail)
+            # 让失败原因变成**公开可读**的 annotation（日志要登录才看得到）
+            _gh_command("error", f"真机自检失败：{c['name']}", detail)
         else:
+            results.append((c["name"], True, ""))
             print(f"  ✓ {c['name']:<10} PASS")
 
     after = sha_and_mtime(PLAYER_SAVE)
     print()
     print(f"玩家存档跑之后: {after[0][:16]}… mtime={after[1]}")
-    if before != after:
+    save_untouched = before == after
+    if not save_untouched:
         failures.append("玩家存档被自检改动了 —— 自检必须用自己的端口")
         print("  ✗ 玩家存档被改动！")
+        _gh_command("error", "真机自检失败：玩家存档",
+                    "玩家存档被自检改动了 —— 自检必须用自己的端口")
     else:
         print("  ✓ 玩家存档未被改动")
+
+    # 成功也给一条：这样「CI 上的自检跑到哪一步了」**不用登录日志**也能知道
+    if not failures:
+        _gh_command("notice", "真机自检",
+                    f"全部 {len(checks)} 个自检通过，且未碰玩家存档")
+
+    if args.summary:
+        _write_summary(Path(args.summary), results, before, after, failures)
 
     print()
     if failures:
         print(f"!! 自检失败 {len(failures)} 项：")
         for f in failures:
             print("   ", f)
+        _gh_command("error", "真机自检失败汇总", "；".join(failures))
         return 1
     print(f"✅ 全部 {len(checks)} 个自检通过，且未碰玩家存档")
     return 0
+
+
+def _write_summary(path: Path, results, before, after, failures) -> None:
+    """把结果写成 Markdown 摘要（CI 传 $GITHUB_STEP_SUMMARY ⇒ 网页上直接看得到）。"""
+    lines = ["### 真机自检（Godot headless）", ""]
+    lines.append("| 自检 | 结果 |")
+    lines.append("|---|---|")
+    for name, ok, detail in results:
+        lines.append(f"| `{name}` | {'✅ PASS' if ok else '❌ FAIL — ' + detail} |")
+    lines.append("")
+    lines.append(f"玩家存档：{'未被改动' if before == after else '**被改动了**'}"
+                 f"（SHA-256 `{after[0][:16]}…`）")
+    if failures:
+        lines.append("")
+        lines.append(f"**失败 {len(failures)} 项**：")
+        for f in failures:
+            lines.append(f"- `{f}`")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    except OSError as exc:
+        print(f"!! 写摘要失败（不影响自检判定）：{exc}")
 
 
 if __name__ == "__main__":

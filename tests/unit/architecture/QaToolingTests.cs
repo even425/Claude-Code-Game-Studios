@@ -169,4 +169,188 @@ public class QaToolingTests
         int stated = int.Parse(m.Groups[1].Value);
         Assertions.AssertThat(stated).IsEqual(actual);
     }
+
+    // ── 断言 5：自检失败的原因必须变成机器可读的 annotation ──────────────
+
+    /// <summary>
+    /// 自检脚本在 GitHub Actions 里跑失败时，<b>失败原因</b>必须以
+    /// <c>::error::</c>（workflow command）输出 ⇒ runner 把它转成
+    /// <b>check-run annotation</b> ⇒ <b>公开仓库用无认证的 API 就能读到</b>。
+    ///
+    /// <para><b>为什么要有这条</b>：CI 的 job 日志<b>要登录才能看</b>
+    /// （<c>/logs</c> 端点还要求 admin）⇒ 自动化环境里「CI 红了」
+    /// 等于「只知道红了，<b>不知道哪一条、为什么</b>」。
+    /// 实测 run #21：Godot 作业红了，而能读到的 annotation 只有一句
+    /// 「Process completed with exit code 1.」—— <b>零信息量</b>。</para>
+    ///
+    /// <para><b>怎么验的</b>：脚本有个 <c>--self-test-annotation</c> 开关，
+    /// 它走<b>与真实失败完全同一条</b> <c>_gh_command</c> 代码路径 ⇒
+    /// 通道坏了这里就会坏（不是「另写一份演示代码」那种自欺）。
+    /// 它也<b>不需要 Godot</b> ⇒ 本机与 CI 都能秒跑。</para>
+    /// </summary>
+    [TestCase]
+    public void SelfCheckScript_ReportsFailuresAsMachineReadableAnnotations()
+    {
+        var script = Path.Combine(QaDir(), "run-selfchecks.py");
+
+        // ① 在 Actions 里 ⇒ 必须有 ::error
+        var inActions = RunPython(script,
+            new Dictionary<string, string> { ["GITHUB_ACTIONS"] = "true" },
+            "--self-test-annotation");
+
+        // GitHub 的 workflow command 格式：::error <属性以逗号分隔>::<消息>
+        // ⇒ 前缀是「::error 」而不是「::error::」（后者永远不会出现 ——
+        // 这条守卫第一版就写错过，断言恒为 0，却一度以为是脚本坏了）。
+        var errorLines = inActions.Split('\n')
+            .Where(l => l.TrimStart().StartsWith("::error ", StringComparison.Ordinal))
+            .Select(l => l.TrimEnd('\r'))
+            .ToList();
+
+        // 自测那条消息**故意带了换行** ⇒ 折叠正确时恰好一行
+        Assertions.AssertThat(errorLines.Count).IsEqual(1);
+
+        // 换行必须被**折叠成空格**（workflow command 是单行的：
+        // 换行会被截断，甚至可能注入新的 workflow command）
+        Assertions.AssertThat(errorLines[0]).Contains("第一行 第二行");
+
+        // 属性与消息之间必须有一个「::」，且标题不为空
+        Assertions.AssertThat(Regex.IsMatch(errorLines[0], @"^::error title=.+::.+$")).IsTrue();
+
+        // ② 不在 Actions 里 ⇒ 一行 annotation 都不该有（别污染本地日志）
+        var local = RunPython(script, new Dictionary<string, string>(), "--self-test-annotation");
+        Assertions.AssertThat(Regex.IsMatch(local, @"^::error(\s|,|:)", RegexOptions.Multiline)).IsFalse();
+    }
+
+    /// <summary>
+    /// 自检脚本必须能把结果写成 <b>Markdown 摘要</b>
+    /// （CI 传 <c>$GITHUB_STEP_SUMMARY</c> ⇒ 网页上直接看得到，不必翻日志）。
+    /// <para><b>为什么值得单独守</b>：这条路径<b>一开始没有任何测试覆盖</b> ——
+    /// 「写不出来」和「写错了」都不会红，而它正是「CI 红了时人第一眼看到的东西」。
+    /// 「没被测过的代码路径」就是**下一个偶发红灯的候选**。</para>
+    /// </summary>
+    [TestCase]
+    public void SelfCheckScript_WritesASummaryFile()
+    {
+        var script = Path.Combine(QaDir(), "run-selfchecks.py");
+        var tmp = Path.Combine(Path.GetTempPath(), $"qa-summary-{Guid.NewGuid():N}.md");
+        try
+        {
+            RunPython(script, new Dictionary<string, string>(),
+                "--self-test-annotation", $"--summary={tmp}");
+
+            Assertions.AssertThat(File.Exists(tmp)).IsTrue();
+            var summary = File.ReadAllText(tmp, System.Text.Encoding.UTF8);
+            Assertions.AssertThat(summary).Contains("| 自检 |");
+            Assertions.AssertThat(summary).Contains("sample");
+        }
+        finally
+        {
+            if (File.Exists(tmp)) File.Delete(tmp);
+        }
+    }
+
+    /// <summary>
+    /// 跑一次 Python 脚本，把 stdout 拿回来。
+    /// <para><b>为什么自己找解释器</b>：Windows 上 <c>python</c> 有可能是
+    /// Microsoft Store 的**占位程序**（App Execution Alias，零字节，
+    /// 一调用就去开商店）⇒ 直接 <c>Process.Start("python")</c> 会拿到一个
+    /// **立刻退出的空输出** —— 那正是本条守卫第一版栽掉的地方
+    /// （断言报「0 行 ::error::」，而脚本手动跑完全正常）。
+    /// 所以这里扫 PATH、**跳过零字节文件**，再逐个试，
+    /// 并把每个候选的失败原因带进异常里 ⇒ 失败时能一眼看出「为什么没找到」。</para>
+    /// </summary>
+    private static string RunPython(
+        string script, Dictionary<string, string> env, params string[] args)
+    {
+        var attempts = new List<string>();
+
+        foreach (var (exe, prefix) in PythonCandidates())
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo(exe)
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    WorkingDirectory = RepoRoot(),
+                    // ⚠️ 必须显式指定：.NET 默认按**系统代码页**解码
+                    // （本机是 GBK，Windows runner 上也不是 UTF-8）
+                    // ⇒ Python 写的 UTF-8 会被解成乱码。
+                    // 这条守卫第一版就栽在这儿：断言「0 行 ::error::」，
+                    // 而脚本其实**跑得好好的**，只是内容被解码成了「鑷閫氶亾」。
+                    StandardOutputEncoding = System.Text.Encoding.UTF8,
+                    StandardErrorEncoding = System.Text.Encoding.UTF8,
+                };
+                foreach (var a in prefix) psi.ArgumentList.Add(a);
+                psi.ArgumentList.Add(script);
+                foreach (var a in args) psi.ArgumentList.Add(a);
+
+                // ⚠️ 必须**先删掉继承来的 GITHUB_ACTIONS**，再按调用方的要求设置。
+                // 「不设置」不等于「没有」：CI 上跑 dotnet test 时这个变量本来就是 true
+                // ⇒ 靠「环境里恰好没有」来断言，等于写了一条**在 CI 上必然红**的测试
+                // （本条守卫第一版就踩了这个坑：本机环境里也恰好带着它）。
+                psi.Environment.Remove("GITHUB_ACTIONS");
+                foreach (var kv in env) psi.Environment[kv.Key] = kv.Value;
+
+                using var proc = System.Diagnostics.Process.Start(psi);
+                if (proc is null)
+                {
+                    attempts.Add($"{exe}: 启动返回 null");
+                    continue;
+                }
+
+                var stdout = proc.StandardOutput.ReadToEnd();
+                var stderr = proc.StandardError.ReadToEnd();
+                if (!proc.WaitForExit(60_000))
+                {
+                    try { proc.Kill(true); } catch { /* 已经退了 */ }
+                    attempts.Add($"{exe}: 超时（60s）");
+                    continue;
+                }
+                if (proc.ExitCode != 0)
+                {
+                    attempts.Add($"{exe}: 退出码 {proc.ExitCode}，输出「{stderr.Trim()}」");
+                    continue;
+                }
+                return stdout;
+            }
+            catch (Exception ex)
+            {
+                attempts.Add($"{exe}: {ex.GetType().Name}");
+            }
+        }
+
+        throw new InvalidOperationException(
+            "找不到可用的 Python 解释器 —— 这条守卫需要 Python 3"
+            + "（本仓库的 QA 工具链也是 Python）。逐个候选的结果：" + string.Join(" | ", attempts));
+    }
+
+    /// <summary>PATH 里的 Python 解释器候选（跳过零字节的 Store 占位程序）。</summary>
+    private static IEnumerable<(string Exe, string[] Prefix)> PythonCandidates()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var path = Environment.GetEnvironmentVariable("PATH") ?? "";
+        foreach (var rawDir in path.Split(Path.PathSeparator))
+        {
+            var dir = rawDir.Trim().Trim('"');
+            if (dir.Length == 0) continue;
+            foreach (var (name, prefix) in new[]
+            {
+                ("python.exe", Array.Empty<string>()),
+                ("python3.exe", Array.Empty<string>()),
+                ("py.exe", new[] { "-3" }),
+            })
+            {
+                var full = Path.Combine(dir, name);
+                if (!seen.Add(full)) continue;
+                FileInfo info;
+                try { info = new FileInfo(full); } catch { continue; }
+                if (!info.Exists) continue;
+                // 零字节 = Microsoft Store 的 App Execution Alias（不是真解释器）
+                if (info.Length == 0) continue;
+                yield return (full, prefix);
+            }
+        }
+    }
 }

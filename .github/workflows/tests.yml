@@ -176,6 +176,10 @@ jobs:
           }
           Write-Host "Debug assembly: $dll"
 
+      # --summary writes the per-check table into the job's summary page:
+      # a reader sees WHICH check failed without digging through the log,
+      # and the failure reasons also go out as check-run annotations
+      # (::error::), which are readable through the public API.
       - name: Run the runtime self-checks
         shell: pwsh
-        run: python production/qa/run-selfchecks.py
+        run: python production/qa/run-selfchecks.py --summary "$env:GITHUB_STEP_SUMMARY"

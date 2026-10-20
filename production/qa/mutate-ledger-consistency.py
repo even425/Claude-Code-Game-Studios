@@ -108,9 +108,11 @@ def main():
     ))
 
     # ── ③ M1 行的行数写回 632 ─────────────────────────────────────────
+    # ⚠️ 这里的「现值」必须与 `07` §6 里写的一致（由 LedgerConsistencyTests 核对），
+    #    否则这一档会报「模式没找到」而不是「守卫红了」。
     results.append(mutate(
         "§6 的 M1 行把行数写回 632（早已拆成 7 个 partial）",
-        "`Main.cs` 902 行，但",
+        "`Main.cs` 908 行，但",
         "`Main.cs` 632 行，但",
     ))
 
@@ -119,7 +121,7 @@ def main():
     #    而 `MainStructureTests`（无扩展名）根本不在它的扫描范围内。
     results.append(mutate(
         "§6 的 M1 行引用一个不存在的 .cs 文件（文档指向空气）",
-        "`Main.cs` 902 行，但",
+        "`Main.cs` 908 行，但",
         "`MainDecomposed.cs` 902 行，但",
     ))
 

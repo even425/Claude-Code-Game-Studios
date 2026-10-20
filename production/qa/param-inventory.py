@@ -12,8 +12,17 @@
 3. 玩法参数的**值**必须与文档一致 —— 文档会过期，脚本不会。
 
 用法：
-  python production/qa/param-inventory.py            # 生成 Markdown 表
-  python production/qa/param-inventory.py --check    # 校验（不一致即退出码 1）
+  python production/qa/param-inventory.py                # 生成 Markdown 表
+  python production/qa/param-inventory.py --check        # 校验（不一致即退出码 1）
+  python production/qa/param-inventory.py --write        # 重写清单文档
+  python production/qa/param-inventory.py --sync-values  # 把台账的值同步成代码里的当前值
+
+**「单一真源」**：台账的值**只**来自 `parameters.json` ——
+⚠️ 2026-10-21 修掉过一个真缺陷：本脚本里曾有一份**硬编码的值副本**，
+它在后面**覆盖**了从台账读出来的值 ⇒ 「单一真源在 parameters.json」**在代码里没成立**，
+而且两个检查器（C# 守卫读台账 / 本脚本读硬编码副本）**会互相矛盾** ——
+实测：台账里把 0.65 改成 0.66，C# 守卫红、本脚本报「一致」。
+⇒ 那份副本已删除；`mutate-param-ledger.py` 第十档现在盯着「两个检查器必须同时红」。
 """
 try:
     import _utf8out  # noqa: F401  — 控制台默认 GBK，印 ✓/✗ 会直接崩
@@ -121,41 +130,6 @@ def check():
     return found, problems
 
 
-# 参数的期望值（与文档一致）—— 单独放，便于与生成表同源
-EXPECTED_VALUES = {
-    ("Application/DailyLife.cs", "PlaceholderActionFractionOfDay"): "0.25",
-    ("Application/DailyLife.cs", "PlaceholderModifierFloor"): "0.10",
-    ("Application/DailyLife.cs", "PlaceholderModifierCeiling"): "10.0",
-    ("Application/DailyLife.cs", "PlaceholderBuildProgressPerAction"): "0.25",
-    ("Application/DungeonFlow.cs", "DeclaredStageCount"): "3",
-    ("Application/HeroBehaviorService.cs", "BagItemLimit"): "5",
-    ("Application/PlaceholderCombat.cs", "PlaceholderHeroWinRate"): "0.65",
-    ("Application/SimulationRunner.cs", "RequiredCatchUpLimit"): "8",
-    ("Application/SimulationRunner.cs", "PlaceholderSimSecondsPerDay"): "100.0",
-    ("Application/VillageUpgradeService.cs", "MaxTier"): "5",
-    ("Domain/Clock/SimClock.cs", "_timeScale"): "1.0",
-    ("Domain/Relationships/Relationship.cs", "MinValue"): "-100",
-    ("Domain/Relationships/Relationship.cs", "MaxValue"): "100",
-    ("Domain/Relationships/Relationship.cs", "InitialValue"): "0",
-    ("Domain/Relationships/Relationship.cs", "SocialDelta"): "2",
-    ("Domain/Relationships/Relationship.cs", "CooperationDelta"): "3",
-    ("Domain/Relationships/Relationship.cs", "HostileThreshold"): "-20",
-    ("Domain/Relationships/Relationship.cs", "CloseThreshold"): "20",
-    ("Domain/Relationships/Relationship.cs", "TargetWeightScale"): "50.0",
-    ("Domain/Relationships/Relationship.cs", "MinTargetWeight"): "0.1",
-    ("Domain/Relationships/Relationship.cs", "MaxTargetWeight"): "3.0",
-    ("Domain/Stall/StallFee.cs", "RatePer100"): "5",
-    ("Domain/Stall/StallFee.cs", "UnitsPerGold"): "100",
-    ("Main.cs", "SquadMax"): "4",
-    ("Main.cs", "DefaultGoldRewardUnits"): "10",
-    ("Main.cs", "PlaceholderBaseSuccessRate"): "0.52",
-    ("Main.cs", "PlaceholderAttrScale"): "300",
-    ("Main.cs", "PlaceholderSuccessCap"): "0.95",
-    ("Main.cs", "PlaceholderPrideRefusalRate"): "0.40",
-    ("Main.cs", "PlaceholderPocketRate"): "0.45",
-    ("Main.cs", "PlaceholderOverrunRate"): "0.35",
-    ("VillageView.cs", "MaxTier"): "5",
-}
 
 
 DOC_PATH = ROOT / "production" / "36_当前实现参数清单_V1.0.md"
@@ -287,10 +261,49 @@ def build_doc(found):
     return head + table(params) + "\n" + "\n".join(tlines) + footer
 
 
+def sync_values():
+    """把台账里每个参数的**值**同步成代码里的当前值，并重新生成清单文档。
+
+    **为什么需要它**：开发者的下一步（T-004 的战斗数值、D-003 的层级数……）
+    都要**改代码里的常量**。改完代码，台账的 `value` 字段就得跟着改 ——
+    而那是**手写 JSON 里的一行**，人很容易漏（漏了守卫会红，但红的是「你漏了一步」，
+    不是「数字对不上」）。⇒ **值由机器跟，措辞由人跟**：
+    这个命令只改 `value`，**不碰** `status` / `note`
+    （那两个是**人的判断**：这个数还是不是占位？它服务于哪个 T 编号？）。
+
+    **它不碰的事**：不新增条目、不删条目、不改分类 ——
+    「一个数字算不算玩法参数」是人的判断，不是脚本的。
+
+    返回 (改了哪些, 出错信息)。
+    """
+    import json
+    data = json.loads(LEDGER_PATH.read_text(encoding="utf-8"))
+    found = {(rel, name): value for rel, name, value in scan()}
+
+    changed = []
+    unknown = []
+    for row in data["parameters"]:
+        key = (row["file"], row["name"])
+        if key not in found:
+            unknown.append(f"{key[0]} :: {key[1]}（代码里找不到这个常量）")
+            continue
+        actual = found[key]
+        old = row.get("value", "")
+        if norm(old) != norm(actual):
+            changed.append(f"{key[0]} :: {key[1]}  {old} → {actual}")
+            row["value"] = actual
+
+    if changed:
+        LEDGER_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+                               encoding="utf-8", newline="\n")
+    return changed, unknown
+
+
 def main():
     args = sys.argv[1:]
     check_only = "--check" in args
     write = "--write" in args
+    sync = "--sync-values" in args
 
     found, problems = check()
 
@@ -316,6 +329,26 @@ def main():
         print(f"✅ 参数台账与代码一致：{len(found)} 个数值常量，"
               f"其中玩法参数 {params} 个，其余为表现层/技术值；文档也与生成结果一致")
         return 0
+
+    if sync:
+        changed, unknown = sync_values()
+        if unknown:
+            print("!! 台账里有这些条目在代码里找不到（请手工处理）：")
+            for u in unknown:
+                print("   ", u)
+        if changed:
+            print("已同步台账的值：")
+            for c in changed:
+                print("   ", c)
+        else:
+            print("台账的值已经与代码一致（没动文件）")
+        # 文档是生成的 ⇒ 值变了就重新生成，免得它与台账分叉
+        DOC_PATH.write_text(build_doc(found), encoding="utf-8", newline="\n")
+        print(f"已重新生成 {DOC_PATH.relative_to(ROOT)}")
+        print()
+        print("📌 **值由机器跟，措辞由人跟**：如果某条备注里写着这个数，")
+        print("   请顺手改一下 —— 守卫 `ParameterLedgerCrossReferenceTests` 会抓出过期数字。")
+        return 1 if unknown else 0
 
     if write:
         DOC_PATH.write_text(build_doc(found), encoding="utf-8", newline="\n")

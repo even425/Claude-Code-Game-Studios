@@ -46,6 +46,15 @@ def run_tests():
     return -1, out
 
 
+def run_python_check():
+    """跑 `param-inventory.py --check`，返回它是不是说「不一致」。"""
+    r = subprocess.run(
+        [sys.executable, str(ROOT / "production" / "qa" / "param-inventory.py"), "--check"],
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    out = (r.stdout or "") + (r.stderr or "")
+    return "不一致" in out, out
+
+
 def report(label, failed):
     color = "RED  " if failed > 0 else ("GREEN" if failed == 0 else "???  ")
     ok = failed > 0
@@ -160,6 +169,40 @@ def main():
                        encoding="utf-8", newline="")
     results.append(report("文档里漏掉一张表",
                           with_backup([DOC], m9)))
+
+    # ── ⑩ 两个检查器必须说**同一件事** ─────────────────────────────────
+    #    2026-10-21 修掉的一个真缺陷：`param-inventory.py` 里有一份**硬编码的值副本**，
+    #    它在第 125 行**覆盖**了第 58 行从台账读出来的值 ⇒
+    #    「单一真源在 parameters.json」在代码里**没成立**，
+    #    而且两个检查器**互相矛盾**（台账改 0.65 → 0.66：C# 守卫红、Python --check 绿）。
+    #    这一档就是那道保险：**台账里的值一改，两个检查器必须同时红**。
+    #    ⚠️ 这一档**不能**用 `with_backup` —— 那个 helper 在 `finally` 里复原文件，
+    #    而检查必须**在变异还在的时候**跑（否则测的是复原后的干净树 ⇒ 两个都绿）。
+    backup = LEDGER.read_bytes()
+    backup_hash = sha(LEDGER)
+    try:
+        raw = backup.decode("utf-8")
+        mutated = re.sub(r'("name": "PlaceholderHeroWinRate",.*?"value": ")0\.65(")',
+                         r"\g<1>0.66\g<2>", raw, count=1, flags=re.S)
+        if mutated == raw:
+            print("!! 探针位置没找到")
+            results.append(False)
+        else:
+            LEDGER.write_text(mutated, encoding="utf-8", newline="")
+            failed, _ = run_tests()
+            py_red, py_out = run_python_check()
+            ok = failed > 0 and py_red
+            print(f"{'OK  ' if ok else '!!  '}变异 [台账里的值改了 ⇒ C# 守卫与 "
+                  f"param-inventory.py --check 必须**同时**红] -> "
+                  f"C# {'RED' if failed > 0 else 'GREEN'} / "
+                  f"Python {'RED' if py_red else 'GREEN'}（期望两个都 RED）")
+            if not ok:
+                print("      " + py_out.strip()[:300].replace("\n", " | "))
+            results.append(ok)
+    finally:
+        LEDGER.write_bytes(backup)
+        if sha(LEDGER) != backup_hash:
+            print("!! 复原失败")
 
     print("---")
     bad = results.count(False)

@@ -161,4 +161,66 @@ public class ParameterLedgerCrossReferenceTests
 
         Assertions.AssertThat(string.Join(" | ", orphans)).IsEmpty();
     }
+
+    /// <summary>
+    /// <b>备注里不许出现「查无此数」的数字</b>。
+    ///
+    /// <para><b>它守的是什么</b>：备注是**人写的**，值是**机器跟的**
+    /// （<c>param-inventory.py --sync-values</c> 会把值同步成代码里的当前值）。
+    /// 两者一分离，生成的清单文档就会出现**自相矛盾**的一行：
+    /// <c>| PlaceholderHeroWinRate | 0.7 | 【占位】P-07 | 战斗占位胜率（0.65） |</c>
+    /// —— 值是 0.7，备注还写着 0.65。</para>
+    ///
+    /// <para><b>判据</b>：备注里出现的每个「独立数字」，
+    /// 必须能在台账的<b>某个值</b>里找到（0.10 与 0.1 视作同一个数）。
+    /// 于是「过期的数字」无处可藏 ⇒ 开发者必须把措辞一起改掉。
+    /// <b>字母或连字符前缀的数字不算</b>（<c>CR-1</c> / <c>P-13</c> / <c>2026-10-21</c>）。</para>
+    /// </summary>
+    [TestCase]
+    public void Notes_DoNotMentionNumbersThatNoLongerExist()
+    {
+        var ledger = LoadLedger();
+
+        // 台账里所有值的归一化集合（0.10 与 0.1 视作同一个数）
+        var known = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var row in ledger)
+        {
+            string v = row.Value.Trim();
+            if (v.Length == 0) continue;
+            known.Add(NormalizeNumber(v));
+        }
+
+        // 防空转：必须真的有值、也真的有备注。
+        Assertions.AssertThat(known.Count).IsGreater(5);
+        Assertions.AssertThat(ledger.Count).IsGreater(10);
+
+        // 「独立数字」：前面不是字母或连字符（排除 CR-1 / P-13 / 2026-10-21）
+        var standalone = new Regex(@"(?<![A-Za-z\-])\d+(?:\.\d+)?", RegexOptions.Compiled);
+
+        var stale = new List<string>();
+        foreach (var row in ledger)
+        {
+            foreach (Match m in standalone.Matches(row.Note))
+            {
+                string token = NormalizeNumber(m.Groups[0].Value);
+                if (known.Contains(token)) continue;
+                stale.Add($"{row.File}::{row.Name} 的备注里有个 {m.Groups[0].Value}"
+                          + " —— 台账里没有这个数（多半是值改了、措辞没跟上）");
+            }
+        }
+
+        Assertions.AssertThat(string.Join(" | ", stale)).IsEmpty();
+    }
+
+    /// <summary>把数字文本归一化（0.10 与 0.1 视作同一个数）。</summary>
+    private static string NormalizeNumber(string v)
+    {
+        if (double.TryParse(v, System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out double f))
+        {
+            return f == Math.Floor(f) ? ((long)f).ToString() : f.ToString("0.#########",
+                       System.Globalization.CultureInfo.InvariantCulture);
+        }
+        return v;
+    }
 }

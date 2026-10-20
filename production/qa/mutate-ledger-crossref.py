@@ -119,6 +119,41 @@ def main() -> int:
         "## 2. 临时参数表",
     ))
 
+    # ── ⑤ 备注里写一个台账里查无此数的数字 ⇒ 断言 3 红 ────────────────
+    results.append(mutate_ledger(
+        "台账某条的备注里写了一个不存在的数字（值改了、措辞没跟上）",
+        '"note": "战斗占位胜率（0.65）"',
+        '"note": "战斗占位胜率（0.65，也可能是 0.71）"',
+    ))
+
+    # ── ⑥ 「值由机器跟、过期措辞由机器抓」这条链 ──────────────────────
+    #    改代码里的常量 → 跑 `--sync-values` → **值**跟着走（✓），
+    #    而备注里的旧数字变成「查无此数」⇒ 守卫**红**（✓）——
+    #    这正是设计：值不用人跟，措辞必须人跟，而「措辞没跟上」机器会喊。
+    src = ROOT / "src" / "Application" / "PlaceholderCombat.cs"
+    src_backup = src.read_bytes()
+    try:
+        text = src_backup.decode("utf-8")
+        src.write_text(text.replace("0.65", "0.66"), encoding="utf-8", newline="")
+        proc = subprocess.run(
+            [sys.executable, str(ROOT / "production" / "qa" / "param-inventory.py"),
+             "--sync-values"], cwd=ROOT, capture_output=True, text=True,
+            encoding="utf-8", errors="replace")
+        ledger_changed = "0.66" in proc.stdout
+        failed = run_tests()
+        ok = ledger_changed and failed > 0
+        print(f"{'OK  ' if ok else '!!  '}变异 [改代码常量 → --sync-values 跟值 → "
+              f"备注里的旧数字被守卫抓住] -> "
+              f"{'RED' if failed > 0 else 'GREEN'}（值跟上了：{ledger_changed}，期望 RED）")
+        results.append(ok)
+    finally:
+        src.write_bytes(src_backup)
+        # 台账里的值要跟着代码一起复原
+        subprocess.run(
+            [sys.executable, str(ROOT / "production" / "qa" / "param-inventory.py"),
+             "--sync-values"], cwd=ROOT, capture_output=True, text=True,
+            encoding="utf-8", errors="replace")
+
     print("---")
     bad = results.count(False)
     print(f"变异矩阵：{len(results) - bad}/{len(results)} 符合预期")

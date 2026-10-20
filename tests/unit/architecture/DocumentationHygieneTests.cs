@@ -71,4 +71,84 @@ public class DocumentationHygieneTests
 
         Assertions.AssertThat(string.Join(" | ", offenders)).IsEmpty();
     }
+
+    /// <summary>
+    /// <b>已判死的设计线</b>（2026-10-17 的 GDD，<c>07</c> D-002「完全作废」）的
+    /// 审查报告留在 <c>production/</c>（现行文档目录）里 ⇒ 它们<b>必须</b>带
+    /// 「审查对象已判死」的状态横幅。
+    ///
+    /// <para><b>为什么这是守卫而不是备注</b>：那批报告里列着 26 条交叉冲突、
+    /// 一堆内容缺口与未决问题，读起来像**现行待办**；
+    /// 而 D-002 明令<b>不得引用</b>那条线的公式、常数与实体定义。
+    /// 没有横幅，下一个人可能照着已判死的公式去改代码 ——
+    /// 那不是「多做了事」，是<b>按作废的规则实现</b>。</para>
+    /// </summary>
+    [TestCase]
+    public void VoidedDesignLine_Audits_CarryTheStatusBanner()
+    {
+        const string marker = "【2026-10-21 补状态标记 · 审查对象已判死】";
+
+        var expected = new[]
+        {
+            "cross-doc-consistency.md",
+            "content-gap-audit.md",
+            "experience-gap-audit.md",
+            "design-review-findings.md",
+            "open-questions-consolidated.md",
+            "design-decisions.md",
+            "terminology-sweep.md",
+            "project-stage-report.md",
+        };
+
+        var missing = new List<string>();
+        foreach (var name in expected)
+        {
+            var path = Path.Combine(ProductionDir(), name);
+            if (!File.Exists(path)) { missing.Add($"{name}（文件不存在）"); continue; }
+            if (!File.ReadAllText(path).Contains(marker)) missing.Add(name);
+        }
+
+        Assertions.AssertThat(string.Join(" | ", missing)).IsEmpty();
+    }
+
+    /// <summary>
+    /// <b>任何</b>现行文档一旦提到 <c>design/gdd/</c>（那条已判死的设计线），
+    /// 就必须<b>同时声明它已作废</b> —— 否则读者会以为它引用的东西仍然有效。
+    ///
+    /// <para><b>「声明作废」有两种合法写法</b>：
+    /// ① 带完整状态横幅（那 8 份旧审查报告）；
+    /// ② 就地写明它不构成基线的任何部分 / 不得引用
+    /// （如 <c>05</c> §9、<c>07</c> D-002 的「效力」段）——
+    /// 那种写法<b>正是我们想要的</b>，不该被守卫骂。</para>
+    ///
+    /// <para>所以本条只抓「<b>提了却没说它死</b>」的情形。</para>
+    /// </summary>
+    [TestCase]
+    public void AnyProductionDoc_ReferencingTheVoidedGddLine_AlsoSaysItIsVoid()
+    {
+        const string marker = "【2026-10-21 补状态标记 · 审查对象已判死】";
+
+        // 「就地声明作废」的几种说法
+        string[] voidingPhrases =
+        {
+            "不构成当前基线的任何部分",
+            "完全作废",
+            "判死",
+            "已归档",
+            "已空",
+            "不是现行待办",
+        };
+
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(ProductionDir(), "*.md", SearchOption.TopDirectoryOnly))
+        {
+            string text = File.ReadAllText(file);
+            if (!text.Contains("design/gdd/")) continue;
+            if (text.Contains(marker)) continue;
+            if (voidingPhrases.Any(p => text.Contains(p))) continue;
+            offenders.Add(Path.GetFileName(file));
+        }
+
+        Assertions.AssertThat(string.Join(" | ", offenders)).IsEmpty();
+    }
 }

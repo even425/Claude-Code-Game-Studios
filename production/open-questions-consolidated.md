@@ -1,5 +1,24 @@
 # 未决问题合并清单 — 一次性过目版
 
+> ⚠️ **【2026-10-21 补状态标记 · 审查对象已判死】**
+>
+> 本文件是 17 份 GDD 的 `## Open Questions` 的**归组与登记**（它引用的 `design-decisions.md` 与 `cross-doc-consistency.md` 同属这条线）。
+>
+> 本文件审查 / 汇总的是**第一条设计线**的产物（`design/gdd/` 下的 GDD，另有 `design/game-brief.md`）。
+> 那条线已于 **2026-10-17 由 `production/07` 的 D-002 判死** ——
+> 开发者原话：「**完全作废，一切以总纲为准**」。文档现归档在 `design/archive/gdd/`。
+>
+> ⇒ **本文列出的冲突 / 缺口 / 待确认项**不是**现行待办**。
+> ⇒ **引用其中的公式、常数、实体定义是被明令禁止的**（D-002 原文：
+> 「编码与设计时**不得**引用其中的公式、常数或实体定义。任何看起来『已经定过』的说法，
+> 若只在该注册表中有记载，**一律视为未确认**」）。
+> ⇒ 保留本文是为了留存**方法与教训**（怎么审、怎么找矛盾），**不是待办清单**。
+>
+> **现行有效设计文档**（清单见 `design/archive/README.md`）：
+> `production/异世界村庄经营与英雄冒险游戏_设计基线_V1.2.md`（唯一权威基线）
+> ＋ `production/07_技术决策与待确认事项.md`（决策台账）。
+> **要动设计，请看这两份。**
+
 > 2026-10-17 · 由 17 份 `design/gdd/*.md` 的 `## Open Questions` 表格抽取。
 > **本文件只做归组与登记，不改任何 GDD。** 所有推荐均可被推翻。
 > 依据：`production/design-decisions.md`（20 条裁定）· `production/cross-doc-consistency.md`（26 条冲突）· `production/design-review-findings.md`

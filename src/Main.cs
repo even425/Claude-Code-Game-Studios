@@ -462,9 +462,15 @@ public partial class Main : Node2D
             id => _heroes.FirstOrDefault(h => h.Id == id),
             ClaudeCodeGameStudios.Domain.Items.PriceBook.Default);
 
-        // R-01：副本战利品的**占位**内容来源。T-007 拍板后只换这一处实现，
+        // R-05：战利品内容 = **掉落表**（权重抽取）。物品注册表管「是什么、什么稀有度」，
+        // 价格表管「多少钱」；掉落表引用物品 Id，配置有问题时**不发放**并记一笔
+        // （不崩游戏 —— 「这个副本今天不掉东西」比「游戏起不来」好对付）。
         // 分配规则（LootSplit）一行都不用改。
-        _lootProvider = new ClaudeCodeGameStudios.Application.PlaceholderDungeonLootProvider();
+        _lootProvider = new ClaudeCodeGameStudios.Application.DungeonLootProvider(
+            new[] { ClaudeCodeGameStudios.Application.DefaultLootTables.For(DungeonName) },
+            ClaudeCodeGameStudios.Domain.Items.ItemCatalog.Default,
+            ClaudeCodeGameStudios.Domain.Items.PriceBook.Default,
+            error => GD.Print($"LOOTCONFIG {error}"));
 
         // 结算器必须在这里造：它的两个委托是本类的方法组，
         // 字段初始化器引用不了（C# 的限制）。必须在 BuildScene 之后 ——
@@ -1260,16 +1266,15 @@ public partial class Main : Node2D
             return ClaudeCodeGameStudios.Domain.Settlement.LootAllocation.Empty;
         }
 
-        var loot = _lootProvider.LootFor(DungeonName, job.Amt);
-        if (loot is null || loot.Count == 0)
-        {
-            return ClaudeCodeGameStudios.Domain.Settlement.LootAllocation.Empty;
-        }
-
-        var rng = new ClaudeCodeGameStudios.Domain.Heroes.DecisionFlow.SeededRandom(
-            ClaudeCodeGameStudios.Domain.Settlement.LootSplit.DeriveSeed(outcome.Run.Id.Value));
-
-        return ClaudeCodeGameStudios.Domain.Settlement.LootSplit.Split(loot, participants, rng);
+        // R-05：整条管线（派生子流 → 抽取 → 分配）住在 `LootPipeline` 里 ——
+        // 它是**抽取与分配共用同一条随机流**的那处接缝，必须有测试盯住。
+        //
+        // 为什么共用一条：同一个副本标识 → 同一个种子 → 同样的抽取顺序 →
+        // 同样的掉落 + 同样的分配。读档后重放得到完全一样的结果。
+        // 为什么要独立于全局流：掉落若从 Main._rng 抽，会**插队** ——
+        // 一次副本掉落会改变此后所有战斗与日常的结果。
+        return ClaudeCodeGameStudios.Domain.Settlement.LootPipeline.Run(
+            _lootProvider, DungeonName, participants, outcome.Run.Id.Value);
     }
 
     private ClaudeCodeGameStudios.Application.DungeonFlowOutcome ResolveDungeon(
@@ -3486,6 +3491,28 @@ public partial class Main : Node2D
         GD.Print($"DUNGEONTEST 战利品入包 = {lootInBags}，未参战者没拿到 = {nobodyElseGotLoot}" +
                  $"（失败时两人都必须是 true：D-010 Q1 失败不给奖励）");
 
+        // ── R-01 M3：奖励要能存进档、读档后仍属于正确的人 ──
+        //
+        // **快照必须在这一刻取**：下面 M4 会故意把战利品摆上摊再卖掉 ——
+        // 卖完之后战利品在**买家**的背包里，摊主的背包已经空了。
+        // 若在卖完之后才查「摊主的存档里有没有这件战利品」，查到的自然是「没有」，
+        // 而那不是入档失败，是**查错了时机**。
+        // （R-05 的掉落表出来之前，每次掉落都是 19 份，卖 1 份还剩 18 份，
+        //    这个错误一直没暴露 —— 它被"数量足够多"掩盖了。）
+        var saveWithLoot = BuildSave();
+        bool lootPersisted = true;
+        foreach (var g in loot.Grants)
+        {
+            var heroSave = saveWithLoot.Heroes.FirstOrDefault(h => h.Id == g.Hero.Value);
+            long saved = heroSave?.Bag
+                .Where(b => b.ItemId == g.Item.Value)
+                .Sum(b => b.Count) ?? 0;
+            if (saved <= 0) lootPersisted = false;
+        }
+        GD.Print($"DUNGEONTEST 战利品已入档 = {lootPersisted}，" +
+                 $"已结算键 {saveWithLoot.AppliedSettlementKeys.Count} 个" +
+                 $"（存档版本 {saveWithLoot.Version}，R-01 未新增字段）");
+
         // ── R-01 M4：拿到的物品要能真的开摊、被另一位英雄买走 ──
         if (loot.Grants.Count > 0 && _heroes.Count >= 2)
         {
@@ -3520,20 +3547,7 @@ public partial class Main : Node2D
             }
         }
 
-        // ── R-01 M3：奖励要能存进档、读档后仍属于正确的人 ──
-        var saveWithLoot = BuildSave();
-        bool lootPersisted = true;
-        foreach (var g in loot.Grants)
-        {
-            var heroSave = saveWithLoot.Heroes.FirstOrDefault(h => h.Id == g.Hero.Value);
-            long saved = heroSave?.Bag
-                .Where(b => b.ItemId == g.Item.Value)
-                .Sum(b => b.Count) ?? 0;
-            if (saved <= 0) lootPersisted = false;
-        }
-        GD.Print($"DUNGEONTEST 战利品已入档 = {lootPersisted}，" +
-                 $"已结算键 {saveWithLoot.AppliedSettlementKeys.Count} 个" +
-                 $"（存档版本 {saveWithLoot.Version}，R-01 未新增字段）");
+        // ── R-01 M3 的存档检查已在上方（战利品刚落地时）完成 ──
 
         foreach (string note in _chronicle.Recent(_chronicle.Count - notesBefore))
         {

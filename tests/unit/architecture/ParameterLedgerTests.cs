@@ -221,4 +221,128 @@ public class ParameterLedgerTests
         Assertions.AssertThat(ledger.Count(r => r.Kind == "参数")).IsGreater(20);
         Assertions.AssertThat(ledger.Count(r => r.Kind != "参数")).IsGreater(20);
     }
+
+    // ── 表类参数（阶段 5 评审要看的四张表）──────────────────────────────
+
+    /// <summary>表类参数的抽取方式。</summary>
+    private static readonly Dictionary<string, Func<string, List<string>>> Extractors =
+        new(StringComparer.Ordinal)
+        {
+            // new(50L, 30L) → "50,30"
+            ["cost-table"] = text => Regex.Matches(text, @"new\((\d+)L,\s*(\d+)L\)")
+                .Select(m => $"{m.Groups[1].Value},{m.Groups[2].Value}").ToList(),
+
+            // new LootEntry(new ItemId("石料"), 60.0, 1, 2) → "石料:60.0:1:2"
+            ["loot-entries"] = text => Regex.Matches(
+                    text, @"new LootEntry\(new ItemId\(""([^""]+)""\),\s*([\d.]+),\s*(\d+),\s*(\d+)\)")
+                .Select(m => $"{m.Groups[1].Value}:{m.Groups[2].Value}:{m.Groups[3].Value}:{m.Groups[4].Value}")
+                .ToList(),
+
+            // "莽" => 1.2  → "莽=1.2"（只取带引号的分支，跳过 `_` 默认臂）
+            ["switch-arms"] = text => Regex.Matches(text, @"""([^""]+)""\s*=>\s*([\d.]+)")
+                .Select(m => $"{m.Groups[1].Value}={m.Groups[2].Value}").ToList(),
+
+            // new ItemDefinition(new ItemId("石料"), "石料", ItemRarity.Common) → "石料=Common"
+            ["rarity-map"] = text => Regex.Matches(
+                    text, @"new ItemDefinition\(new ItemId\(""([^""]+)""\),\s*""[^""]*"",\s*ItemRarity\.(\w+)\)")
+                .Select(m => $"{m.Groups[1].Value}={m.Groups[2].Value}").ToList(),
+        };
+
+    private sealed record TableRow(string Id, string File, string Status, string Note,
+                                   string Extractor, string[] Expected);
+
+    private static List<TableRow> LoadTables()
+    {
+        string path = Path.Combine(RepoRoot(), LedgerRelPath.Replace('/', Path.DirectorySeparatorChar));
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var rows = new List<TableRow>();
+        if (!doc.RootElement.TryGetProperty("tables", out var arr)) return rows;
+
+        foreach (var t in arr.EnumerateArray())
+        {
+            rows.Add(new TableRow(
+                t.GetProperty("id").GetString() ?? "",
+                t.GetProperty("file").GetString() ?? "",
+                t.GetProperty("status").GetString() ?? "",
+                t.GetProperty("note").GetString() ?? "",
+                t.GetProperty("extractor").GetString() ?? "",
+                t.GetProperty("expected").EnumerateArray().Select(x => x.GetString() ?? "").ToArray()));
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// 表类参数的值必须与代码一致 ⇒ <b>改表忘了改台账 ⇒ 红</b>。
+    /// <para>这四张表恰好就是阶段 5 要评审的：掉落权重 / 掉落次数 / 稀有度映射 / 升级成本。</para>
+    /// </summary>
+    [TestCase]
+    public void TableParameters_MatchTheCode()
+    {
+        var problems = new List<string>();
+
+        foreach (var row in LoadTables())
+        {
+            if (!Extractors.TryGetValue(row.Extractor, out var extract))
+            {
+                problems.Add($"{row.Id}：未知的抽取方式「{row.Extractor}」");
+                continue;
+            }
+
+            string path = Path.Combine(RepoRoot(), row.File.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+            {
+                problems.Add($"{row.Id}：文件不存在 {row.File}");
+                continue;
+            }
+
+            var actual = extract(File.ReadAllText(path));
+            var expected = row.Expected;
+
+            if (actual.Count != expected.Length)
+            {
+                problems.Add($"{row.Id}：条数不同（代码 {actual.Count}，台账 {expected.Length}）");
+                continue;
+            }
+            for (int i = 0; i < expected.Length; i++)
+            {
+                if (actual[i] != expected[i])
+                {
+                    problems.Add($"{row.Id} 第 {i} 项：代码「{actual[i]}」≠ 台账「{expected[i]}」");
+                }
+            }
+        }
+
+        Assertions.AssertThat(string.Join(" | ", problems)).IsEmpty();
+    }
+
+    /// <summary>清单文档必须列出每张表（⇒ 文档不会漏掉一张表）。</summary>
+    [TestCase]
+    public void TheInventoryDocument_MentionsEveryTable()
+    {
+        string docPath = Path.Combine(RepoRoot(), DocRelPath.Replace('/', Path.DirectorySeparatorChar));
+        string doc = File.ReadAllText(docPath);
+
+        var missing = LoadTables()
+            .Where(t => !doc.Contains(t.Id))
+            .Select(t => t.Id)
+            .ToList();
+
+        Assertions.AssertThat(string.Join(" | ", missing)).IsEmpty();
+    }
+
+    /// <summary><b>防空转</b>：四张表都真的被抽到了内容。</summary>
+    [TestCase]
+    public void EveryTableExtractor_ActuallyFindsSomething()
+    {
+        var tables = LoadTables();
+        Assertions.AssertThat(tables.Count).IsGreater(3);
+
+        foreach (var row in tables)
+        {
+            string path = Path.Combine(RepoRoot(), row.File.Replace('/', Path.DirectorySeparatorChar));
+            var actual = Extractors[row.Extractor](File.ReadAllText(path));
+            Assertions.AssertThat(actual.Count).IsGreater(0);
+            Assertions.AssertThat(actual.Count).IsEqual(row.Expected.Length);
+        }
+    }
 }

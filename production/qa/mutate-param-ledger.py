@@ -113,6 +113,49 @@ def main():
     results.append(report("从清单文档里删掉一行参数",
                           with_backup([DOC], m4)))
 
+    # ── ⑤ 表类参数：改掉落权重 ────────────────────────────────────────
+    def m5():
+        p = ROOT / "src" / "Application" / "DungeonLootProvider.cs"
+        t = p.read_text(encoding="utf-8")
+        p.write_text(t.replace('new ItemId("石料"), 60.0, 1, 2', 'new ItemId("石料"), 65.0, 1, 2'),
+                     encoding="utf-8", newline="")
+    results.append(report("改了掉落权重",
+                          with_backup([ROOT / "src" / "Application" / "DungeonLootProvider.cs"], m5)))
+
+    # ── ⑥ 表类参数：改升级成本 ────────────────────────────────────────
+    def m6():
+        p = ROOT / "src" / "Application" / "VillageUpgradeService.cs"
+        t = p.read_text(encoding="utf-8")
+        p.write_text(t.replace("new(50L, 30L),", "new(60L, 30L),"), encoding="utf-8", newline="")
+    results.append(report("改了升级成本",
+                          with_backup([ROOT / "src" / "Application" / "VillageUpgradeService.cs"], m6)))
+
+    # ── ⑦ 表类参数：改稀有度映射 ──────────────────────────────────────
+    def m7():
+        p = ROOT / "src" / "Domain" / "Items" / "ItemCatalog.cs"
+        t = p.read_text(encoding="utf-8")
+        p.write_text(t.replace('new ItemId("木料"), "木料", ItemRarity.Common',
+                                'new ItemId("木料"), "木料", ItemRarity.Uncommon'),
+                     encoding="utf-8", newline="")
+    results.append(report("改了稀有度映射",
+                          with_backup([ROOT / "src" / "Domain" / "Items" / "ItemCatalog.cs"], m7)))
+
+    # ── ⑧ 表类参数：改性格权重 ────────────────────────────────────────
+    def m8():
+        p = ROOT / "src" / "Application" / "HeroBehaviorService.cs"
+        t = p.read_text(encoding="utf-8")
+        p.write_text(t.replace('"莽" => 1.2,', '"莽" => 1.3,'), encoding="utf-8", newline="")
+    results.append(report("改了性格权重",
+                          with_backup([ROOT / "src" / "Application" / "HeroBehaviorService.cs"], m8)))
+
+    # ── ⑨ 文档里漏掉一张表 ────────────────────────────────────────────
+    def m9():
+        doc = DOC.read_text(encoding="utf-8")
+        DOC.write_text(doc.replace("loot-weights-and-quantity", "（漏掉的那张）"),
+                       encoding="utf-8", newline="")
+    results.append(report("文档里漏掉一张表",
+                          with_backup([DOC], m9)))
+
     print("---")
     bad = results.count(False)
     print(f"变异矩阵：{len(results) - bad}/{len(results)} 符合预期")

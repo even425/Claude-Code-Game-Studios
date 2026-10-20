@@ -53,6 +53,13 @@ def load_ledger():
 CLASSIFICATION, EXPECTED_VALUES = load_ledger()
 
 
+def load_tables():
+    """读台账里的「表」类参数（阶段 5 评审要看的四张表）。"""
+    import json
+    data = json.loads(LEDGER_PATH.read_text(encoding="utf-8"))
+    return data.get("tables", [])
+
+
 def scan():
     """扫出 (相对路径, 常量名, 值文本) 列表。"""
     out = []
@@ -192,18 +199,20 @@ DOC_FOOTER = """
 3. **`07` §2 的 P-11 那一行写「台账当前为空表」** —— **过期状态**：
    台账有 P-01…P-11 共 11 行，不是空的。
 
-## 4 · 不在本文范围的东西（但同样是「实现里的数」）
+## 4 · 覆盖范围与已知边界
 
-| 东西 | 在哪 | 为什么不在本文 |
+| 东西 | 在哪 | 覆盖情况 |
 |---|---|---|
-| 升级成本表（金 50/100/150/200/250 + 材料 30/55/80/105/130） | `VillageUpgradeService.CostTable` | 是**数组**不是标量，本文只扫标量常量。数值由 `07` D-054 裁决 ⑤ 记录 |
-| 价格表（石料/木料/布匹） | `config/prices.json` / `PriceBook.Default` | 已是**外部配置**（B4 同款做法），不在代码里 |
-| 掉落权重 60/30/10 与数量区间 | `DungeonLootProvider` | **【占位】**，待 T-004 的掉落评审 |
-| 性格偏好权重（莽 1.2 / 傲 0.5 / 肝 1.5 / 挂机 0.2） | `HeroBehaviorService` | 不是 `const`（是查表），本文的扫描器只认标量常量 |
-| 税率 5% | `StallFee.RatePer100` | **在**本文（已确认 D-054 ⑩） |
+| 标量数值常量（64 处） | `src/` 全部 | ✅ **全覆盖**（32 个玩法参数 + 32 个表现层/技术/哨兵值） |
+| **表类参数**（4 张） | 见 §1.1 | ✅ **全覆盖**：升级成本、掉落权重与数量、性格权重、稀有度映射 |
+| 价格表（石料/木料/布匹） | `config/prices.json` ↔ `PriceBook.Default` | ✅ 由 `PriceBookConfigConsistencyTests` **逐项比对**（两份副本不许分叉） |
+| 世界表 | `config/worlds.json` ↔ `HeroFactory.World.Builtin` | ✅ 由 `WorldTableConfigConsistencyTests` **逐字段比对** |
 
-> ⚠️ **本文只扫「标量常量」**。查表 / 数组里的数字**不在覆盖范围内** ——
-> 这是本文的已知边界，不是「那些数不重要」。
+> ⚠️ **已知边界**：本文的**标量扫描**只认 `const` / `static readonly` 的**单值**声明。
+> **表类参数**靠 4 个专门的抽取器（`extractor` 字段）覆盖，覆盖到本文列出的那 4 张；
+> **别的表**（例如某个服务里的一组系数）若要纳入，需再加一个抽取器。
+> 这是本文的已知边界，不是「那些数不重要」——
+> **新增一张表，就该给它加一个抽取器**，否则它就在覆盖范围之外了。
 """
 
 
@@ -256,8 +265,21 @@ def build_doc(found):
         "**否则「新增一个数字忘了登记」这件事会被淹没在一堆无关数字里**。\n\n"
         + table(others))
 
+    # 表类参数（阶段 5 评审要看的那几张）
+    tables = load_tables()
+    tlines = []
+    if tables:
+        tlines = ["## 1.1 · 表类参数（阶段 5 要评审的那几张）", "",
+                  "| 表 | 位置 | 状态 | 内容 | 说明 |",
+                  "|---|---|---|---|---|"]
+        for row in tables:
+            values = " / ".join(f"`{v}`" for v in row["expected"])
+            tlines.append(
+                f"| `{row['id']}` | `{row['file']}` | {row['status']} | {values} | {row['note']} |")
+        tlines.append("")
+
     head = DOC_HEADER.replace("（32 个）", f"（{len(params)} 个）")
-    return head + table(params) + "\n" + footer
+    return head + table(params) + "\n" + "\n".join(tlines) + footer
 
 
 def main():

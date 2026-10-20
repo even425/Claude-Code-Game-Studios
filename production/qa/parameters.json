@@ -1,5 +1,5 @@
 {
-  "_note": "当前实现参数台账的单一真源。Python 脚本 production/qa/param-inventory.py 用它生成文档，C# 守卫 tests/unit/architecture/ParameterLedgerTests.cs 用它校验代码。新增一个数值常量必须在这里登记，否则两个守卫都会红。",
+  "_note": "当前实现参数台账的单一真源。Python 脚本 production/qa/param-inventory.py 用它生成文档，C# 守卫 tests/unit/architecture/ParameterLedgerTests.cs 用它校验代码。新增一个数值常量必须在这里登记，否则两个守卫都会红。 表类参数（tables）由 C# 守卫 ParameterLedgerTests 按 extractor 抽取并逐项比对；本文只负责把它们列进文档。",
   "parameters": [
     {
       "file": "Application/DailyLife.cs",
@@ -482,6 +482,59 @@
       "kind": "非参数",
       "status": "哨兵",
       "note": "上次建造状态哨兵"
+    }
+  ],
+  "tables": [
+    {
+      "id": "village-upgrade-costs",
+      "file": "src/Application/VillageUpgradeService.cs",
+      "status": "【已确认】D-054 ⑤",
+      "note": "五级升级的金币 / 材料成本（升到第 N 级用第 N-1 项）。材料沿用既有规则 30 + tier×25",
+      "extractor": "cost-table",
+      "expected": [
+        "50,30",
+        "100,55",
+        "150,80",
+        "200,105",
+        "250,130"
+      ]
+    },
+    {
+      "id": "loot-weights-and-quantity",
+      "file": "src/Application/DungeonLootProvider.cs",
+      "status": "【占位】T-004",
+      "note": "掉落权重（归一化后 60%/30%/10%）与数量区间 —— **占位，不是平衡值**；阶段 5 的掉落评审会一并定",
+      "extractor": "loot-entries",
+      "expected": [
+        "石料:60.0:1:2",
+        "木料:30.0:1:1",
+        "布匹:10.0:1:1"
+      ]
+    },
+    {
+      "id": "personality-desire-weights",
+      "file": "src/Application/HeroBehaviorService.cs",
+      "status": "【已确认】D-025",
+      "note": "性格权重 × 投入度权重：性格 {莽 1.2 / 傲 0.5 / 其余 1.0} × 投入度 {肝 1.5 / 挂机 0.2 / 其余 1.0}",
+      "extractor": "switch-arms",
+      "expected": [
+        "莽=1.2",
+        "傲=0.5",
+        "肝=1.5",
+        "挂机=0.2"
+      ]
+    },
+    {
+      "id": "item-rarity-mapping",
+      "file": "src/Domain/Items/ItemCatalog.cs",
+      "status": "【占位】T-004",
+      "note": "物品 → 稀有度映射（石料/木料 = 普通，布匹 = 优秀）。**占位**，阶段 5 会一并复核",
+      "extractor": "rarity-map",
+      "expected": [
+        "石料=Common",
+        "木料=Common",
+        "布匹=Uncommon"
+      ]
     }
   ]
 }

@@ -168,6 +168,67 @@ public class QaToolingTests
         Assertions.AssertThat(proc.ExitCode).IsNotEqual(0);
     }
 
+    // ── 断言 9：价格扫描工具不许替开发者拍板，也不许用单样本下结论 ──────
+
+    /// <summary>
+    /// <c>price-scan.py</c> 是给 T-007 提供**决策依据**的工具 ——
+    /// 它<b>必须</b>做到三件事，否则它就变成了「替开发者发明数值」：
+    /// <list type="number">
+    /// <item><b>不碰仓库里的价格表</b>：候选表写在临时目录，用
+    /// <c>--prices</c> 做一次性覆盖 ⇒ 仓库状态不被实验污染。</item>
+    /// <item><b>默认跑多个种子</b>：单样本的差异可能是噪声
+    /// （本仓库铁律：「跨版本比较先量种子方差，再下结论」）。</item>
+    /// <item><b>单种子时明说「不能下结论」</b>：一个样本**证明不了**「一致」，
+    /// 而这句话恰恰会出现在「我只跑了一遍」的场合。</item>
+    /// </list>
+    /// </summary>
+    [TestCase]
+    public void PriceScan_TakesEvidence_WithoutDecidingForTheDeveloper()
+    {
+        var script = File.ReadAllText(Path.Combine(QaDir(), "price-scan.py"));
+
+        // 防空转：脚本得真的存在，而且不能小到不可能有这些能力
+        Assertions.AssertThat(script.Length).IsGreaterEqual(1000);
+
+        // ① 候选表写在临时目录，且用 --prices 一次性覆盖
+        Assertions.AssertThat(script).Contains("--prices");
+        Assertions.AssertThat(script).Contains("tempfile");
+
+        // ② 默认多个种子（单样本不能下结论）
+        Assertions.AssertThat(script).Contains("DEFAULT_SEEDS");
+        var m = Regex.Match(script, @"DEFAULT_SEEDS\s*=\s*\[([^\]]+)\]");
+        Assertions.AssertThat(m.Success).IsTrue();
+        Assertions.AssertThat(m.Groups[1].Value.Split(',').Length).IsGreaterEqual(2);
+
+        // ③ 单种子时必须**明说「不能下结论」**。
+        //    ⚠️ 光查「脚本里含这句话」**太弱** —— 变异把**打印那一行**换掉后，
+        //    那句话仍在源码里 ⇒ 断言照样绿（变异矩阵实测踩到）。
+        //    ⇒ 必须查**分支里**：单种子分支（`if n_seeds < 2:`）的**正文**里
+        //    必须同时出现「不能下结论」与「没有意义」
+        //    （后者表示它**否定了**「一致」这句话 —— 单样本证明不了「一致」）。
+        var singleSeedBranch = Regex.Match(
+            script, @"if n_seeds < 2:(?<body>.*?)(?=\n    elif|\n    else)", RegexOptions.Singleline);
+        Assertions.AssertThat(singleSeedBranch.Success).IsTrue();
+        var body = singleSeedBranch.Groups["body"].Value;
+        Assertions.AssertThat(body.Contains("不能下结论")).IsTrue();
+        Assertions.AssertThat(body.Contains("没有意义")).IsTrue();
+
+        // ④ 它不许**写**仓库里的价格表。
+        //    ⚠️ 不能查「脚本里有没有出现 config/prices.json」——
+        //    它的文档字符串里**就该提到**那个路径（说明「我们不碰它」）。
+        //    要查的是「有没有**打开它写入**」——
+        //    即有没有把 ROOT/config/prices.json 当成**输出**目标。
+        //    判据：候选表写到 **mkdtemp 出来的临时目录**，且脚本里
+        //    **没有**对仓库价格表的写调用（open( / write_text( 到那个路径）。
+        Assertions.AssertThat(script).Contains("mkdtemp");
+        Assertions.AssertThat(script.Contains("price-scan-")).IsTrue();
+        // 没有对仓库价格表的任何写操作（open 会截断文件）
+        Assertions.AssertThat(script.Contains("open(")).IsFalse();
+        // 写候选表的那一处，路径变量必须来自临时目录
+        var tmpdirUse = Regex.Match(script, @"tmpdir\s*/\s*\(?");
+        Assertions.AssertThat(tmpdirUse.Success).IsTrue();
+    }
+
     // ── 断言 2：README 的变异矩阵一览必须与磁盘一致 ────────────────────
 
     /// <summary>

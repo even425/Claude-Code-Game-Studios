@@ -191,6 +191,24 @@ def main():
         '                print(f"\\n[QA] skipped: no mutate-*.py contains "',
     ))
 
+    # ── ⑪ 价格扫描只跑一个种子 ─────────────────────────────────────
+    #    单样本的差异**可能是噪声**（本仓库铁律）⇒ 工具必须默认多种子。
+    results.append(mutate(
+        "price-scan.py 默认只跑一个种子（单样本差异可能是噪声）",
+        QA / "price-scan.py",
+        "DEFAULT_SEEDS = [4242, 7777, 31337]",
+        "DEFAULT_SEEDS = [4242]",
+    ))
+
+    # ── ⑫ 价格扫描不再声明「单种子不能下结论」 ───────────────────────
+    #    一个样本**证明不了**「一致」—— 而这句话恰恰出现在「我只跑了一遍」的场合。
+    results.append(mutate(
+        "price-scan.py 单种子时不再声明「不能下结论」",
+        QA / "price-scan.py",
+        'print(f"\\n  ⚠️ **只跑了 {n_seeds} 个种子 ⇒ 「一致」这句话没有意义**"',
+        'print(f"\\n  ⇒ 各档状态一致。")',
+    ))
+
     print("---")
     bad = results.count(False)
     print(f"变异矩阵：{len(results) - bad}/{len(results)} 符合预期")

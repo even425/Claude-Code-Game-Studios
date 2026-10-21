@@ -175,6 +175,10 @@ def main():
                          "传 random 则每次运行都不同 —— 那正是 CI 偶发红灯的来源）")
     ap.add_argument("--self-test-annotation", action="store_true",
                     help="自测两条通道：annotation 与 summary（走与真实运行**同一条**代码路径），不跑自检")
+    ap.add_argument("--prices", default="",
+                    help="给每个自检传 --prices=<路径>（用**另一张价格表**跑自检）—— "
+                         "用途：证明「改价格 ⇒ 自检仍然全绿」。⚠️ 该文件是**外部配置**，"
+                         "游戏会优先用它（`Main.LoadPriceBook` 的查找顺序 ①）")
     args = ap.parse_args()
 
     # 自测开关：走**同一条** _gh_command / _write_summary 代码路径 ⇒ 它们坏了这里就会坏
@@ -220,6 +224,9 @@ def main():
     for c in checks:
         argv = [godot, "--headless", "--path", str(ROOT), "--quit-after", FRAMES, "--"] \
                + c["args"] + [f"--savepath={tmp_save}"] + seed_args
+        if args.prices:
+            # ⚠️ **放在用户参数里**（`--` 之后）—— 游戏是从 `OS.GetCmdlineUserArgs()` 读它的。
+            argv.append(f"--prices={args.prices}")
         try:
             proc = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True,
                                   encoding="utf-8", errors="replace", timeout=args.timeout)

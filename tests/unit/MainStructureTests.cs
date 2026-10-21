@@ -331,11 +331,28 @@ public class MainStructureTests
     [TestCase]
     public void SelfTestFile_ContainsOnlySelfTestMethods()
     {
-        var path = Path.Combine(SrcDir(), "Main.SelfTest.cs");
-        Assertions.AssertThat(File.Exists(path)).IsTrue();
+        // ⚠️ **扫所有 `Main.SelfTest*.cs`**，不只 `Main.SelfTest.cs`。
+        // 原因：自检文件会撞上「单文件 ≤ 1200 行」的上限（UT-01 的行数封顶）⇒
+        // 于是自检**必然会被拆成多个文件**（`Main.SelfTest.Stall.cs` 就是这么来的）。
+        // ⇒ 若这条断言只盯着**一个**文件名，拆分就变成了**绕过**这条规则的缺口：
+        // 把一个玩法方法挪到新的自检文件里，它就不再受「只允许有自检方法」约束。
+        var dir = SrcDir();
+        var files = CsFiles(dir)
+            .Where(f => Path.GetFileName(f).StartsWith("Main.SelfTest"))
+            .ToList();
+
+        // 防空转：至少要有那两个文件（否则「扫不到任何自检文件」也是绿）
+        Assertions.AssertThat(files.Count).IsGreaterEqual(2);
 
         var allowed = new HashSet<string>(SelfTestMethods);
-        var strays = MethodsOf(path).Where(m => !allowed.Contains(m)).ToList();
+        var strays = new List<string>();
+        foreach (var file in files)
+        {
+            foreach (var m in MethodsOf(file))
+            {
+                if (!allowed.Contains(m)) strays.Add($"{Path.GetFileName(file)}.{m}");
+            }
+        }
 
         Assertions.AssertThat(string.Join(" | ", strays)).IsEmpty();
     }
@@ -366,6 +383,8 @@ public class MainStructureTests
         {
             "Main.cs", "Main.Ui.cs", "Main.Expedition.cs", "Main.Save.cs",
             "Main.Collector.cs", "Main.Events.cs", "Main.SelfTest.cs",
+            // 自检拆出来的第二个文件（`Main.SelfTest.cs` 撞上了 1200 行上限 ⇒ 拆）
+            "Main.SelfTest.Stall.cs",
         };
 
         var missing = parts.Where(p => !File.Exists(Path.Combine(dir, p))).ToList();

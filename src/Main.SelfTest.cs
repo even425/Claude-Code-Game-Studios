@@ -20,6 +20,8 @@ using ClaudeCodeGameStudios.Domain.Stall;
 public partial class Main : Node2D
 {
     // ---------------------------------------------------------------- 自检
+    // （--trade / --market / --shop 三个摊位自检在 `Main.SelfTest.Stall.cs` ——
+    //   那边撞上了「单文件 ≤ 1200 行」的上限，拆出去只是为了守住那条结构规则。）
 
     /// <summary>--selftest：不等人操作，直接跑一遍按键逻辑并打印状态。</summary>
     private void SelfTest()
@@ -176,192 +178,7 @@ public partial class Main : Node2D
         }
     }
 
-    /// <summary>
-    /// <c>--trade</c>：第四阶段 3A 真机自检 —— 发物品 → 开摊 → 手动购买 → 失败场景。
-    /// </summary>
-    /// <remarks>
-    /// <para>覆盖：成功购买（双方货币/背包/摊位库存/村库费用）、重复请求幂等、
-    /// 库存不足、余额不足；每个失败场景都检查状态不变（无部分结算）。</para>
-    /// <para>走的是生产代码路径：<see cref="ItemGrantService.Grant"/>、
-    /// <c>StallService.PlaceStall</c>、<c>StallService.TryBuy</c>，不是复制品。</para>
-    /// </remarks>
-    private void RunTradeSelfTest()
-    {
-        _tradeTestDone = true;
 
-        if (_states.Count < 2)
-        {
-            GD.Print("TRADETEST FAIL 英雄不足 2 人，无法验证买卖。");
-            return;
-        }
-
-        var seller = _heroes[0];
-        var buyer = _heroes[1];
-        var item = new ClaudeCodeGameStudios.Domain.Items.ItemId("石料");
-        var gold = ClaudeCodeGameStudios.Application.Stall.StallService.Gold;
-
-        long sellerGold0 = seller.Wallet.Amount(gold);
-        long buyerGold0 = buyer.Wallet.Amount(gold);
-        long villageGold0 = _villageModel.Get(gold);
-
-        // 1. 测试配给 + 开摊
-        SelfTestEnsurePresentAndIdle(seller);   // 夹具：摊主必须在场且空闲（否则偶发开摊失败）
-        var grant = _itemGrant.Grant(seller.Id, item, 5);
-        var placed = _stallService.PlaceStall(seller.Id, item, 5, _clock.Now);
-        GD.Print($"TRADETEST 配给={grant.Result}，开摊={(placed is null ? "FAIL" : "OK")}");
-        if (!grant.Granted || placed is null)
-        {
-            GD.Print("TRADETEST FAIL 无法准备交易场景");
-            return;
-        }
-
-        // 2. 成功购买 2 份
-        var buy = _stallService.TryBuy(seller.Id, buyer.Id, item, 2, _clock.Now, "traderun-1");
-        long stockAfterBuy = _stallService.GetStall(seller.Id)?.Stock ?? -1;
-        long sellerGold1 = seller.Wallet.Amount(gold);
-        long buyerGold1 = buyer.Wallet.Amount(gold);
-        long villageGold1 = _villageModel.Get(gold);
-        bool buyOk = buy.Bought
-                     && buyerGold0 - buyerGold1 == 10
-                     && sellerGold1 - sellerGold0 == 10   // 10×5% floor = 0，全归卖家
-                     && buyer.Bag.Count(item) == 2
-                     && stockAfterBuy == 3
-                     && villageGold1 == villageGold0;     // 村费为 0
-        GD.Print($"TRADETEST 购买={buy.Outcome}，卖家金 {sellerGold0}→{sellerGold1}，" +
-                 $"买家金 {buyerGold0}→{buyerGold1}，买家背包={buyer.Bag.Count(item)}，" +
-                 $"摊位库存={stockAfterBuy}，村金 {villageGold0}→{villageGold1} → {buyOk}");
-
-        // 3. 重复同一请求键：幂等，状态不变
-        var dup = _stallService.TryBuy(seller.Id, buyer.Id, item, 2, _clock.Now, "traderun-1");
-        bool dupOk = dup.Outcome == ClaudeCodeGameStudios.Application.Stall.StallService.BuyOutcome.DuplicateRequest
-                     && seller.Wallet.Amount(gold) == sellerGold1
-                     && buyer.Wallet.Amount(gold) == buyerGold1
-                     && buyer.Bag.Count(item) == 2
-                     && (_stallService.GetStall(seller.Id)?.Stock ?? -1) == 3;
-        GD.Print($"TRADETEST 重复请求={dup.Outcome}，状态不变={dupOk}");
-
-        // 4. 库存不足：状态不变
-        var shortStock = _stallService.TryBuy(seller.Id, buyer.Id, item, 999, _clock.Now, "traderun-2");
-        bool stockOk = shortStock.Outcome ==
-                       ClaudeCodeGameStudios.Application.Stall.StallService.BuyOutcome.InsufficientStock
-                       && (_stallService.GetStall(seller.Id)?.Stock ?? -1) == 3
-                       && buyer.Wallet.Amount(gold) == buyerGold1;
-
-        // 5. 余额不足：把买家金币压到 5，再买 2 份（需 10）→ 拒绝且状态不变
-        buyer.TrySpendResource(gold, buyerGold1 - 5);
-        var poor = _stallService.TryBuy(seller.Id, buyer.Id, item, 2, _clock.Now, "traderun-3");
-        bool poorOk = poor.Outcome ==
-                      ClaudeCodeGameStudios.Application.Stall.StallService.BuyOutcome.CannotAfford
-                      && buyer.Wallet.Amount(gold) == 5
-                      && (_stallService.GetStall(seller.Id)?.Stock ?? -1) == 3
-                      && buyer.Bag.Count(item) == 2;
-
-        GD.Print($"TRADETEST 库存不足={shortStock.Outcome}/{stockOk}，余额不足={poor.Outcome}/{poorOk}");
-        GD.Print(buyOk && dupOk && stockOk && poorOk ? "TRADETEST PASS" : "TRADETEST FAIL");
-    }
-
-    /// <summary>
-    /// <c>--market</c>：R-02 真机自检 —— 摊位面板背后的那条路。
-    /// </summary>
-    /// <remarks>
-    /// <para><b>验的是"面板点下去会发生什么"</b>：候选买家怎么算、
-    /// 「尽可能多」买多少、成交后双方的钱和货对不对、失败时状态动不动。
-    /// 走的是生产代码路径（<see cref="ClaudeCodeGameStudios.Application.Stall.StallMarketService"/>
-    /// → <see cref="ClaudeCodeGameStudios.Application.Stall.StallService.TryBuy"/>），不是复制品。</para>
-    ///
-    /// <para><b>为什么不用鼠标点</b>：自检跑在 headless 里，没有指针。
-    /// 面板的「点摊位 → 点买家」两跳，等价于「取摊位 → 取候选 → 买」——
-    /// 面板只是把玩家的点击翻译成这三步。验这三步，就验了面板的语义。</para>
-    /// </remarks>
-    private void RunMarketSelfTest()
-    {
-        _marketTestDone = true;
-
-        if (_states.Count < 2)
-        {
-            GD.Print("MARKETTEST FAIL 英雄不足 2 人，无法验证买卖。");
-            return;
-        }
-
-        var seller = _heroes[0];
-        var buyer = _heroes[1];
-        var item = new ClaudeCodeGameStudios.Domain.Items.ItemId("石料");
-        var gold = ClaudeCodeGameStudios.Application.Stall.StallService.Gold;
-
-        long sellerGold0 = seller.Wallet.Amount(gold);
-        long buyerGold0 = buyer.Wallet.Amount(gold);
-        long villageGold0 = _villageModel.Get(gold);
-
-        // 1. 配给 + 开摊：摊主有 5 份石料，摊上摆 5 份。
-        SelfTestEnsurePresentAndIdle(seller);   // 夹具：摊主必须在场且空闲（否则偶发开摊失败）
-        var grant = _itemGrant.Grant(seller.Id, item, 5);
-        var placed = _stallService.PlaceStall(seller.Id, item, 5, _clock.Now);
-        if (!grant.Granted || placed is null)
-        {
-            GD.Print("MARKETTEST FAIL 无法准备交易场景");
-            return;
-        }
-
-        var stall = _stallService.GetStall(seller.Id);
-        if (stall is null)
-        {
-            GD.Print("MARKETTEST FAIL 摊位丢失");
-            return;
-        }
-
-        // 2. 候选买家：摊主本人不在列表里（在列表里就是"点了必然失败"）。
-        var offers = _market.Offers(stall, _heroes);
-        bool sellerNotCandidate = !offers.Any(o => o.Id == seller.Id);
-        bool buyerIsCandidate = offers.Any(o => o.Id == buyer.Id);
-        var buyerOffer = offers.FirstOrDefault(o => o.Id == buyer.Id);
-        GD.Print($"MARKETTEST 摊位={ClaudeCodeGameStudios.Presentation.StallMarketText.StallLine(seller.Name, stall)}");
-        GD.Print($"MARKETTEST 候选 {offers.Count} 人：摊主不在={sellerNotCandidate}，买家在={buyerIsCandidate}，" +
-                 $"买家可买={buyerOffer.MaxQty} 份");
-
-        // 3. 走面板：打开 → 点摊位 → 点买家 → 成交。
-        //    这一段刻意**经过面板**，而不是直接调服务 ——
-        //    「玩家点下去会发生什么」正是本轮要验的东西。
-        //    面板内部最终调的就是 _market.BuyAsMuchAsPossible（唯一结算入口 TryBuy）。
-        _stallPanel.Open();
-        bool pickedStall = _stallPanel.SelectStall(0);
-        int buyerIndex = offers.ToList().FindIndex(o => o.Id == buyer.Id);
-        int buyerRows = _stallPanel.BuyerRowCount;
-        bool pickedBuyer = buyerIndex >= 0 && _stallPanel.SelectBuyer(buyerIndex);
-        GD.Print($"MARKETTEST 面板：选中摊位={pickedStall}，候选行数={buyerRows}，" +
-                 $"选中买家={pickedBuyer}，回执=「{_stallPanel.ResultText}」");
-
-        long stockAfter = _stallService.GetStall(seller.Id)?.Stock ?? -1;
-        long sellerGold1 = seller.Wallet.Amount(gold);
-        long buyerGold1 = buyer.Wallet.Amount(gold);
-        long villageGold1 = _villageModel.Get(gold);
-
-        // 5 份 × 5 金 = 25：村抽 floor(25×5/100) = 1，卖家净得 24。
-        bool buyOk = pickedStall && pickedBuyer && buyerRows >= 1
-                     && buyerGold0 - buyerGold1 == 25
-                     && sellerGold1 - sellerGold0 == 24
-                     && villageGold1 - villageGold0 == 1
-                     && buyer.Bag.Count(item) == 5
-                     && stockAfter == 0;
-        GD.Print($"MARKETTEST 购买后：买家金 {buyerGold0}→{buyerGold1}，" +
-                 $"摊主金 {sellerGold0}→{sellerGold1}，村金 {villageGold0}→{villageGold1}，" +
-                 $"买家背包={buyer.Bag.Count(item)}，摊位库存={stockAfter} → {buyOk}");
-
-        // 4. 售罄后再买：摊位不再是 Open → 拒绝，且状态不变。
-        var afterSoldOut = _market.BuyAsMuchAsPossible(stall, buyer.Id, _clock.Now);
-        bool soldOutOk = !afterSoldOut.Bought
-                         && buyer.Wallet.Amount(gold) == buyerGold1
-                         && buyer.Bag.Count(item) == 5;
-        GD.Print($"MARKETTEST 售罄后再买={afterSoldOut.Outcome}，状态不变={soldOutOk}");
-
-        // 5. 面板文案：R-04 的库存/单价确实上界面了。
-        string line = ClaudeCodeGameStudios.Presentation.StallMarketText.StallLine(seller.Name, stall);
-        bool lineOk = line.Contains("石料") && line.Contains("单价");
-        GD.Print($"MARKETTEST 摊位行=「{line}」含物品与单价={lineOk}");
-
-        GD.Print(sellerNotCandidate && buyerIsCandidate && buyOk && soldOutOk && lineOk
-            ? "MARKETTEST PASS"
-            : "MARKETTEST FAIL");
-    }
 
     /// <summary>
     /// 自检夹具：把某个英雄摆成「<b>在场且空闲</b>」。
@@ -385,108 +202,6 @@ public partial class Main : Node2D
         hero.ToSite = false;  // 空闲（不在工地）
     }
 
-    /// <summary>
-    /// <c>--shop</c>：第四阶段 3B 真机自检 —— 有物品/有开放摊位时自主购物成交，同日不重复。
-    /// </summary>
-    /// <remarks>
-    /// <para>走生产路径：<see cref="ItemGrantService.Grant"/> → <c>PlaceStall</c> →
-    /// 逐日 <see cref="RunDailyShoppingIfNeeded"/>（跨天推进）→ 事件管线。</para>
-    /// <para>最多推进 30 个游戏日等待成交（随机性格/投骰；30 天内未成交视为失败）；
-    /// 成交后同日再调用一次，验证闸门不重复执行。</para>
-    /// </remarks>
-    private void RunShoppingSelfTest()
-    {
-        _shopTestDone = true;
-
-        if (_states.Count < 2)
-        {
-            GD.Print("SHOPTEST FAIL 英雄不足 2 人");
-            return;
-        }
-
-        var seller = _heroes[0];
-        var buyer = _heroes[1];
-        var item = new ClaudeCodeGameStudios.Domain.Items.ItemId("石料");
-        var gold = ClaudeCodeGameStudios.Application.Stall.StallService.Gold;
-
-        _itemGrant.Grant(seller.Id, item, 100);
-        if (_stallService.GetStall(seller.Id) is null)
-        {
-            SelfTestEnsurePresentAndIdle(seller);   // 夹具：摊主必须在场且空闲（见该方法的说明）
-            var placed = _stallService.PlaceStall(seller.Id, item, 100, _clock.Now);
-            if (placed is null)
-            {
-                GD.Print("SHOPTEST FAIL 开摊失败（英雄可能不在场/在忙）");
-                return;
-            }
-        }
-
-        long buyerGold0 = buyer.Wallet.Amount(gold);
-        long stock0 = _stallService.GetStall(seller.Id)?.Stock ?? -1;
-        int events0 = _events.Count;
-        int startDay = (int)_clock.Day;
-        bool bought = false;
-        int days = 0;
-
-        while (!bought && days < 30)
-        {
-            _clock.SetSimTime(_clock.Now + _clock.SimSecondsPerDay);
-            RunDailyShoppingIfNeeded();
-            if (buyer.LastShoppingDay == (int)_clock.Day) bought = true;
-            days++;
-        }
-
-        long stock1 = _stallService.GetStall(seller.Id)?.Stock ?? -1;
-        long buyerGold1 = buyer.Wallet.Amount(gold);
-        int events1 = _events.Count;
-
-        // 同日再调一次：闸门应直接返回，不产生新事件/状态变化
-        long goldCheck = buyerGold1;
-        long stockCheck = stock1;
-        int eventsCheck = events1;
-        RunDailyShoppingIfNeeded();
-        bool noRepeat = events1 == _events.Count
-                        && buyer.Wallet.Amount(gold) == goldCheck
-                        && (_stallService.GetStall(seller.Id)?.Stock ?? -1) == stockCheck;
-
-        // M5：把成交当天的逐人结果打出来 —— 谁买了、谁跳过了、为什么。
-        if (_lastShoppingResults.Count > 0)
-        {
-            PrintShoppingResults("SHOPTEST 明细", _lastShoppingDay, _lastShoppingResults);
-        }
-
-        bool stateOk = bought && buyerGold1 < buyerGold0 && stock1 < stock0 && events1 > events0;
-        GD.Print($"SHOPTEST 第{startDay}→{_clock.Day}天/尝试{days}天：成交={bought}，" +
-                 $"买家金 {buyerGold0}→{buyerGold1}，摊位库存 {stock0}→{stock1}，" +
-                 $"事件 {events0}→{events1}");
-        GD.Print($"SHOPTEST 同日重复调用无新增={noRepeat}");
-
-        // ── R-07：想买没买成 的两条反馈 ──────────────────────────────────
-        // 把买家的钱清零 → 他想买（欲望够）却买不成。
-        // 这条验的是**玩家能看见**：花名册行尾有标记、杂谈里有一条汇总。
-        //
-        // 欲望是随机的（性格权重），所以像上面等成交那样**逐日推进直到命中** ——
-        // 买家的钱一直是 0，一旦他动了念头，就必然落在「钱不够」上。
-        buyer.TrySpendResource(gold, buyer.Wallet.Amount(gold));
-        int chronBefore = _chronicle.Count;
-        int missDays = 0;
-
-        for (int i = 0; i < 30; i++)
-        {
-            _clock.SetSimTime(_clock.Now + _clock.SimSecondsPerDay);
-            RunDailyShoppingIfNeeded();
-            if (ShoppingNoteFor(buyer).Contains("钱不够")) { missDays = i + 1; break; }
-        }
-
-        string note = ShoppingNoteFor(buyer);
-        string chronText = string.Join(" | ", _chronicle.Recent(_chronicle.Count - chronBefore));
-        bool noteOk = note.Contains("钱不够");
-        bool summaryOk = chronText.Contains("想买没买成");
-        GD.Print($"SHOPTEST R-07 第{missDays}天命中：花名册标记=「{note}」→ {noteOk}");
-        GD.Print($"SHOPTEST R-07 杂谈新增=「{chronText}」→ {summaryOk}");
-
-        GD.Print(stateOk && noRepeat && noteOk && summaryOk ? "SHOPTEST PASS" : "SHOPTEST FAIL");
-    }
 
     /// <summary>
     /// <c>--grant=英雄Id:物品名:数量</c>：第四阶段 M1 的测试配给入口。
@@ -1141,15 +856,52 @@ public partial class Main : Node2D
                  $"（存档版本 {saveWithLoot.Version}，R-01 未新增字段）");
 
         // ── R-01 M4：拿到的物品要能真的开摊、被另一位英雄买走 ──
-        if (loot.Grants.Count > 0 && _heroes.Count >= 2)
+        // ⚠️ **这一段必须每次都跑**（真事：2026-10-21 查出来的）：
+        // 副本**有可能失败**（单场胜率 0.65 × 3 个阶段 ≈ 27%）⇒ 失败就没有战利品
+        // ⇒ 整段被跳过 ⇒ **它就成了一段装饰**。
+        // 实测：固定种子下这次副本**失败** ⇒ 这段从未跑过；
+        // 而且它的结果**也从未被要求过** —— 原来只打了 `→ True/False`，
+        // runner 的禁词是「FAIL」，**看不见 True/False**。
+        // ⇒ 战利品为空时，**用生产路径配给一件同样的物品**，让这条链照样被验。
+        //    （「副本掉了什么」由上面的战利品分配 / 入档断言负责；
+        //      这里验的是「物品能开摊、能被别人买走」这条**链路**。）
+        if (_heroes.Count >= 2)
         {
-            var firstGrant = loot.Grants[0];
-            var seller = _heroes.FirstOrDefault(h => h.Id == firstGrant.Hero);
-            var buyer = _heroes.FirstOrDefault(h => h.Id != firstGrant.Hero);
-            var item = firstGrant.Item;
+            var seller = _heroes[0];
+            var buyer = _heroes[1];
+            var item = new ClaudeCodeGameStudios.Domain.Items.ItemId("石料");
+
+            if (loot.Grants.Count > 0)
+            {
+                var firstGrant = loot.Grants[0];
+                item = firstGrant.Item;
+                seller = _heroes.FirstOrDefault(h => h.Id == firstGrant.Hero) ?? seller;
+                buyer = _heroes.FirstOrDefault(h => h.Id != firstGrant.Hero) ?? buyer;
+            }
+            else
+            {
+                // 副本失败 ⇒ 没有战利品 ⇒ 配给摊主 1 份（生产路径），让这条链照样被验。
+                var give = _itemGrant.Grant(seller.Id, item, 1);
+                if (!give.Granted)
+                {
+                    GD.Print("DUNGEONTEST 战利品开摊链 = FAIL（配给失败，无法准备场景）");
+                    return;
+                }
+            }
+
             var gold = ClaudeCodeGameStudios.Application.Stall.StallService.Gold;
 
-            if (seller is not null && buyer is not null)
+            // ⚠️ 单价取自**生效价格表**（P-14 的占位值，开发者随时会改）——
+            // 写死 5 的话，改一次价格这个自检就红，而「改价格 → 重跑标定」
+            // 恰恰要在**改价之后**才用得上。
+            long unitPrice = _priceBook.PriceOf(item);
+            if (unitPrice <= 0)
+            {
+                // 单价 0 = 「不卖」（价格表的合法取值）⇒ 这条链**不适用**，不是失败。
+                GD.Print($"DUNGEONTEST 战利品开摊链 = 跳过（{item.Value} 单价为 0 = 不卖）");
+                return;
+            }
+
             {
                 long stock = Math.Min(3, seller.Bag.Count(item));
                 long buyerGold0 = buyer.Wallet.Amount(gold);
@@ -1167,11 +919,17 @@ public partial class Main : Node2D
                 bool chainOk = placed is not null
                               && bought.Bought
                               && buyer.Bag.Count(item) == buyerBag0 + 1
-                              && buyer.Wallet.Amount(gold) == buyerGold0 - 5;   // 石料单价 5
+                              && buyer.Wallet.Amount(gold) == buyerGold0 - unitPrice;
 
                 GD.Print($"DUNGEONTEST 战利品开摊={(placed is null ? "FAIL" : $"OK（{seller.Name} 摆 {stock} 份）")}，" +
                          $"他人购买={bought.Outcome}，买家背包 {buyerBag0} → {buyer.Bag.Count(item)}，" +
                          $"买家金 {buyerGold0} → {buyer.Wallet.Amount(gold)} → {chainOk}");
+                // ⚠️ **必须再打一个能被机器读到的 PASS/FAIL 标记**。
+                // 原来这一行只打了 `→ {chainOk}`（True/False）⇒ runner 的禁词是「FAIL」，
+                // **看不见 True/False** ⇒ 这条断言其实**从未被要求过** —— 是装饰。
+                // （真事：2026-10-21 的变异矩阵里，「把付款期望写死回 5」那一档**没被抓住**，
+                //   就是因为它。⇒ 打印出来的东西，必须有一个**机器能读的形式**。）
+                GD.Print($"DUNGEONTEST 战利品开摊链 = {(chainOk ? "PASS" : "FAIL")}");
             }
         }
 

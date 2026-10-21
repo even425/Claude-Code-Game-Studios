@@ -19,6 +19,7 @@
 | `recalibrate.py` | 重跑经济标定（扫 X → 稳态 / 分布） | 改了价格 / 掉落 / 报酬之后 |
 | `price-scan.py` | 扫**相对价格结构**对经济的影响 —— 给 T-007 的价格拍板提供**决策依据**（**不决定价格**） | 开发者要定价格之前 |
 | `export-check.py` | 验「导出预设**真的被 Godot 认**」—— 并把「**预设错**」与「**模板缺**」分开（`--self-test` 证明判据本身有效） | 改了 `export_presets.cfg` / `project.yaml` 的 build 之后 |
+| `price-change-check.py` | 验「**改价格 ⇒ 自检仍然全绿**」—— 用**另一张价格表**跑那几个自检（**不改仓库里的任何文件**） | 改了价格、或改了自检里与价格有关的期望值之后 |
 | `sync-price-fallback.py` | 把**内置兜底**价格表同步成 `config/prices.json`（两份副本不许分叉） | 改了价格之后（`recalibrate.py` 会自动调它） |
 | `mutate-*.py` | **变异矩阵**：把代码改坏，确认对应的守卫会红 | 改了守卫之后 |
 | `_utf8out.py` | 让本目录的脚本在**任何**控制台编码下都能把话说出来 | 不是工具，是**每个工具的前置**（见约定 ⑤） |
@@ -200,6 +201,7 @@ CI 同时把结果表写进 **job summary**（网页上直接看得到）。
 | `mutate-combat-party-input.py` | 战斗能拿到队伍配置（IT-31 的前置）：快照是值、且真的传到了解算器 |
 | `mutate-export-preset.py` | 导出预设：名两处一致 + Godot 真认它（预设错 vs 模板缺要分得清） |
 | `mutate-chronicle-event-coverage.py` | 杂谈十类事件：基线 ↔ 代码归类 ↔ 盘点缺口表三处不许脱节（含「正文数字 ↔ 自己的表」） |
+| `mutate-price-agnostic-selfcheck.py` | 真机自检**不依赖占位价**（把写死的单价塞回去 ⇒ 换价后必须红） |
 
 全部一起跑（**很慢** —— 每个脚本都要重建 + 重跑测试，建议过夜跑）：
 

@@ -97,12 +97,20 @@ public interface IBattleOutcomeReader
 /// 本场战斗结果<b>是否被关联进了副本实例</b>（不变量 I3）。
 /// 只有<b>决定整个副本成败的那一场</b>为 <c>true</c>。
 /// </param>
+/// <param name="RoundsUsed">
+/// 这一场打了几回合（D-073：从战斗日志的回合标记读回）。
+/// </param>
+/// <param name="GameHours">
+/// 这一场占了多少游戏内小时（D-073：回合数 × <c>StageDuration.GameHoursPerRound</c>）。
+/// </param>
 public sealed record DungeonStageRecord(
     DungeonStage Stage,
     string EncounterName,
     BattleResult Result,
     IReadOnlyList<DungeonModifier> Modifiers,
-    bool AttachedToRun);
+    bool AttachedToRun,
+    int RoundsUsed,
+    double GameHours);
 
 /// <summary>一次副本跑完之后的总结。</summary>
 /// <param name="Run">副本实例。</param>
@@ -112,11 +120,15 @@ public sealed record DungeonStageRecord(
 /// —— 流程只要跑完就必然产生了一个决定性结果。
 /// </param>
 /// <param name="Succeeded">副本是否成功。</param>
+/// <param name="TotalRoundsUsed">整个副本一共打了几个回合（D-073）。</param>
+/// <param name="TotalGameHours">整个副本一共占了多少游戏内小时（D-073）。</param>
 public sealed record DungeonFlowOutcome(
     DungeonRun Run,
     IReadOnlyList<DungeonStageRecord> Records,
     BattleResult DecidingBattle,
-    bool Succeeded);
+    bool Succeeded,
+    int TotalRoundsUsed,
+    double TotalGameHours);
 
 /// <summary>
 /// 副本的<b>流程驱动</b> —— 第一阶段（M5）。
@@ -348,6 +360,14 @@ public sealed class DungeonFlow
         //    一场交不出依据的战斗绝不能先写进副本实例。
         CiteDecidingEntries(result);
 
+        // 3b. 读回这一场打了几回合（D-073：阶段耗时的原始数据）。
+        //     ⚠️ **读不出就抛**（`BattleLogReader.RoundsUsed`）——
+        //     静默当成 0 回合 ⇒ 副本耗时算成 0 小时 ⇒ 时间底座整个塌掉。
+        //     ⚠️ **这一步必须在 `Produce` 之后**：日志不可判定时，
+        //     该由 `Produce` 在构造期拒掉（基线 §8.5 D5），
+        //     不能被「读回合」抢先抛别的异常 ⇒ 那样会掩盖真正的失败原因。
+        int roundsUsed = BattleLogReader.RoundsUsed(log);
+
         // 4. 关联决定性结果（I3，至多一次）。
         //    流程遇到败仗就终止 ⇒「最后一场」就是「决定生死的那一场」。
         //    赢了但不是最终目标的那场，说明副本还有下一场 —— 不是决定性结果。
@@ -370,7 +390,8 @@ public sealed class DungeonFlow
         }
 
         var record = new DungeonStageRecord(
-            stage, encounterName, result, modifiers.ToArray(), attachedToRun);
+            stage, encounterName, result, modifiers.ToArray(), attachedToRun,
+            roundsUsed, StageDuration.GameHoursFor(roundsUsed));
 
         _records.Add(record);
         return record;
@@ -410,8 +431,13 @@ public sealed class DungeonFlow
         // 这里按 AttachedToRun 取，而不是取最后一条 —— 若两条规则哪天不一致，
         // 应该报出不一致，而不是悄悄汇报另一场战斗。
         var deciding = _records.Single(record => record.AttachedToRun).Result;
+
+        // 阶段耗时（D-073）：整个副本打了几个回合、占了多少游戏内小时。
+        var roundsPerStage = _records.Select(r => r.RoundsUsed).ToArray();
         return new DungeonFlowOutcome(
-            _run, _records.AsReadOnly(), deciding, _run.Status == DungeonRunStatus.Succeeded);
+            _run, _records.AsReadOnly(), deciding, _run.Status == DungeonRunStatus.Succeeded,
+            roundsPerStage.Sum(),
+            StageDuration.GameHoursForStages(roundsPerStage));
     }
 
     /// <summary>结算副本（幂等由领域保证：不变量 I4）。</summary>

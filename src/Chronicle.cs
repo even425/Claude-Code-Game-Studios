@@ -145,6 +145,28 @@ public static class Chronicle
         return new Entry(day, tpl, null);
     }
 
+    /// <summary>
+    /// 队内关系恶化（基线 §7.2「两名英雄关系恶化」；D-071：同队副本失败）。
+    /// </summary>
+    /// <param name="day">游戏日。</param>
+    /// <param name="who">队里所有人的名字（顿号分隔）。</param>
+    /// <param name="place">副本名。</param>
+    /// <remarks>
+    /// <b>为什么是「摔在一处」而不是「吵架」</b>：C1「次品 / 真伪纠纷」已裁决暂不做
+    /// ⇒ 现在没有「骗」这种可指认的起因 ⇒ 写成「这一趟白跑了、互相埋怨」，
+    /// **不写成吵架**（吵架会暗示有具体的导火索，而这一版没有）。
+    /// </remarks>
+    public static Entry SquadFellOut(int day, string who, string place)
+    {
+        string tpl = Pick(new[]
+        {
+            $"{who}从{place}空手回来，一路上谁也没跟谁说话。",
+            $"{place}没去成。{who}回来的时候脸色都不好看。",
+            $"{who}在{place}碰了钉子。回村的几里路，谁也没先开口。",
+        });
+        return new Entry(day, tpl, null);
+    }
+
     public static Entry SiteOpened(int day, string what, int workers)
     {
         string tpl = workers switch

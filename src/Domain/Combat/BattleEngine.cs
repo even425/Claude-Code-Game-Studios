@@ -25,6 +25,18 @@ public static class BattleOutcomeMarkers
 
     /// <summary>敌方获胜的标记（含超时判负）。</summary>
     public const string EnemiesWin = "【敌方胜】";
+
+    /// <summary>
+    /// 回合标记：<c>【回合N】</c>（D-073）。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么它是「精确整串」而不是自由文本</b>：读回器
+    /// <see cref="BattleLogReader"/> 用锚定正则取它 ⇒ 标记的**形状**必须是固定的
+    /// （<c>【回合</c> + 数字 + <c>】</c>），不能写成「打了一共 12 回合」
+    /// ——那种写法在别的句子里也可能出现，读回器就会取错。
+    /// </remarks>
+    /// <param name="rounds">打过的回合数。</param>
+    public static string RoundsMarker(int rounds) => $"【回合{rounds}】";
 }
 
 /// <summary>
@@ -190,15 +202,21 @@ public sealed class BattleEngine
             ? BattleOutcomeMarkers.HeroesWin
             : BattleOutcomeMarkers.EnemiesWin;
 
+        // 回合标记（D-073）：战斗用了几个回合，是「阶段耗时」的原始数据
+        // （`04` §5.4 插拔点 7「报出用了几回合」）。
+        // ⚠️ **必须写进决定性条目**：只有这一条是「每场战斗恰有一条」的位置
+        // ⇒ 读回器能无歧义地找到它（`BattleLogReader.RoundsUsed`）。
+        string rounds = BattleOutcomeMarkers.RoundsMarker(roundsCompleted);
+
         if (killer is not null)
         {
-            return $"{encounter}：{killer.Name} 击倒了对手 ⇒ {marker}";
+            return $"{encounter}：{killer.Name} 击倒了对手{rounds} ⇒ {marker}";
         }
         if (outcome == BattleOutcome.EnemiesWin)
         {
-            return $"{encounter}：{roundsCompleted} 回合用尽，判定失败 ⇒ {marker}";
+            return $"{encounter}：{roundsCompleted} 回合用尽，判定失败{rounds} ⇒ {marker}";
         }
-        return $"{encounter}：战斗结束 ⇒ {marker}";
+        return $"{encounter}：战斗结束{rounds} ⇒ {marker}";
     }
 
     /// <summary>

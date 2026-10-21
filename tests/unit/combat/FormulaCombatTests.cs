@@ -478,6 +478,87 @@ public class FormulaCombatTests
         Assertions.AssertThat(weakWins).IsFalse();
     }
 
+    /// <summary>
+    /// <b>难度目标必须可验</b>（D-072）：首领档的两人队胜率落在 <b>70–90%</b>。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么这条必须存在</b>：D-070 把「胜率预计落到 70–90%」写进决策，
+    /// 但<b>没有人验过它落在哪</b> —— 实测 180 血时只有 37.8% ⇒
+    /// 目标写了两轮、从未被机器检查过 ⇒ 数值可以悄悄跑偏。
+    /// 现在它是<b>一条断言</b>：改了首领血量而胜率掉出区间 ⇒ 立刻红。</para>
+    /// <para><b>为什么是「穷举 45 种两人队」而不是采集器的胜率</b>：
+    /// 采集器的队伍轮换是<b>确定性</b>的（按名册顺序两两配对）⇒ 它测到的胜率
+    /// 是<b>配对方式的产物</b>（两个种子 5.4% vs 67.6%，差 12 倍），
+    /// 不是难度的度量。穷举才有可比性。</para>
+    /// <para><b>区间下界 70% 的含义</b>：首领必须<b>有风险</b>（不能人人必过）；
+    /// <b>上界 90%</b>：也不能难到「选谁进队都没区别」。</para>
+    /// </remarks>
+    [TestCase]
+    public void BossStage_WinRateAcrossAllTwoHeroCrews_LandsInTheTargetBand()
+    {
+        string[] personalities = { "莽", "傲", "随手" };
+        string[] diligences = { "肝", "随手", "挂机" };
+        var archetypes = (from p in personalities
+                          from d in diligences
+                          select (p, d)).ToArray();
+
+        int crews = 0;
+        int wins = 0;
+        var lostCrews = new List<string>();
+
+        for (int i = 0; i < archetypes.Length; i++)
+        {
+            for (int j = i; j < archetypes.Length; j++)
+            {
+                var (p1, d1) = archetypes[i];
+                var (p2, d2) = archetypes[j];
+                crews++;
+
+                var party = Party(("甲", p1, d1), ("乙", p2, d2));
+                if (DidWin(party, 2)) wins++;
+                else lostCrews.Add($"{p1}/{d1}+{p2}/{d2}");
+            }
+        }
+
+        double rate = 100.0 * wins / crews;
+        string detail = $"首领胜率 {wins}/{crews} = {rate:F1}%（目标 70–90%）；"
+                        + $"输的队伍：{string.Join("、", lostCrews)}";
+
+        // 诊断信息落文件（测试宿主会吞掉 Console；断言值必须是纯布尔，
+        // 混合类型的断言会让 GdUnit4 的报告路径崩掉）。
+        try
+        {
+            var dump = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), "ccgs-boss-band.txt");
+            System.IO.File.WriteAllText(dump, detail, new System.Text.UTF8Encoding(false));
+        }
+        catch { /* 落盘失败不影响断言 */ }
+
+        // ⚠️ **为什么断言「输掉的是哪几支队伍」，而不是只断言「胜率在 70–90% 之间」**
+        // （变异看红时抓到的）：
+        //
+        // 只断言区间的话，把区间**放宽成 0–100** 之后守卫照样绿 ⇒ 那条断言成了装饰
+        // ⇒ 数值可以悄悄漂到「人人必过」也不报。（加一条更宽的元断言也堵不住：
+        // 区间一放宽，元断言跟着放宽即可。）
+        //
+        // ⇒ 真正能自证的判据是**具体的队伍集合**：
+        // D-072 实测的 6 支必败队伍**全部含「挂机」**（挂机 ⇒ 攻 5 / 防 4 / 命 60），
+        // 而**所有不含挂机的队伍都赢** ⇒ 这条断言同时表达了
+        //   · 胜率（39/45 = 86.7%，落在 70–90% 目标区间内）
+        //   · 设计意图（「选谁进队要有后果」：投入度最低的那批打不过首领）
+        // 而且它**与任何区间写法无关** ⇒ 区间被放宽也照样红。
+        //
+        // ⚠️ 为什么不写死「39/45」：胜率会随**任何**战斗规则改动而变
+        // （改个伤害公式就可能变）⇒ 写死会让每次规则微调都要改守卫 ⇒ 反而更容易被绕过。
+        // ⇒ 这里要的是**「难度漂移就报」**，不是「精确等于某个数」。
+        string expectedLosers = string.Join("、",
+            "莽/挂机+莽/挂机", "莽/挂机+傲/挂机", "莽/挂机+随手/挂机",
+            "傲/挂机+傲/挂机", "傲/挂机+随手/挂机", "随手/挂机+随手/挂机");
+        string actualLosers = string.Join("、", lostCrews);
+
+        Assertions.AssertThat(actualLosers).IsEqual(expectedLosers);
+    }
+
     private static bool DidWin(CombatPartySnapshot party, int stage)
     {
         var combat = new FormulaCombat();

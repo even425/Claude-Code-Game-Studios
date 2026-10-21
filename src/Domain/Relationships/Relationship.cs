@@ -145,19 +145,41 @@ public enum RelationshipStage
 /// 关系规则常量与派生计算 —— <b>纯函数</b>，不持有状态。
 /// </summary>
 /// <remarks>
-/// <para><b>所有数值都是占位值</b>（<c>07</c> D-036 明确）：范围 ±100、社交 +2、同队副本 +3、
-/// 阶段阈值、目标权重系数。开发者拍板后整体替换，调用方一行不用改。</para>
+/// <para><b>哪些值已拍板</b>（<c>07</c> <b>D-071</b>，2026-10-21 开发者拍板）：</para>
+/// <list type="bullet">
+/// <item><b>幅度 N = 10</b>：一次纠纷 = 关系 <b>−10</b>（<see cref="DisputeDelta"/>）。</item>
+/// <item><b>幅度 M = 10</b>：一次同队副本<b>成功</b> = 关系 <b>+10</b>（<see cref="CooperationDelta"/>）。
+///       正负同幅 ⇒ 一次失败抵掉一次成功。</item>
+/// <item><b>触发源</b>：<b>同队副本失败</b>（C1「次品 / 真伪纠纷」已裁决暂不做，
+///       所以纠纷从副本失败来 —— 见 <c>41</c> §2 C2）。</item>
+/// </list>
+/// <para><b>仍是占位值的</b>（<c>07</c> D-036）：<see cref="SocialDelta"/>（日常社交 +2）、
+/// <see cref="HostileThreshold"/> / <see cref="CloseThreshold"/>（阶段阈值）、
+/// <see cref="TargetWeightScale"/>（权重系数）。这些<b>没被本轮拍板</b> ⇒ 不动。</para>
 /// <para><b>关系影响行为只改权重、不改合法性</b>：<see cref="TargetWeight"/> 恒为正，
 /// 因此「讨厌一个人」只会降低被搭话的概率，<b>不会</b>让任何行为变成不可能
 /// （CR-1；<c>05</c> §5.1 I8）。</para>
 /// </remarks>
 public static class RelationshipRules
 {
-    /// <summary>一次社交完成后，双方各自的关系变化量。<b>占位值。</b></summary>
+    /// <summary>一次日常社交完成后，双方各自的关系变化量。<b>占位值（D-036，未拍板）。</b></summary>
     public const int SocialDelta = 2;
 
-    /// <summary>一次同队副本成功后，参与双方各自的关系变化量。<b>占位值。</b></summary>
-    public const int CooperationDelta = 3;
+    /// <summary>
+    /// 一次同队副本<b>成功</b>后，参与双方各自的关系变化量。
+    /// <b>【已确认】D-071：M = 10。</b>
+    /// </summary>
+    public const int CooperationDelta = 10;
+
+    /// <summary>
+    /// 一次<b>纠纷</b>后，双方各自的关系变化量（负值 = 关系恶化）。
+    /// <b>【已确认】D-071：N = 10。</b>
+    /// </summary>
+    /// <remarks>
+    /// <b>触发源 = 同队副本失败</b>（<c>41</c> §2 C2；C1「次品 / 真伪」已裁决暂不做）。
+    /// ⇒ 副本失败是<b>队内每一对</b>各自的一次纠纷。
+    /// </remarks>
+    public const int DisputeDelta = -10;
 
     /// <summary>敌对阶段上界（≤ 此值为敌对）。<b>占位值。</b></summary>
     public const int HostileThreshold = -20;

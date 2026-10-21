@@ -275,6 +275,15 @@ public interface IBattleResolver
     /// 战斗规则不该自己去数阶段。</para>
     /// </param>
     /// <returns>战斗日志。</returns>
+    /// <remarks>
+    /// <para>⚠️ <b>契约（D-073）</b>：那条<b>决定性条目</b>必须带<b>回合标记</b>
+    /// （<c>【回合N】</c>，由 <see cref="BattleOutcomeMarkers.RoundsMarker"/> 生成），
+    /// 指明这一场打了几个回合。
+    /// <b>为什么这是硬契约</b>：阶段耗时（回合 ↔ 游戏内小时）由此算出，
+    /// 而关系变化要靠它拿到「这段经历发生在什么时候」的底座（基线 §9.5 R4）。
+    /// ⇒ 少写标记 ⇒ <see cref="BattleLogReader.RoundsUsed"/> <b>大声失败</b>
+    /// （而不是把耗时算成 0）。</para>
+    /// </remarks>
     IReadOnlyList<BattleLogEntry> Resolve(
         string encounterName, CombatPartySnapshot party, int stageIndex);
 }

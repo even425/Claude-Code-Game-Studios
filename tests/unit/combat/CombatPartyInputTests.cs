@@ -55,7 +55,11 @@ public class CombatPartyInputTests
             return new[]
             {
                 new BattleLogEntry($"{encounterName}#e0", $"{encounterName}：双方接战", false),
-                new BattleLogEntry($"{encounterName}#e1", $"{encounterName}：判定 {VerdictWin}", true),
+                new BattleLogEntry(
+                    $"{encounterName}#e1",
+                    $"{encounterName}：判定 {VerdictWin}"
+                    + BattleOutcomeMarkers.RoundsMarker(12),
+                    true),
             };
         }
 

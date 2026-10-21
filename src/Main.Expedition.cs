@@ -5,6 +5,7 @@ using System.Linq;
 using ClaudeCodeGameStudios.Application;
 using ClaudeCodeGameStudios.Domain.Heroes;
 using ClaudeCodeGameStudios.Domain.Quests;
+using ClaudeCodeGameStudios.Domain.Relationships;
 using DomainVillage = ClaudeCodeGameStudios.Domain.Village.Village;
 using ResourceId = ClaudeCodeGameStudios.Domain.Village.ResourceId;
 
@@ -555,6 +556,10 @@ public partial class Main : Node2D
                         ["place"] = DungeonName,
                         ["names"] = string.Join("、", names),
                         ["pairs"] = touched.PairsChanged.ToString(),
+                        // D-073：这段经历的时间底座 —— 打了几个回合、占了多少游戏内小时。
+                        // 关系变化的「可追溯到具体经历」（基线 §9.5 R4）因此有了**时间坐标**。
+                        ["rounds"] = outcome.TotalRoundsUsed.ToString(),
+                        ["hours"] = outcome.TotalGameHours.ToString("0.##"),
                     },
                     _ => $"{string.Join("、", names)}一起从{DungeonName}回来了，彼此熟了一些。");
             }
@@ -603,6 +608,33 @@ public partial class Main : Node2D
                     },
                     ev => Chronicle.Outcome((int)_clock.Day, h, ev.Payload["job"],
                         ev.Payload["res"], 0, ev.Payload["place"], "fail").Text);
+            }
+
+            // ── D-071：副本失败 = 队内每一对的一次纠纷（关系 −10）────────
+            //
+            // ⚠️ **这不违反 D-010 Q1「失败不额外惩罚」**：那条说的是**不发额外资源/代价**
+            // （不发战利品、不扣属性）。关系变化**不是惩罚**，它是**经历本身的后果**
+            // （基线 §9.1 / §9.2：关系由实际经历产生）—— 一起打、一起输，
+            // 回来路上关系就差了。这条同时补上了基线 §7.2 的
+            // 「**两名英雄关系恶化**」这一类事件（此前是缺口表里的 ❌）。
+            //
+            // 幂等键带 runId ⇒ 同一副本重复结算不会二次扣关系（P3-D08）。
+            var worsened = _relationships.FailTogether(
+                outcome.Run.Id.Value, crew.Select(h => h.Id).ToList());
+            if (worsened.Changed)
+            {
+                Emit(EvRelationshipWorsened, string.Join("、", names), new[] { StRelationship },
+                    new Dictionary<string, string>
+                    {
+                        ["place"] = DungeonName,
+                        ["names"] = string.Join("、", names),
+                        ["pairs"] = worsened.PairsChanged.ToString(),
+                        ["delta"] = RelationshipRules.DisputeDelta.ToString(),
+                        // D-073：这段经历的时间底座（同上）。
+                        ["rounds"] = outcome.TotalRoundsUsed.ToString(),
+                        ["hours"] = outcome.TotalGameHours.ToString("0.##"),
+                    },
+                    ev => Chronicle.SquadFellOut((int)_clock.Day, ev.Payload["names"], ev.Payload["place"]).Text);
             }
         }
         // granted == false 且成功 = 该键已结算过（I4），本次不重复发放，也不记「带回来了」。

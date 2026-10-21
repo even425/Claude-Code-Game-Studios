@@ -58,6 +58,9 @@ public class DungeonPartyConditionTests
     {
         private const string VerdictWin = "胜";
 
+        /// <summary>测试替身报的回合数（固定值）。</summary>
+        private const int StubRoundsUsed = 12;
+
         public int Calls { get; private set; }
 
         public IReadOnlyList<BattleLogEntry> Resolve(
@@ -69,8 +72,12 @@ public class DungeonPartyConditionTests
                 // 过程记录：不该被引用为判定依据
                 new BattleLogEntry($"{encounterName}#e0", $"{encounterName}：双方接战", false),
                 // 决定性记录：胜负结论靠它
+                // ⚠️ 必须带回合标记（D-073 的解算器契约）。
                 new BattleLogEntry(
-                    $"{encounterName}#e1", $"{encounterName}：判定 {VerdictWin}", true),
+                    $"{encounterName}#e1",
+                    $"{encounterName}：判定 {VerdictWin}"
+                    + BattleOutcomeMarkers.RoundsMarker(StubRoundsUsed),
+                    true),
             };
         }
 

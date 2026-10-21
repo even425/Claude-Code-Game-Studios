@@ -44,6 +44,11 @@ public class DungeonFlowTests
         private const string VerdictWin = "胜";
         private const string VerdictLoss = "负";
 
+        /// <summary>
+        /// 测试替身报的回合数（固定值，让耗时断言可预期）。
+        /// </summary>
+        private const int StubRoundsUsed = 12;
+
         private readonly Queue<bool> _verdicts;
         private readonly bool _afterScript;
 
@@ -81,9 +86,12 @@ public class DungeonFlowTests
                 // 过程记录：不改变判定，因此不该被引用为依据
                 new BattleLogEntry($"{encounterName}#e0", $"{encounterName}：双方接战", false),
                 // 决定性记录：胜负结论就靠它
+                // ⚠️ **必须带回合标记**（D-073 的解算器契约）：少了它，
+                //    `BattleLogReader.RoundsUsed` 会大声失败 ⇒ 副本耗时算不出来。
                 new BattleLogEntry(
                     $"{encounterName}#e1",
-                    $"{encounterName}：判定 {(won ? VerdictWin : VerdictLoss)}",
+                    $"{encounterName}：判定 {(won ? VerdictWin : VerdictLoss)}"
+                    + BattleOutcomeMarkers.RoundsMarker(StubRoundsUsed),
                     true),
             };
         }
@@ -98,7 +106,10 @@ public class DungeonFlowTests
                 throw new InvalidOperationException("测试替身：日志里没有决定性条目，读不出结论。");
             }
 
-            return decisive[decisive.Length - 1].Summary.EndsWith(VerdictWin, StringComparison.Ordinal);
+            // ⚠️ 用 Contains 而不是 EndsWith：决定性条目末尾现在还带着回合标记
+            // （D-073），结论词不在末尾了。
+            // 「胜」与「负」互不含对方 ⇒ Contains 不会认错。
+            return decisive[decisive.Length - 1].Summary.Contains(VerdictWin, StringComparison.Ordinal);
         }
     }
 

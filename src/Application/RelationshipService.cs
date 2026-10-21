@@ -75,6 +75,54 @@ public sealed class RelationshipService
     }
 
     /// <summary>
+    /// 应用一次同队副本<b>失败</b>：队内<b>每一对</b>双向各减
+    /// <see cref="RelationshipRules.DisputeDelta"/>（关系恶化）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>触发源（D-071）</b>：C1「次品 / 真伪纠纷」已裁决暂不做，
+    /// 所以<b>纠纷从同队副本失败来</b> —— 一起打、一起输，回来路上关系就差了。</para>
+    /// <para><b>幂等键</b>用独立的 <c>dungeon-fail:</c> 前缀 ⇒
+    /// 同一个副本<b>不会</b>因为先成功过就跳过失败这一侧，反之亦然
+    /// （成功与失败是同一副本里互斥的两条经历，各自带自己的键）。</para>
+    /// </remarks>
+    /// <param name="runId">副本实例标识（幂等依据）。</param>
+    /// <param name="members">参战英雄（快照 Id）。</param>
+    /// <returns>真正发生变化的关系对数。</returns>
+    /// <exception cref="ArgumentException"><paramref name="runId"/> 为空。</exception>
+    public CooperationTouched FailTogether(string runId, IReadOnlyList<HeroId> members)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            throw new ArgumentException("副本失败必须有 runId —— 它是幂等的唯一依据。", nameof(runId));
+        }
+
+        if (members is null) throw new ArgumentNullException(nameof(members));
+
+        int changedPairs = 0;
+        for (int i = 0; i < members.Count; i++)
+        {
+            for (int j = i + 1; j < members.Count; j++)
+            {
+                var a = members[i];
+                var b = members[j];
+
+                if (string.IsNullOrEmpty(a.Value) || string.IsNullOrEmpty(b.Value) || a == b) continue;
+
+                var ab = _book.Apply(
+                    $"dungeon-fail:{runId}:{a.Value}->{b.Value}",
+                    new RelationshipKey(a, b), RelationshipRules.DisputeDelta);
+                var ba = _book.Apply(
+                    $"dungeon-fail:{runId}:{b.Value}->{a.Value}",
+                    new RelationshipKey(b, a), RelationshipRules.DisputeDelta);
+
+                if (ab.Changed || ba.Changed) changedPairs++;
+            }
+        }
+
+        return new CooperationTouched(changedPairs);
+    }
+
+    /// <summary>
     /// 应用一次同队副本合作：队内<b>每一对</b>双向各加
     /// <see cref="RelationshipRules.CooperationDelta"/>。
     /// </summary>

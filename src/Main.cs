@@ -845,6 +845,8 @@ public partial class Main : Node2D
         new("SquadBonded");                    // §7.2「大事件的发生与结算」—— 第三阶段 M5：同队副本合作（一条聚合）
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvTradeCompleted =
         new("TradeCompleted");                 // §7.2「村庄日常（采集、摆摊、社交等）」—— 第四阶段 3B：英雄自主购物成交
+    private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvRelationshipWorsened =
+        new("RelationshipWorsened");           // §7.2「两名英雄关系恶化」—— D-071：同队副本失败 = 队内每对一次纠纷
 
     /// <summary>
     /// 副本战利品结算（运行闭环验证与经济数据采集准备）。

@@ -93,9 +93,17 @@
       "file": "Domain/Relationships/Relationship.cs",
       "name": "CooperationDelta",
       "kind": "参数",
-      "status": "【已确认】D-036",
-      "note": "一次同队副本的关系增量（+3）",
-      "value": "3"
+      "status": "【已确认】D-071",
+      "note": "一次同队副本成功的关系增量（M = 10）—— D-071 拍板",
+      "value": "10"
+    },
+    {
+      "file": "Domain/Relationships/Relationship.cs",
+      "name": "DisputeDelta",
+      "kind": "参数",
+      "status": "【已确认】D-071",
+      "note": "一次纠纷的关系增量（N = -10，即关系恶化 10）—— D-071 拍板；触发源 = 同队副本失败",
+      "value": "-10"
     },
     {
       "file": "Domain/Relationships/Relationship.cs",
@@ -280,6 +288,14 @@
       "status": "【已确认】D-065",
       "note": "中毒持续的回合数（战斗结束即解除）",
       "value": "5"
+    },
+    {
+      "file": "Domain/Combat/StageDuration.cs",
+      "name": "GameHoursPerRound",
+      "kind": "参数",
+      "status": "【已确认】D-073",
+      "note": "一个战斗回合占多少游戏内小时（0.25）—— D-073 拍板；三阶段满回合约一天",
+      "value": "0.25"
     }
   ],
   "nonParameters": [
@@ -575,8 +591,8 @@
     {
       "id": "combat-archetypes",
       "file": "src/Domain/Combat/CombatParameters.cs",
-      "status": "【已确认】D-065",
-      "note": "战斗属性表：性格定攻/防（莽 12/3 · 傲 8/8 · 随手 8/6）· 投入度定生命（肝 120 · 随手 80 · 挂机 60）· 挂机时攻防取 5/4 · 怪物三档（普通 6/2/60 · 精英 7/3/150 · 首领 8/4/180） —— 怪物按**两人小队**重算（D-068）并调难（D-070）",
+      "status": "【已确认】D-065 / D-068 / D-070 / D-072",
+      "note": "英雄侧属性表：性格定攻/防（莽 12/3 · 傲 8/8 · 随手 8/6）、投入度定生命（肝 120 · 随手 80 · 挂机 60）、挂机时攻/防取 5/4；怪物三档：普通 6/2/60 · 精英 7/3/150 · 首领 8/4/120。首领血量经 D-072 调整：穷举 45 种两人队实测，180 时胜率仅 37.8%，120 时为 86.7%（落在 70–90% 目标区间内）。",
       "extractor": "combat-archetypes",
       "expected": [
         "莽=12,3,0",
@@ -588,7 +604,7 @@
         "挂机=5,4,0",
         "普通=6,2,60",
         "精英=7,3,150",
-        "首领=8,4,180"
+        "首领=8,4,120"
       ]
     }
   ]

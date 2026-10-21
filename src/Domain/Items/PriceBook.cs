@@ -101,7 +101,7 @@ public sealed class PriceBook
     }
 
     /// <summary>
-    /// 默认价格表（<b>【待定 T-007 占位】</b>）。
+    /// 默认价格表（<b>【待定 P-14 占位】</b>）。
     /// </summary>
     /// <remarks>
     /// <para>这 3 个数只是<b>占位</b> —— 让 M2 的 Trade 能跑起来、有东西可买。<br/>

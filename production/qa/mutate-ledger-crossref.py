@@ -32,6 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 LEDGER = ROOT / "production" / "qa" / "parameters.json"
 DECISION = ROOT / "production" / "07_技术决策与待确认事项.md"
+REVIEW = ROOT / "production" / "37_R-05阶段5_数值评审清单_V1.0.md"
 TESTS = ROOT / "tests" / "Claude-Code-Game-Studios.Tests.csproj"
 FILTER = "FullyQualifiedName~ParameterLedgerCrossReferenceTests"
 
@@ -59,6 +60,10 @@ def mutate_ledger(label, old, new):
 
 def mutate_decision(label, old, new):
     return _mutate(label, DECISION, old, new)
+
+
+def mutate_review(label, old, new):
+    return _mutate(label, REVIEW, old, new)
 
 
 def _mutate(label, target: Path, old, new):
@@ -166,6 +171,31 @@ def main() -> int:
         "`07` §2 里点名的常量值与台账不符（规则层的台账在撒谎）",
         "`MaxTier = 5`",
         "`MaxTier = 7`",
+    ))
+
+    # ── ⑧ 评审项的主编号改回 T-007 ⇒ 断言 5 红 ───────────────────────
+    #    **这正是真事**：基础价格此前在四处都被标成 T-007，
+    #    而 T-007 是「存档是否保存随机数状态」，在机器台账里**一次都没被引用**。
+    #    ⇒ 「主编号必须被机器台账引用」这条本来就能抓住它。
+    results.append(mutate_review(
+        "阶段 5 评审项的主编号改回 T-007（这组数机器就看不见了）",
+        "**P-14**（2026-10-21 补登）",
+        "**T-007**（2026-10-21 补登）",
+    ))
+
+    # ── ⑨ 表的归属指针被摘掉 ⇒ 断言 6 红 ─────────────────────────────
+    #    表类条目此前是**豁免**的 —— 而「基础价格注册成一张表」恰好落进那块没人管的地方。
+    results.append(mutate_ledger(
+        "表类条目的归属指针被摘掉（待定的表不说自己等谁）",
+        '"status": "【待定】P-14"',
+        '"status": "【待定】"',
+    ))
+
+    # ── ⑩ 表指向一个不存在的 P 编号 ⇒ 断言 6 红 ───────────────────────
+    results.append(mutate_ledger(
+        "表类条目指向一个不存在的 P 编号（悬空链接）",
+        '"status": "【待定】P-14"',
+        '"status": "【待定】P-99"',
     ))
 
     print("---")

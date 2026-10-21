@@ -6,14 +6,14 @@ namespace ClaudeCodeGameStudios.Tests;
 /// <summary>
 /// <b>测试自己的价格表</b> —— 单元测试的<b>夹具</b>，不是产品的配置。
 ///
-/// <para><b>为什么需要它</b>：价格是 <c>07</c> §2 的<b>临时参数</b>（<b>T-007</b> 待定），
+/// <para><b>为什么需要它</b>：价格是 <c>07</c> §2 的<b>临时参数</b>（<b>P-14</b> 待定），
 /// 而开发者随时会改它 —— 改的是 <c>config/prices.json</c> 与内置兜底 <c>PriceBook.Default</c>。
 /// 如果单元测试直接用 <c>PriceBook.Default</c>，那么：
 /// <list type="number">
 /// <item>开发者一改价格，**十几条测试当场红** —— 而那些测试断言的其实是
 /// <b>机制</b>（摆摊抽 5%、余额怎么算），不是<b>价格是多少</b>；</item>
 /// <item>更要命的是：<c>production/qa/recalibrate.py</c> 的第 2 步就是 <c>dotnet test</c>，
-/// 而「改价格 → 重跑标定」正是开发者拿到 T-007 的三个数之后要走的那条路
+/// 而「改价格 → 重跑标定」正是开发者拿到 P-14 的三个数之后要走的那条路
 /// ⇒ <b>那条承诺恰好在最需要它的地方断了</b>。</item>
 /// </list></para>
 ///

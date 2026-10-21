@@ -13,7 +13,7 @@ namespace ClaudeCodeGameStudios.Tests.Items;
 /// <list type="bullet">
 /// <item>负价防线：构造期拒收负数（不能"以后再处理"）。</item>
 /// <item>未登记 = 0（语义："不卖"，不是"免费"）。</item>
-/// <item>默认价格表<b>装着那三个可售物品</b>（<b>不写死价格</b> —— 那是 T-007 的占位值，见下方那条测试的说明）。</item>
+/// <item>默认价格表<b>装着那三个可售物品</b>（<b>不写死价格</b> —— 那是 P-14 的占位值，见下方那条测试的说明）。</item>
 /// <item><see cref="PriceBook.WithPrices"/>：读档专用，整张表替换。</item>
 /// </list>
 ///
@@ -195,7 +195,7 @@ public class PriceBookTests
     /// </summary>
     /// <remarks>
     /// <para><b>这里刻意不写死具体价格</b>（曾经是 3 / 5 / 8）。
-    /// 那是 <b>T-007</b> 的占位值，开发者随时会改 —— 而写死它的后果是：
+    /// 那是 <b>P-14</b> 的占位值，开发者随时会改 —— 而写死它的后果是：
     /// 开发者改完价格，这条测试就红，而 <c>production/qa/recalibrate.py</c>
     /// 的第 2 步正是 <c>dotnet test</c> ⇒ <b>「改价格 → 重跑标定」那条路
     /// 恰好在最需要它的地方断掉</b>。</para>

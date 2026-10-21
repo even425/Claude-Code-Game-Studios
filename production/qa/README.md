@@ -184,7 +184,7 @@ CI 同时把结果表写进 **job summary**（网页上直接看得到）。
 | `mutate-hero-ids.py` | IT-25 唯一 Id + 撞号防护 |
 | `mutate-write-points.py` | IT-27 领域层没有公开写入口 |
 | `mutate-doc-guard.py` | 文档卫生（控制字符 / 已判死设计线的标记） |
-| `mutate-param-ledger.py` | 参数台账与代码一致（标量 + 四张表） |
+| `mutate-param-ledger.py` | 参数台账与代码一致（标量 + **五张表**：升级成本 / 掉落权重与数量 / 性格权重 / 稀有度映射 / **基础价格**） |
 | `mutate-config-fallback.py` | 外部配置与内置兜底不许分叉（价格表 / 世界表） |
 | `mutate-death-cost.py` | IT-16 死亡代价：领域层不许有「永久损失」字段 |
 | `mutate-mt04-visible.py` | MT-04 存档重载后的可见状态（**含「界面没跟着刷新」那一档**） |
@@ -192,7 +192,7 @@ CI 同时把结果表写进 **job summary**（网页上直接看得到）。
 | `mutate-ledger-consistency.py` | `07` 台账自身（两处状态表不许互相矛盾 / 现状必须是真的） |
 | `mutate-doc-citations.py` | 活文档点名的测试必须真的存在（文件 / 类 / 方法） |
 | `mutate-price-fallback.py` | 价格表两份副本不许分叉 + 同步脚本不许帮倒忙 |
-| `mutate-ledger-crossref.py` | 两张参数台账之间的链接不许悬空 / 占位值不许无主 |
+| `mutate-ledger-crossref.py` | 两张参数台账之间的链接不许悬空 / 占位值不许无主 **+ 阶段 5 要评审的每组数主编号必须被机器台账引用** |
 | `mutate-domain-purity.py` | 领域层脱离 Godot 编译（不变量 I9）：加一行 `using Godot;` ⇒ 编译失败 |
 | `mutate-acceptance-coverage.py` | 验收覆盖摘要不许过期（`06` 正文 ↔ 本文档「覆盖现状」表的两个数字） |
 | `mutate-settlement-atomicity.py` | I15 结算要么全应用要么不应用（三处一起动 / 三处都不动） |

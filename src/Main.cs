@@ -213,7 +213,7 @@ public partial class Main : Node2D
     private ClaudeCodeGameStudios.Application.ItemGrantService _itemGrant = null!;
 
     /// <summary>
-    /// 副本战利品的<b>内容来源</b>（R-01）。注入点：T-007 拍板后只换实现。
+    /// 副本战利品的<b>内容来源</b>（R-01）。注入点：P-08 拍板后只换实现。
     /// </summary>
     private ClaudeCodeGameStudios.Domain.Settlement.ILootProvider _lootProvider = null!;
 
@@ -298,7 +298,7 @@ public partial class Main : Node2D
     /// 本局使用的<b>价格表</b>（D-054 阶段 7：从 <c>config/prices.json</c> 读，读不到则用占位表）。
     /// </summary>
     /// <remarks>
-    /// <b>为什么要外部化</b>：价格本身是【待定 T-007】（开发者与 ChatGPT 商定），
+    /// <b>为什么要外部化</b>：价格本身是【待定 P-14】（开发者与 ChatGPT 商定），
     /// 而<b>货币侧的全部标定</b>（X 的固定点、稳态、分布）都随价格变。
     /// 把表放外面 ⇒ 「开发者定价格 → 重跑标定」= 改一个文件 + 跑一条命令。
     /// </remarks>
@@ -306,7 +306,7 @@ public partial class Main : Node2D
         ClaudeCodeGameStudios.Domain.Items.PriceBook.Default;
 
     /// <summary>价格表的<b>来源说明</b>（写进采集日志，便于溯源）。</summary>
-    private string _priceBookSource = "内置占位表（T-007 未定）";
+    private string _priceBookSource = "内置占位表（P-14 未定）";
 
     /// <summary>
     /// 载入价格表：<b>外部文件优先</b>，读不到 / 解析失败 ⇒ <b>退回占位表</b>。

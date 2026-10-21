@@ -222,7 +222,7 @@ public class ParameterLedgerTests
         Assertions.AssertThat(ledger.Count(r => r.Kind != "参数")).IsGreater(20);
     }
 
-    // ── 表类参数（阶段 5 评审要看的四张表）──────────────────────────────
+    // ── 表类参数（阶段 5 评审要看的五张表）──────────────────────────────
 
     /// <summary>表类参数的抽取方式。</summary>
     private static readonly Dictionary<string, Func<string, List<string>>> Extractors =
@@ -246,6 +246,17 @@ public class ParameterLedgerTests
             ["rarity-map"] = text => Regex.Matches(
                     text, @"new ItemDefinition\(new ItemId\(""([^""]+)""\),\s*""[^""]*"",\s*ItemRarity\.(\w+)\)")
                 .Select(m => $"{m.Groups[1].Value}={m.Groups[2].Value}").ToList(),
+
+            // config/prices.json： "石料": 5  → "石料=5"
+            // ⚠️ **以 `_` 开头的键是注释**，它们的值是**字符串** ⇒ 正则只匹配数字值
+            //    ⇒ 注释键天然被排除（不必在抽取器里特判）。
+            // ⚠️ **必须排序**：JSON 里的键序是**人写的**，重排一下就应当判「值没变」，
+            //    而不是「顺序变了 ⇒ 红」。排序键用 Ordinal（与 Python / C# 一致）。
+            ["price-json"] = text => Regex.Matches(text, @"""(?<k>[^""]+)""\s*:\s*(?<v>\d+)")
+                .Select(m => new { Key = m.Groups["k"].Value, Value = m.Groups["v"].Value })
+                .OrderBy(x => x.Key, StringComparer.Ordinal)
+                .Select(x => $"{x.Key}={x.Value}")
+                .ToList(),
         };
 
     private sealed record TableRow(string Id, string File, string Status, string Note,
@@ -273,7 +284,9 @@ public class ParameterLedgerTests
 
     /// <summary>
     /// 表类参数的值必须与代码一致 ⇒ <b>改表忘了改台账 ⇒ 红</b>。
-    /// <para>这四张表恰好就是阶段 5 要评审的：掉落权重 / 掉落次数 / 稀有度映射 / 升级成本。</para>
+    /// <para>这五张表恰好就是阶段 5 要评审的：掉落权重 / 掉落次数 / 稀有度映射 / 升级成本 /
+    /// <b>基础价格</b>（价格表是 2026-10-21 补进来的 —— 它此前**不在台账里**，
+    /// 而它恰恰是阶段 5 要评审的第一组数，详见 <c>07</c> §2 的 P-14 补登说明）。</para>
     /// </summary>
     [TestCase]
     public void TableParameters_MatchTheCode()
@@ -330,7 +343,7 @@ public class ParameterLedgerTests
         Assertions.AssertThat(string.Join(" | ", missing)).IsEmpty();
     }
 
-    /// <summary><b>防空转</b>：四张表都真的被抽到了内容。</summary>
+    /// <summary><b>防空转</b>：五张表都真的被抽到了内容。</summary>
     [TestCase]
     public void EveryTableExtractor_ActuallyFindsSomething()
     {

@@ -68,7 +68,7 @@ CLASSIFICATION, EXPECTED_VALUES = load_ledger()
 
 
 def load_tables():
-    """读台账里的「表」类参数（阶段 5 评审要看的四张表）。"""
+    """读台账里的「表」类参数（阶段 5 评审要看的五张表）。"""
     import json
     data = json.loads(LEDGER_PATH.read_text(encoding="utf-8"))
     return data.get("tables", [])
@@ -183,12 +183,12 @@ DOC_FOOTER = """
 | 东西 | 在哪 | 覆盖情况 |
 |---|---|---|
 | 标量数值常量（64 处） | `src/` 全部 | ✅ **全覆盖**（32 个玩法参数 + 32 个表现层/技术/哨兵值） |
-| **表类参数**（4 张） | 见 §1.1 | ✅ **全覆盖**：升级成本、掉落权重与数量、性格权重、稀有度映射 |
-| 价格表（石料/木料/布匹） | `config/prices.json` ↔ `PriceBook.Default` | ✅ 由 `PriceBookConfigConsistencyTests` **逐项比对**（两份副本不许分叉） |
+| **表类参数**（5 张） | 见 §1.1 | ✅ **全覆盖**：升级成本、掉落权重与数量、性格权重、稀有度映射、**基础价格** |
+| 价格表的**两份副本** | `config/prices.json` ↔ `PriceBook.Default` | ✅ 台账登记**外部配置那一份**（运行时真正生效的那份）；两份不许分叉由 `PriceBookConfigConsistencyTests` **逐项比对** |
 | 世界表 | `config/worlds.json` ↔ `HeroFactory.World.Builtin` | ✅ 由 `WorldTableConfigConsistencyTests` **逐字段比对** |
 
 > ⚠️ **已知边界**：本文的**标量扫描**只认 `const` / `static readonly` 的**单值**声明。
-> **表类参数**靠 4 个专门的抽取器（`extractor` 字段）覆盖，覆盖到本文列出的那 4 张；
+> **表类参数**靠 5 个专门的抽取器（`extractor` 字段）覆盖，覆盖到本文列出的那 5 张；
 > **别的表**（例如某个服务里的一组系数）若要纳入，需再加一个抽取器。
 > 这是本文的已知边界，不是「那些数不重要」——
 > **新增一张表，就该给它加一个抽取器**，否则它就在覆盖范围之外了。

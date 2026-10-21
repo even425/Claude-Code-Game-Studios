@@ -13,7 +13,7 @@ namespace ClaudeCodeGameStudios.Tests;
 /// 与 <see cref="PriceBook.Default"/>（内置兜底）。
 ///
 /// <para><b>它守的是什么</b>：这是同一份数据的<b>两个副本</b>。
-/// 开发者把最终价格写进 <c>config/prices.json</c>（正是 <c>T-007</c> 要做的事），
+/// 开发者把最终价格写进 <c>config/prices.json</c>（正是 <c>P-14</c> 要做的事），
 /// 如果内置兜底忘了同步，于是：<list type="bullet">
 /// <item>配置文件<b>在</b> ⇒ 新价格生效；</item>
 /// <item>配置文件<b>不在</b>（丢了 / 解析失败 / 路径写错）⇒ <b>静默退回占位价格</b>。</item>

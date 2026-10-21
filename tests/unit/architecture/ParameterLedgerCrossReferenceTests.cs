@@ -42,6 +42,7 @@ public class ParameterLedgerCrossReferenceTests
 {
     private const string LedgerRelPath = "production/qa/parameters.json";
     private const string DecisionRelPath = "production/07_技术决策与待确认事项.md";
+    private const string ReviewRelPath = "production/37_R-05阶段5_数值评审清单_V1.0.md";
 
     /// <summary>归属指针：P 编号（规则层临时参数）/ T 编号（待定规则）/ D 编号（决策）。</summary>
     private static readonly Regex Owner = new(@"(P-\d+|T-\d+|D-\d+)", RegexOptions.Compiled);
@@ -85,6 +86,80 @@ public class ParameterLedgerCrossReferenceTests
 
     private sealed record LedgerRow(string File, string Name, string Kind, string Status,
                                    string Note, string Value);
+
+    /// <summary>规则层台账（<c>07</c> §3）里登记的 T 编号（待定规则）。</summary>
+    private static HashSet<string> RegisteredRuleIds()
+    {
+        string path = Path.Combine(RepoRoot(), DecisionRelPath.Replace('/', Path.DirectorySeparatorChar));
+        string text = File.ReadAllText(path).Replace("\r\n", "\n");
+
+        int from = text.IndexOf("## 3. 待定规则台账", StringComparison.Ordinal);
+        if (from < 0) throw new InvalidOperationException("找不到 `07` 的 §3 标题 —— 台账结构变了？");
+        int to = text.IndexOf("## 4.", from, StringComparison.Ordinal);
+        if (to < 0) to = text.Length;
+
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match m in Regex.Matches(text[from..to], @"^\|\s*(T-\d+)\s*\|", RegexOptions.Multiline))
+        {
+            ids.Add(m.Groups[1].Value);
+        }
+        return ids;
+    }
+
+    /// <summary>机器台账里的「表」条目（阶段 5 要评审的那几张）。</summary>
+    private sealed record TableRow(string Id, string File, string Status, string Note);
+
+    private static List<TableRow> LoadTableRows()
+    {
+        string path = Path.Combine(RepoRoot(), LedgerRelPath.Replace('/', Path.DirectorySeparatorChar));
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        var rows = new List<TableRow>();
+        if (!doc.RootElement.TryGetProperty("tables", out var arr)) return rows;
+
+        foreach (var t in arr.EnumerateArray())
+        {
+            rows.Add(new TableRow(
+                t.GetProperty("id").GetString() ?? "",
+                t.GetProperty("file").GetString() ?? "",
+                t.GetProperty("status").GetString() ?? "",
+                t.TryGetProperty("note", out var n) ? n.GetString() ?? "" : ""));
+        }
+        return rows;
+    }
+
+    /// <summary>一个待评审项（阶段 5 数值评审清单里的一节）及其主编号。</summary>
+    private sealed record ReviewItem(string Title, string MainId);
+
+    /// <summary>
+    /// 阶段 5 数值评审清单里，**每一组要拍板的数**及其主编号。
+    /// <para><b>主编号 = 「在 `07` 的编号」那一格里括号外的第一个编号</b> ——
+    /// 括号里的是补充说明（如「P-08 掉落内容 / P-09 掉落条件」），
+    /// 主编号才是「这组数等谁拍板」的那一个。</para>
+    /// </summary>
+    private static List<ReviewItem> ReviewItems()
+    {
+        string path = Path.Combine(RepoRoot(), ReviewRelPath.Replace('/', Path.DirectorySeparatorChar));
+        string text = File.ReadAllText(path).Replace("\r\n", "\n");
+
+        var headings = Regex.Matches(text, @"^##\s+\d+\.\s+(?<t>.+)$", RegexOptions.Multiline);
+        var items = new List<ReviewItem>();
+
+        for (int i = 0; i < headings.Count; i++)
+        {
+            int start = headings[i].Index;
+            int end = i + 1 < headings.Count ? headings[i + 1].Index : text.Length;
+            var section = text[start..end];
+
+            var cell = Regex.Match(section,
+                @"^\|\s*\*\*在\s*`07`\s*的编号\*\*\s*\|\s*(?<v>[^|]+)\|", RegexOptions.Multiline);
+            if (!cell.Success) continue;
+
+            var ids = Owner.Matches(cell.Groups["v"].Value).Select(x => x.Value).ToList();
+            if (ids.Count == 0) continue;
+            items.Add(new ReviewItem(headings[i].Groups["t"].Value.Trim(), ids[0]));
+        }
+        return items;
+    }
 
     private static List<LedgerRow> LoadLedger()
     {
@@ -293,5 +368,120 @@ public class ParameterLedgerCrossReferenceTests
         // 防空转：§2 必须真的点了几个常量的名，否则本条什么也没守。
         Assertions.AssertThat(checkedRefs).IsGreaterEqual(2);
         Assertions.AssertThat(string.Join(" | ", offenders)).IsEmpty();
+    }
+
+    /// <summary>
+    /// <b>阶段 5 要评审的每一组数：主编号必须存在，而且必须被机器台账引用。</b>
+    ///
+    /// <para><b>它守的是什么</b>：那三组数（基础价格 / 掉落权重与次数 / 稀有度映射）
+    /// 是第四阶段收口的**唯一前置**。而「评审清单上写着要定」与
+    /// 「机器台账里看得见它」是**两件事** ——
+    /// 前者是散文，后者才能在改动时喊一声。</para>
+    ///
+    /// <para><b>为什么这条不是「多写一行台账」的规矩</b>：它抓的是
+    /// <b>「编号指错」</b>这种最难自己发现的错 ——
+    /// 2026-10-21 实测：基础价格此前在 <b>四处</b>都被标成 <b>T-007</b>，
+    /// 而 T-007 是「<b>存档是否保存随机数状态</b>」；
+    /// 同时价格<b>在规则台账里根本没有编号</b>（P-01…P-13 覆盖不到它），
+    /// 也<b>不在机器台账的表类参数里</b>。
+    /// ⇒ 「T-007 在机器台账里一次都没被引用」这一条事实，
+    /// 本守卫本来就能抓住那个错。</para>
+    ///
+    /// <para><b>两条判据</b>：
+    /// <list type="number">
+    /// <item>主编号必须<b>存在于</b>规则台账（<c>07</c> §2 的 P 行或 §3 的 T 行）。</item>
+    /// <item>主编号必须<b>被机器台账引用</b>（标量条目或表条目都算）——
+    /// 否则这组数「机器看不见」，改了也没人知道。</item>
+    /// </list></para>
+    /// </summary>
+    [TestCase]
+    public void StageFiveReviewNumbers_HaveAKnownId_ThatTheMachineLedgerTracks()
+    {
+        var parameterIds = RegisteredParameterIds();
+        var ruleIds = RegisteredRuleIds();
+        var ledger = LoadLedger();
+        var tables = LoadTableRows();
+        var items = ReviewItems();
+
+        // 防空转：必须真的读到了三个待评审项，否则本条什么也没守。
+        Assertions.AssertThat(items.Count).IsGreaterEqual(3);
+
+        // 机器台账引用了哪些编号（标量 + 表）
+        var tracked = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var row in ledger)
+        {
+            foreach (Match m in Owner.Matches(row.Status)) tracked.Add(m.Value);
+        }
+        foreach (var row in tables)
+        {
+            foreach (Match m in Owner.Matches(row.Status)) tracked.Add(m.Value);
+        }
+
+        var problems = new List<string>();
+        foreach (var item in items)
+        {
+            bool known = item.MainId.StartsWith("P-", StringComparison.Ordinal)
+                ? parameterIds.Contains(item.MainId)
+                : ruleIds.Contains(item.MainId);
+            if (!known)
+            {
+                problems.Add($"待评审项「{item.Title}」的主编号 {item.MainId} 在 `07` 的台账里没有这一行");
+                continue;
+            }
+            if (!tracked.Contains(item.MainId))
+            {
+                problems.Add($"待评审项「{item.Title}」的主编号 {item.MainId} 在机器台账里没有任何条目引用它"
+                             + " ⇒ 这组数机器看不见（改了也不会有人知道）");
+            }
+        }
+
+        Assertions.AssertThat(string.Join(" | ", problems)).IsEmpty();
+    }
+
+    /// <summary>
+    /// <b>表类条目也要有归属指针，而且指针不许悬空。</b>
+    ///
+    /// <para><b>为什么表也要管</b>：标量条目的归属指针早就有守卫盯着，
+    /// 而<b>表类条目此前是豁免的</b> ——
+    /// 于是「阶段 5 要评审的第一组数（基础价格）注册成了一张表」这件事，
+    /// 恰好落进了<b>没人管的那块</b>：它没有编号、也不被任何检查覆盖。</para>
+    ///
+    /// <para><b>两条判据</b>：
+    /// <list type="number">
+    /// <item>【待定】/【占位】的表必须说清它服务于哪个 P / T / D。</item>
+    /// <item>它引用的 <c>P-xx</c> 必须<b>真的存在于</b> <c>07</c> §2。</item>
+    /// </list></para>
+    /// </summary>
+    [TestCase]
+    public void TableRows_SayWhoTheyAreWaitingFor_AndTheirPointerIsNotDangling()
+    {
+        var parameterIds = RegisteredParameterIds();
+        var tables = LoadTableRows();
+
+        // 防空转：必须真的有表。
+        Assertions.AssertThat(tables.Count).IsGreaterEqual(4);
+
+        var problems = new List<string>();
+        foreach (var row in tables)
+        {
+            if (row.Status.Contains("待定") || row.Status.Contains("占位"))
+            {
+                if (!Owner.IsMatch(row.Status))
+                {
+                    problems.Add($"表 `{row.Id}` 标着待定/占位，但没说自己服务于哪个 P/T/D");
+                }
+            }
+
+            foreach (Match m in Owner.Matches(row.Status))
+            {
+                if (!m.Value.StartsWith("P-", StringComparison.Ordinal)) continue;
+                if (!parameterIds.Contains(m.Value))
+                {
+                    problems.Add($"表 `{row.Id}` 指向 {m.Value}，但 `07` §2 没有这一行");
+                }
+            }
+        }
+
+        Assertions.AssertThat(string.Join(" | ", problems)).IsEmpty();
     }
 }

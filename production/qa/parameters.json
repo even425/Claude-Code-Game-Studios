@@ -539,13 +539,13 @@
     {
       "id": "base-prices",
       "file": "config/prices.json",
-      "status": "【待定】P-14",
-      "note": "物品单价（石料 / 木料 / 布匹）—— **占位，不是平衡值**；阶段 5 的基础价格评审会定。**登记的是外部配置那一份**（运行时真正生效的那份），内置兜底 `PriceBook.Default` 由 `PriceBookConfigConsistencyTests` 比对，两份不许分叉",
+      "status": "【已确认】D-057（P-14）",
+      "note": "物品单价（石料 3 / 木料 2 / 布匹 5）—— 2026-10-21 开发者拍板（P-14），**不再是占位值**。**登记的是外部配置那一份**（运行时真正生效的那份），内置兜底 `PriceBook.Default` 由 `PriceBookConfigConsistencyTests` 比对，两份不许分叉",
       "extractor": "price-json",
       "expected": [
-        "布匹=8",
-        "木料=3",
-        "石料=5"
+        "布匹=5",
+        "木料=2",
+        "石料=3"
       ]
     }
   ]

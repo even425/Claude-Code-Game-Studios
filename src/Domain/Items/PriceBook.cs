@@ -101,22 +101,23 @@ public sealed class PriceBook
     }
 
     /// <summary>
-    /// 默认价格表（<b>【待定 P-14 占位】</b>）。
+    /// 默认价格表（<b>【已确认 D-057】</b>：石料 3 / 木料 2 / 布匹 5 —— 2026-10-21 开发者拍板）。
     /// </summary>
     /// <remarks>
-    /// <para>这 3 个数只是<b>占位</b> —— 让 M2 的 Trade 能跑起来、有东西可买。<br/>
-    /// D-021 / P2-D03 拍的是"固定表"这条机制，<b>不是</b>这几个具体价格。
-    /// 实际价格由开发者与 ChatGPT 商定后定（很可能放在外部配置里 —— 见 TODO）。</para>
+    /// <para>这 3 个数<b>不再是占位值</b>：<c>07</c> **D-057**（P-14）已确认。
+    /// D-021 / P2-D03 拍的是「固定表」这条机制，现在这张表的<b>值</b>也定了。</para>
+    /// <para>⚠️ **它们仍不是「平衡已验证」** —— 平衡看标定数据（<c>production/qa/recalibrate.py</c>），
+    /// 而标定的结论是「成交额不塌缩」这类<b>性质</b>，不是某个数。</para>
     /// <para><b>【D-054 阶段 7 · 2026-10-21】外部价格表已落地</b>：
     /// <c>config/prices.json</c>（放在带 <c>.gdignore</c> 的目录里 ⇒ Godot 不会导入它）。
-    /// 找不到 / 解析失败 ⇒ <b>退回本占位表</b>（行为与之前完全一致）。
-    /// ⇒ 「开发者定价格 → 我重跑标定」这条路现在是**改一个文件 + 跑一条命令**。</para>
+    /// 找不到 / 解析失败 ⇒ <b>退回本表</b>（行为与之前完全一致）。
+    /// ⇒ 「开发者定价格 → 我重跑标定」这条路是<b>改一个文件 + 跑一条命令</b>。</para>
     /// </remarks>
     public static PriceBook Default { get; } = new PriceBook(new[]
     {
-        new KeyValuePair<ItemId, long>(new ItemId("石料"), 5L),
-        new KeyValuePair<ItemId, long>(new ItemId("木料"), 3L),
-        new KeyValuePair<ItemId, long>(new ItemId("布匹"), 8L),
+        new KeyValuePair<ItemId, long>(new ItemId("石料"), 3L),
+        new KeyValuePair<ItemId, long>(new ItemId("木料"), 2L),
+        new KeyValuePair<ItemId, long>(new ItemId("布匹"), 5L),
     });
 
     /// <summary>

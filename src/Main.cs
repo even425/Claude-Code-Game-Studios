@@ -13,6 +13,8 @@ using System.Globalization;
 // VillageView（表现层节点）。两个都叫「村庄」，混用会读错。
 using DomainVillage = ClaudeCodeGameStudios.Domain.Village.Village;
 using ResourceId = ClaudeCodeGameStudios.Domain.Village.ResourceId;
+using BuildableBuilding = ClaudeCodeGameStudios.Domain.Village.BuildableBuilding;
+using BuildableBuildings = ClaudeCodeGameStudios.Domain.Village.BuildableBuildings;
 
 /// <summary>
 /// 主场景。整棵树在代码里搭，不依赖 .tscn —— 少一个会悄悄坏掉的序列化文件。
@@ -163,6 +165,10 @@ public partial class Main : Node2D
     private Label _squadInfo = null!;
     private Button _btnTask = null!;
     private Button _btnUpgrade = null!;
+    // D-074：独立建筑（围栏 / 试炼塔）—— 与村庄整体升级**并存**的两条路。
+    private Button _btnBuildFence = null!;
+    private Button _btnBuildTower = null!;
+    private Button _btnTrialTower = null!;
     private Button _btnSummon = null!;
     private Button _btnStall = null!;   // M7：摆摊按钮
     private Button _btnMarket = null!;  // R-02：看摊位（正式购买 UI + 摊位库存面板）
@@ -287,6 +293,15 @@ public partial class Main : Node2D
 
     /// <summary>村庄升级的扣款服务（D-054-02：金币 + 材料）。</summary>
     private ClaudeCodeGameStudios.Application.VillageUpgradeService _upgradeService = null!;
+
+    /// <summary>独立建筑的建造流程（D-074：围栏 / 试炼塔，人力决定工期）。</summary>
+    private ClaudeCodeGameStudios.Application.BuildingService _buildingService = null!;
+
+    /// <summary>试炼塔的挑战流程（D-074：打赢 ⇒ 永久加生命）。</summary>
+    private ClaudeCodeGameStudios.Application.TrialTowerService _trialTower = null!;
+
+    /// <summary>建造与试炼的接线（D-074：玩家命令 → 领域动作）。</summary>
+    private ClaudeCodeGameStudios.Application.BuildingCoordinator _buildingCoordinator = null!;
 
     /// <summary>给英雄钱包发金币的写入入口（D-054-01；记「累计发放」）。</summary>
     private ClaudeCodeGameStudios.Application.WalletGrantService _walletWriter = null!;
@@ -590,6 +605,17 @@ public partial class Main : Node2D
         //    经济标定必须重跑（`production/qa/recalibrate.py`）。
         _combat = new ClaudeCodeGameStudios.Application.FormulaCombat();
 
+        // D-074：独立建筑的建造流程 + 试炼塔挑战。
+        // ⚠️ 试炼塔与副本**共用同一个战斗解算器** ⇒ 战斗规则只有一份
+        // （D-062 不设命中 ⇒ 战斗完全确定 ⇒ 同一个英雄进塔结果永远一样）。
+        _buildingService = new ClaudeCodeGameStudios.Application.BuildingService(
+            _villageModel,
+            new ClaudeCodeGameStudios.Domain.Village.ResourceId("金币"),
+            MaterialsId);
+        _trialTower = new ClaudeCodeGameStudios.Application.TrialTowerService(_combat, _combat);
+        _buildingCoordinator = new ClaudeCodeGameStudios.Application.BuildingCoordinator(
+            _buildingService, _trialTower, id => _heroes.FirstOrDefault(h => h.Id.Value == id.Value));
+
         // 日常循环的初始化必须早于 OnSummon —— 它要往 _states 里加条目
         // 第三阶段 M2：随机源改为 Main._rng（可存档），社交目标与关系权重在此注入。
         _life = new DailyLife(_rng, DailyLife.DefaultEffects(
@@ -713,6 +739,7 @@ public partial class Main : Node2D
         if (Expending && _clock.AbsoluteHour >= _pendingEnd) ResolveExpedition();
 
         TickBuild(dt);
+        TickIndependentBuilds(dt);
 
         Refresh();
 
@@ -786,6 +813,53 @@ public partial class Main : Node2D
         }
     }
 
+    /// <summary>
+    /// 每帧推进<b>独立建筑</b>的施工（D-074：围栏 / 试炼塔）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么与 <see cref="TickBuild"/> 分开</b>：两者的进度模型不同
+    /// —— 村庄升级用「干活速度 × 时间」（既有机制），
+    /// 独立建筑用「<b>人数 × 时间 ÷ 工期</b>」（D-074 的「人力决定工期」）。
+    /// ⇒ 混在一起会得出两个互不相容的进度定义。</para>
+    /// <para><b>为什么一次只盖一样</b>：施工队是<b>同一批人</b>
+    /// ⇒ 村庄升级在施工时，独立建筑就<b>拿不到人</b>（停工），
+    /// 反之亦然 ⇒ 两条路不会互相偷人力。</para>
+    /// </remarks>
+    /// <param name="dt">本帧经过的现实秒数。</param>
+    private void TickIndependentBuilds(float dt)
+    {
+        if (_buildingService.ActiveConstructions.Count == 0) return;
+
+        // 现实秒 → 游戏内小时：一个游戏日 = SimSecondsPerDay 模拟秒 = 24 游戏内小时。
+        double gameHours = dt * 24.0 / _clock.SimSecondsPerDay;
+        if (gameHours <= 0.0) return;
+
+        // 人力 = 没在路上、也不在村庄升级工地的人。
+        int workers = _heroes.Count(h => !h.Away && !h.ToSite && IsPresent(h));
+
+        foreach (var c in _buildingService.ActiveConstructions)
+        {
+            _buildingService.SetWorkers(c.Definition.Id, workers);
+        }
+
+        _buildingCoordinator.Advance(gameHours, OnIndependentBuildingCompleted);
+    }
+
+    /// <summary>独立建筑建成：发事件（基线 §7.2「建筑建成 / 升级」）。</summary>
+    /// <param name="definition">刚建成的建筑。</param>
+    private void OnIndependentBuildingCompleted(BuildableBuilding definition)
+    {
+        Emit(EvBuildingConstructed, definition.Name, new[] { StVillageBuilding },
+            new Dictionary<string, string>
+            {
+                ["what"] = definition.Name,
+                ["effect"] = definition.Effect.ToString(),
+            },
+            ev => Chronicle.Building((int)_clock.Day, ev.Payload["what"]).Text);
+
+        GD.Print($"BUILD {definition.Name} 建成。");
+    }
+
     private bool _eventsTestDone;
     private bool _clickTestDone;
     private bool _economyTestDone;
@@ -847,6 +921,10 @@ public partial class Main : Node2D
         new("TradeCompleted");                 // §7.2「村庄日常（采集、摆摊、社交等）」—— 第四阶段 3B：英雄自主购物成交
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvRelationshipWorsened =
         new("RelationshipWorsened");           // §7.2「两名英雄关系恶化」—— D-071：同队副本失败 = 队内每对一次纠纷
+    private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvBuildingConstructed =
+        new("BuildingConstructed");            // §7.2「建筑建成 / 升级」—— D-074：独立建筑建成
+    private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvTrialTowerCleared =
+        new("TrialTowerCleared");              // §7.2「英雄受伤 / 康复」—— D-074：试炼塔打赢 ⇒ 永久加生命
 
     /// <summary>
     /// 副本战利品结算（运行闭环验证与经济数据采集准备）。

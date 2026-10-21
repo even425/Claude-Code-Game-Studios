@@ -36,7 +36,7 @@ public class MainStructureTests
     {
         ("模拟推进", new[]
         {
-            "_Process", "TickBuild",
+            "_Process", "TickBuild", "TickIndependentBuilds", "OnIndependentBuildingCompleted",
             "RunCollect", "CollectOneDay", "RunDailyShoppingIfNeeded",
             "DispatchDungeonForCollection", "DispatchOneDungeonForCollection",
             "OpenStallsForCollection", "UpgradeVillageForCollection",
@@ -44,6 +44,7 @@ public class MainStructureTests
         ("战斗执行", new[]
         {
             "ResolveDungeon", "ComputeLoot", "ResolveExpedition", "NextDungeonRunId",
+            "CombatStatsFor",
         }),
         ("结算入账", new[]
         {
@@ -91,6 +92,7 @@ public class MainStructureTests
         "SocialTargetCandidates", "OnSocialCompleted", "SocialStageLine",
         "SocialPreferenceWeight",
         "OnRosterItemActivated", "OnSummon", "OnTask", "OnUpgrade",
+        "OnBuild", "OnBuildFence", "OnBuildTower", "OnTrialTower", "RefreshBuildButton",
         "OnStall", "OnStallConfirm", "OnMarket", "OnManualTradeCompleted",
         "OnSave", "OnLoad",
         "Refresh", "RefreshRoster", "RosterLine", "ShoppingNoteFor",

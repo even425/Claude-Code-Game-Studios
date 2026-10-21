@@ -7,6 +7,8 @@ using ClaudeCodeGameStudios.Domain.Heroes;
 using ClaudeCodeGameStudios.Domain.Quests;
 using ClaudeCodeGameStudios.Domain.Relationships;
 using ClaudeCodeGameStudios.Presentation;
+using BuildableBuilding = ClaudeCodeGameStudios.Domain.Village.BuildableBuilding;
+using BuildableBuildings = ClaudeCodeGameStudios.Domain.Village.BuildableBuildings;
 
 /// <summary>
 /// 主场景的<b>表现层</b>部分（A1 拆分：场景搭建、界面刷新、玩家命令入口、输入）。
@@ -83,6 +85,11 @@ public partial class Main : Node2D
         // 所以用 ShrinkBegin：按钮宽度由文字决定，最宽也不超过左栏。
         _btnTask = MakeButton("发布任务", left, OnTask);
         _btnUpgrade = MakeButton("升级村庄", left, OnUpgrade);
+        // D-074：独立建筑（围栏 / 试炼塔）与村庄的整体升级**并存** ——
+        // 后者是既有的 5 级阶梯，前者是各自独立的建筑。
+        _btnBuildFence = MakeButton("建围栏", left, OnBuildFence);
+        _btnBuildTower = MakeButton("建试炼塔", left, OnBuildTower);
+        _btnTrialTower = MakeButton("进试炼塔", left, OnTrialTower);
         _btnSummon = MakeButton("招募一个人", left, OnSummon);
         _btnStall = MakeButton("摆摊", left, OnStall);
         _btnMarket = MakeButton("看摊位", left, OnMarket);
@@ -550,6 +557,150 @@ public partial class Main : Node2D
     }
 
     /// <summary>
+    /// D-074：建造一栋独立建筑（围栏 / 试炼塔）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>与「升级村庄」并存</b>：后者是既有的 5 级阶梯（整体升级），
+    /// 前者是各自独立的建筑 ⇒ 两条路互不干扰。</para>
+    /// <para><b>人力决定工期</b>（D-074）：<b>没被派去副本的人</b>去工地
+    /// ⇒ 派出去的人越多，盖得越慢；全派出去就<b>停工</b>（已付的资源不退）。</para>
+    /// </remarks>
+    /// <param name="definition">要建什么。</param>
+    private void OnBuild(BuildableBuilding definition)
+    {
+        // ⚠️ **一次只盖一样**（D-074）：施工队是同一批人 ⇒
+        // 村庄升级在施工时，独立建筑拿不到人（停工）⇒ 两条路互斥，
+        // 免得玩家以为「两样都在盖」而其实互相偷人力。
+        if (_buildTarget >= 0)
+        {
+            GD.Print($"BUILD {definition.Name} 开不了工（村庄正在升级，工地上有人）。");
+            Refresh();
+            return;
+        }
+
+        if (!_buildingService.CanStart(definition))
+        {
+            GD.Print($"BUILD {definition.Name} 开不了工（已建成 / 在建 / 落点被占 / 钱或材料不够）。");
+            Refresh();
+            return;
+        }
+
+        // 施工队：**没被派去副本的人**去工地（副本里的人还在路上）。
+        int workers = _heroes.Count(h => !h.Away && !h.ToSite && IsPresent(h));
+        if (!_buildingService.TryStart(definition, workers))
+        {
+            GD.Print($"BUILD {definition.Name} 开工失败（资源或落点不满足）。");
+            Refresh();
+            return;
+        }
+
+        GD.Print($"BUILD {definition.Name} 开工：{definition.GoldCost}金 {definition.MaterialCost}材料，"
+                 + $"{workers} 人施工（一个人要 {definition.BaseBuildHours:0.#} 小时）。");
+        Refresh();
+    }
+
+    private void OnBuildFence() => OnBuild(BuildableBuildings.Fence);
+
+    private void OnBuildTower() => OnBuild(BuildableBuildings.TrialTower);
+
+    /// <summary>
+    /// D-074：进试炼塔打一场（<b>第 1 个在场且空闲的英雄</b>）。
+    /// </summary>
+    /// <remarks>
+    /// <b>赢了 ⇒ 永久加生命</b>；输了什么也不发生（无惩罚）。
+    /// ⇒ 战斗完全确定（D-062 不设命中）⇒ 同一个英雄进塔，结果永远一样。
+    /// </remarks>
+    private void OnTrialTower()
+    {
+        if (!_buildingService.IsCompleted(BuildableBuildings.TrialTower.Id))
+        {
+            GD.Print("TRIAL 试炼塔还没建好。");
+            Refresh();
+            return;
+        }
+
+        HeroAgent? challenger = null;
+        foreach (var h in _heroes)
+        {
+            if (h.Away || h.ToSite) continue;
+            if (!IsPresent(h)) continue;
+            challenger = h;
+            break;
+        }
+
+        if (challenger is null)
+        {
+            GD.Print("TRIAL 村口没人（都在路上或工地上）。");
+            Refresh();
+            return;
+        }
+
+        var outcome = _buildingCoordinator.TryTrial(challenger.Id);
+        if (outcome is null)
+        {
+            GD.Print("TRIAL 找不到这个人。");
+            Refresh();
+            return;
+        }
+
+        if (outcome.Value.Won)
+        {
+            Emit(EvTrialTowerCleared, challenger.Name,
+                new[] { StHeroTally, StVillageBuilding },
+                new Dictionary<string, string>
+                {
+                    ["hero"] = challenger.Name,
+                    ["bonus"] = outcome.Value.HealthBonusGained.ToString(),
+                    ["total"] = challenger.TrialTowerHealthBonus.ToString(),
+                },
+                ev => Chronicle.TrialTowerWon((int)_clock.Day, ev.Payload["hero"], ev.Payload["total"]).Text);
+        }
+        else
+        {
+            GD.Print($"TRIAL {challenger.Name} 没打过试炼塔的守卫（无惩罚）。");
+        }
+
+        Refresh();
+    }
+
+    /// <summary>
+    /// D-074：独立建筑按钮的文案与禁用状态。
+    /// </summary>
+    /// <param name="button">要刷新的按钮。</param>
+    /// <param name="definition">对应的建筑。</param>
+    /// <remarks>
+    /// <b>为什么按钮上要写成本</b>：升级按钮已经这么做了（D-054-02 的教训：
+    /// 只显示材料会让玩家以为「升级不要钱」）⇒ 独立建筑同理。
+    /// </remarks>
+    private void RefreshBuildButton(Button button, BuildableBuilding definition)
+    {
+        if (_buildingService.IsCompleted(definition.Id))
+        {
+            button.Text = $"{definition.Name}（已建成）";
+            button.Disabled = true;
+            return;
+        }
+
+        var active = _buildingService.ActiveConstructions
+            .FirstOrDefault(c => c.Definition.Id.Value == definition.Id.Value);
+
+        if (active is not null)
+        {
+            int pct = (int)(active.Instance.ConstructionProgress * 100);
+            button.Text = $"正在建 {definition.Name}  {pct}%";
+            button.Disabled = true;
+            return;
+        }
+
+        button.Text = $"建{definition.Name}  ·  {definition.GoldCost}金 {definition.MaterialCost}材料";
+        // ⚠️ **落点被占也要在按钮上体现**：`CanStart` 不查占位
+        // （占位的权威判定在 `Village.TryPlace` —— 见它的说明）⇒ 这里补一次，
+        // 免得玩家点了才知道「那儿已经有东西了」。
+        button.Disabled = !_buildingService.CanStart(definition)
+                          || _villageModel.IsOccupied(definition.GridX, definition.GridY);
+    }
+
+    /// <summary>
     /// M7 摆摊按钮 handler —— 弹 LineEdit 输入物品名 + 数量，<b>第 1 个在场且空闲的英雄</b>开摊。
     /// </summary>
     /// <remarks>
@@ -779,6 +930,15 @@ public partial class Main : Node2D
 
         _btnSummon.Disabled = false;
         _btnSummon.Text = $"招募一个人（{_heroes.Count} 人在村里）";
+
+        // ---- D-074：独立建筑的三个按钮 ----
+        RefreshBuildButton(_btnBuildFence, BuildableBuildings.Fence);
+        RefreshBuildButton(_btnBuildTower, BuildableBuildings.TrialTower);
+
+        _btnTrialTower.Text = _buildingService.IsCompleted(BuildableBuildings.TrialTower.Id)
+            ? "进试炼塔（打赢 +20 生命）"
+            : "试炼塔还没建";
+        _btnTrialTower.Disabled = !_buildingService.IsCompleted(BuildableBuildings.TrialTower.Id);
 
         // 杂谈只在真的变了的时候重建 —— 每帧重建节点会拖垮帧率
         _chronicle.RebuildIfDirty();

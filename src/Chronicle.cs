@@ -167,6 +167,23 @@ public static class Chronicle
         return new Entry(day, tpl, null);
     }
 
+    /// <summary>
+    /// 试炼塔通关（基线 §7.2「英雄受伤 / 康复」；D-074：永久加生命）。
+    /// </summary>
+    /// <param name="day">游戏日。</param>
+    /// <param name="who">通关的英雄。</param>
+    /// <param name="totalBonus">他现在的<b>累计</b>生命加成。</param>
+    public static Entry TrialTowerWon(int day, string who, string totalBonus)
+    {
+        string tpl = Pick(new[]
+        {
+            $"{who}从试炼塔里出来了，身上带着伤，精神头倒是不错。",
+            $"试炼塔的门关上了又开，{who}走出来时腰板直了些。",
+            $"{who}在塔里练了一趟。回村路上有人问他怎么样，他没说。",
+        });
+        return new Entry(day, tpl, null);
+    }
+
     public static Entry SiteOpened(int day, string what, int workers)
     {
         string tpl = workers switch

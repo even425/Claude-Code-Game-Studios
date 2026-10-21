@@ -296,6 +296,22 @@
       "status": "【已确认】D-073",
       "note": "一个战斗回合占多少游戏内小时（0.25）—— D-073 拍板；三阶段满回合约一天",
       "value": "0.25"
+    },
+    {
+      "file": "Application/TrialTowerService.cs",
+      "name": "HealthBonusPerWin",
+      "kind": "参数",
+      "status": "【建议】D-074",
+      "note": "试炼塔赢一场获得的生命加成（20）—— D-074 拍板的是「只加生命」与「永久」，加多少是本实现的方案值（改它只需改这一个常量）",
+      "value": "20"
+    },
+    {
+      "file": "Application/TrialTowerService.cs",
+      "name": "GuardTierIndex",
+      "kind": "参数",
+      "status": "【已确认】D-074",
+      "note": "试炼塔守卫用哪一档怪物（1 = 精英档）—— 实测：普通档九种英雄原型全部能赢（门槛无效），精英档只有最强的组合能过",
+      "value": "1"
     }
   ],
   "nonParameters": [

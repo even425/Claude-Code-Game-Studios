@@ -63,6 +63,23 @@ public partial class HeroAgent
     public int RefusedCount { get; set; }
     public int Pocketed { get; set; }
 
+    /// <summary>
+    /// 试炼塔给的<b>永久生命加成</b>（D-074）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么落在「英雄个体」上</b>：战斗属性按<b>个人</b>换算
+    /// （<c>CombatParameters.ForHero</c>），而试炼塔是「<b>这个人</b>去打过一场」
+    /// ⇒ 加成跟着人走，不是跟着建筑走（建筑只是入口）。</para>
+    /// <para><b>为什么只加生命</b>（D-074）：加攻防会直接改战斗胜率
+    /// （首领档 86.7% 得重测）⇒ 先只动生命。</para>
+    /// <para><b>为什么是「永久」</b>（D-074）：限时效果需要状态系统
+    /// （基线 §4.4 的状态清单仍【待定】）⇒ 第一版只做永久这一半。</para>
+    /// <para>⚠️ 这是<b>运行期状态</b>（英雄身上发生了什么），不是静态定义
+    /// ⇒ 属基线 §4.1 的「当前状态」层 ⇒ 放在这里而不是 <c>HeroDefinition</c>
+    /// （后者是不可变的静态定义，I7）。</para>
+    /// </remarks>
+    public int TrialTowerHealthBonus { get; set; }
+
 
     // ---- 当下状态 -------------------------------------------------------
 

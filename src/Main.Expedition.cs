@@ -376,6 +376,30 @@ public partial class Main : Node2D
             _lootProvider, DungeonName, participants, outcome.Run.Id.Value);
     }
 
+    /// <summary>
+    /// 某个英雄现在的<b>战斗属性</b> = 基础换算（性格 × 投入度）+ 试炼塔加成（D-074）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么加成要在这里加</b>：基础属性是<b>静态表</b>算出来的
+    /// （<c>CombatParameters.ForHero</c>），而试炼塔的加成是<b>这个人后来得到的</b>
+    /// ⇒ 两者必须<b>分开算再相加</b>，不能把加成塞进静态表
+    /// （那张表是所有英雄共用的，塞进去就变成「人人都加了」）。</para>
+    /// <para>⚠️ <b>只加生命</b>（D-074）：加攻防会直接改战斗胜率
+    /// （首领档 86.7% 得重测）⇒ 先只动生命。</para>
+    /// </remarks>
+    /// <param name="agent">英雄个体。</param>
+    /// <returns>战斗属性（攻 / 防 / 命）。</returns>
+    private static ClaudeCodeGameStudios.Domain.Combat.CombatStats CombatStatsFor(HeroAgent agent)
+    {
+        var baseStats = ClaudeCodeGameStudios.Domain.Combat.CombatParameters.ForHero(
+            agent.Personality, agent.Diligence);
+
+        int bonus = agent.TrialTowerHealthBonus;
+        if (bonus == 0) return baseStats;
+
+        return baseStats with { Health = baseStats.Health + bonus };
+    }
+
     private ClaudeCodeGameStudios.Application.DungeonFlowOutcome ResolveDungeon(
         Job job, List<HeroAgent> crew)
     {
@@ -407,8 +431,7 @@ public partial class Main : Node2D
                          ?? _heroes.FirstOrDefault(h => h.Id.Value == id);
                 var stats = agent is null
                     ? ClaudeCodeGameStudios.Domain.Combat.CombatStats.Unknown
-                    : ClaudeCodeGameStudios.Domain.Combat.CombatParameters.ForHero(
-                        agent.Personality, agent.Diligence);
+                    : CombatStatsFor(agent);
                 return ClaudeCodeGameStudios.Domain.Combat.CombatantSnapshot.Create(
                     id,
                     st?.Definition.Name ?? id,

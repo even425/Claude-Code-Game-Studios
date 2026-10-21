@@ -398,19 +398,89 @@ public class FormulaCombatTests
     [TestCase]
     public void TheActualTwoHeroParty_CanWinTheFirstStage()
     {
-        var problems = new List<string>();
-
         // 游戏里最常见的一支两人队：一个莽（能肝）+ 一个傲（随手）
         var party = Party(("甲", "莽", "肝"), ("乙", "傲", "随手"));
         var combat = new FormulaCombat();
         var log = combat.Resolve("遭遇一", party, 0);
 
-        if (!combat.DidHeroesWin(log))
+        Assertions.AssertThat(combat.DidHeroesWin(log)).IsTrue();
+    }
+
+    /// <summary>
+    /// <b>穷举所有两人队的通关率</b> —— 因为采集器的队伍轮换是**确定性的**
+    /// （按名册顺序两两配对）⇒ 它测到的胜率是**配对方式的产物**，不是难度的产物
+    /// （实测两个种子：5.4% vs 67.6%，差 12 倍）。
+    /// ⇒ 要量难度，只能**穷举**：9 种英雄原型（3 性格 × 3 投入度）⇒ 45 种无序组合。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>断言的是设计意图，不是编出来的平衡数</b>（D-070）：
+    /// <b>强队（莽 + 莽）必须打得过首领</b>，<b>弱队（挂机 + 挂机）必须打不过首领</b>
+    /// ⇒ 「选谁进队」必须**有后果**。</para>
+    /// <para>顺带把各档的胜率分布**打出来**（供标定与调难度看）。</para>
+    /// </remarks>
+    [TestCase]
+    public void EveryTwoHeroCrew_ShowsTheSquadChoiceMatters()
+    {
+        string[] personalities = { "莽", "傲", "随手" };
+        string[] diligences = { "肝", "随手", "挂机" };
+        var archetypes = (from p in personalities
+                          from d in diligences
+                          select (p, d)).ToArray();
+
+        int crews = 0;
+        var winsPerStage = new int[3];
+        var lossesPerStage = new int[3];
+
+        for (int i = 0; i < archetypes.Length; i++)
         {
-            problems.Add("两人小队打不赢第一关（普通档）"
-                         + " ⇒ 采集器与自检用的就是这个规模 ⇒ 副本必然失败 ⇒ 0 战利品");
+            for (int j = i; j < archetypes.Length; j++)
+            {
+                var (p1, d1) = archetypes[i];
+                var (p2, d2) = archetypes[j];
+                var party = Party(("甲", p1, d1), ("乙", p2, d2));
+                crews++;
+
+                for (int stage = 0; stage < 3; stage++)
+                {
+                    var combat = new FormulaCombat();
+                    var log = combat.Resolve("遭遇", party, stage);
+                    if (combat.DidHeroesWin(log)) winsPerStage[stage]++; else lossesPerStage[stage]++;
+                }
+            }
         }
 
-        Assertions.AssertThat(string.Join(" | ", problems)).IsEqual(string.Empty);
+        // 设计意图（D-070）：强队过首领，弱队过不了首领。
+        bool strongWins = DidWin(Party(("甲", "莽", "肝"), ("乙", "莽", "肝")), 2);
+        bool weakWins = DidWin(Party(("甲", "随手", "挂机"), ("乙", "随手", "挂机")), 2);
+
+        // 分布（打出来给人看：这是调难度的依据）
+        var report = new System.Text.StringBuilder();
+        for (int stage = 0; stage < 3; stage++)
+        {
+            double rate = 100.0 * winsPerStage[stage] / crews;
+            report.Append($"{CombatParameters.MonsterNameFor(stage)}: "
+                          + $"{winsPerStage[stage]}/{crews} = {rate:F0}% 通关；");
+        }
+        Console.WriteLine($"[战斗分布] 两人队穷举 {crews} 种：{report}");
+        // 测试宿主会吞掉 Console 输出 ⇒ 同时落文件，供人工读取（调试用，不参与判定）。
+        try
+        {
+            var dump = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), "ccgs-combat-dist.txt");
+            System.IO.File.WriteAllText(
+                dump,
+                $"两人队穷举 {crews} 种（9 原型两两组合）\n{report}\n",
+                new System.Text.UTF8Encoding(false));
+        }
+        catch { /* 落盘失败不影响断言 */ }
+
+        Assertions.AssertThat(strongWins).IsTrue();
+        Assertions.AssertThat(weakWins).IsFalse();
+    }
+
+    private static bool DidWin(CombatPartySnapshot party, int stage)
+    {
+        var combat = new FormulaCombat();
+        return combat.DidHeroesWin(combat.Resolve("遭遇", party, stage));
     }
 }

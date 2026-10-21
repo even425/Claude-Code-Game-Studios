@@ -270,12 +270,20 @@ public class ParameterLedgerCrossReferenceTests
         Assertions.AssertThat(ledger.Count).IsGreater(10);
 
         // 「独立数字」：前面不是字母或连字符（排除 CR-1 / P-13 / 2026-10-21）
+        // ⚠️ **但要先剥掉「编号型 token」**（D-069 / P-14 / T-004 / I-16 / A-03）：
+        // 那些是**决策与台账的编号**，不是参数值 ⇒ 不该被当成「过期的数」。
+        // （真事：备注里写「D-069 拍板」⇒ 旧正则把 `D-069` 的 `69` 当成一个独立数字
+        //   ⇒ 报「台账里没有这个数」——**误报**，而且它靠「运气」才没误报：
+        //   `P-07` 里的 `07` 同理会被拆成 `7`。）
+        var idLike = new Regex(@"\b[A-Z]{1,3}-\d{1,3}\b", RegexOptions.Compiled);
         var standalone = new Regex(@"(?<![A-Za-z\-])\d+(?:\.\d+)?", RegexOptions.Compiled);
 
         var stale = new List<string>();
         foreach (var row in ledger)
         {
-            foreach (Match m in standalone.Matches(row.Note))
+            // 先把编号型 token 换成等长空格（保留位置，免得相邻数字被粘成一个）
+            var note = idLike.Replace(row.Note, m => new string(' ', m.Length));
+            foreach (Match m in standalone.Matches(note))
             {
                 string token = NormalizeNumber(m.Groups[0].Value);
                 if (known.Contains(token)) continue;

@@ -383,31 +383,32 @@ public class FormulaCombatTests
     /// <summary>
     /// <b>游戏实际派出去的队伍是 2 人</b>（采集器 <c>DispatchOneDungeonForCollection</c>：
     /// 「取前两个可用的人」；自检的 <c>--dungeon</c> 同样两人）
-    /// ⇒ 因此<b>批准的那张数值表必须让 2 人小队打得过</b>。
+    /// ⇒ 因此<b>批准的那张数值表必须让 2 人小队打得过第一关</b>。
     ///
     /// <para><b>为什么这条必须写成断言</b>：D-065 的数值是按「混编 <b>4</b> 人」算的
     /// （草案 §3 的算式就是这么写的），而游戏跑的是 2 人小队
     /// ⇒ 两边的前提不一致 ⇒ 数值表在游戏里<b>不成立</b>。
     /// ⇒ 这类「纸面上对、跑起来不成立」的偏差，<b>只有用游戏真实的队伍规模去跑</b>才看得见。</para>
+    ///
+    /// <para><b>为什么只要求「第一关」</b>（D-070 调难之后）：精英/首领的血量是按
+    /// 「<b>普通队能赢、弱队会输</b>」定的 ⇒ <b>两人小队打首领本来就可能超时</b>
+    /// （那正是「选谁进队」有后果的意思）⇒ 断言若要求「两人必赢三关」，
+    /// 就会把「难度调对了」判成错。</para>
     /// </summary>
     [TestCase]
-    public void TheActualTwoHeroParty_CanWinEveryStage()
+    public void TheActualTwoHeroParty_CanWinTheFirstStage()
     {
         var problems = new List<string>();
 
-        for (int stage = 0; stage < 3; stage++)
-        {
-            var combat = new FormulaCombat();
-            // 游戏里最常见的一支两人队：一个莽（能肝）+ 一个傲（随手）
-            var party = Party(("甲", "莽", "肝"), ("乙", "傲", "随手"));
-            var log = combat.Resolve("遭遇", party, stage);
-            bool won = combat.DidHeroesWin(log);
+        // 游戏里最常见的一支两人队：一个莽（能肝）+ 一个傲（随手）
+        var party = Party(("甲", "莽", "肝"), ("乙", "傲", "随手"));
+        var combat = new FormulaCombat();
+        var log = combat.Resolve("遭遇一", party, 0);
 
-            if (!won)
-            {
-                problems.Add($"第 {stage} 档（{CombatParameters.MonsterNameFor(stage)}）："
-                             + "两人小队打不赢 ⇒ 副本必然失败 ⇒ 玩家拿不到任何战利品");
-            }
+        if (!combat.DidHeroesWin(log))
+        {
+            problems.Add("两人小队打不赢第一关（普通档）"
+                         + " ⇒ 采集器与自检用的就是这个规模 ⇒ 副本必然失败 ⇒ 0 战利品");
         }
 
         Assertions.AssertThat(string.Join(" | ", problems)).IsEqual(string.Empty);

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>开发进度总览 · 2026-10-21</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#f7f5f0; --card:#ffffff; --line:#e9e3d6; --line-soft:#f0ece2;
+    --ink:#14171e; --ink2:#3a4256; --muted:#7c7a72;
+    --accent:#2f6f5e; --accent-soft:rgba(47,111,94,.09);
+    --warn:#c97b3f; --warn-soft:rgba(201,123,63,.12);
+    --stop:#b06367; --stop-soft:rgba(176,99,103,.10);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Outfit',sans-serif; font-size:15px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(520px 320px at 88% -6%, rgba(47,111,94,.055), transparent 70%),
+      radial-gradient(420px 300px at -4% 8%, rgba(201,123,63,.05), transparent 70%);
+  }
+  main{position:relative; z-index:1; max-width:980px; margin:0 auto; padding:44px 24px 72px}
+  h1{font-family:'DM Serif Display',serif; font-weight:400; font-size:34px; line-height:1.2; margin:0 0 10px; letter-spacing:-.005em}
+  h2{font-family:'DM Serif Display',serif; font-weight:400; font-size:23px; margin:0 0 6px; letter-spacing:-.003em}
+  .sub{color:var(--ink2); max-width:66ch; margin:0 0 26px}
+  .mono{font-family:'JetBrains Mono',monospace}
+  section{margin-top:46px}
+  .sec-head{display:flex; align-items:center; gap:10px; margin-bottom:14px}
+  .sec-head svg{color:var(--accent); flex:none}
+  .sec-note{color:var(--muted); font-size:13.5px; margin:-2px 0 16px}
+
+  /* 数字条 */
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:26px 0 6px}
+  .stat{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:15px 16px;
+        box-shadow:0 2px 8px rgba(0,0,0,.035)}
+  .stat .k{font-size:12px; color:var(--muted); letter-spacing:.02em}
+  .stat .v{font-family:'JetBrains Mono',monospace; font-size:25px; line-height:1.25; margin-top:3px; color:var(--ink)}
+  .stat .v em{font-style:normal; color:var(--accent); font-size:15px; padding:0 2px}
+  .stat .d{font-size:12.5px; color:var(--muted); margin-top:2px}
+
+  /* 通用卡片 */
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px;
+        box-shadow:0 2px 8px rgba(0,0,0,.035)}
+
+  /* 对照表 */
+  table{width:100%; border-collapse:collapse; font-size:14px}
+  th{font-weight:600; text-align:left; color:var(--muted); font-size:12.5px; letter-spacing:.03em;
+     padding:0 10px 8px 0; border-bottom:1px solid var(--line)}
+  td{padding:11px 10px 11px 0; border-bottom:1px solid var(--line-soft); vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td.k{font-weight:600; white-space:nowrap; width:118px}
+  .before{color:var(--muted)}
+  .after{color:var(--ink); font-weight:500}
+  .arrow{color:var(--accent); padding:0 6px}
+
+  /* 模块全景 */
+  .mods{display:grid; grid-template-columns:repeat(3,1fr); gap:11px}
+  .mod{background:var(--card); border:1px solid var(--line); border-radius:13px; padding:13px 14px;
+       box-shadow:0 2px 8px rgba(0,0,0,.03)}
+  .mod .t{font-weight:600; font-size:14px; display:flex; align-items:center; gap:7px}
+  .mod .dot{width:8px; height:8px; border-radius:50%; flex:none}
+  .dot.done{background:var(--accent)} .dot.rules{background:var(--warn)} .dot.todo{background:var(--stop)}
+  .mod .g{font-size:12.5px; color:var(--muted); margin-top:5px; line-height:1.5}
+  .mod .bar{height:5px; border-radius:3px; background:var(--line-soft); margin-top:9px; overflow:hidden}
+  .mod .bar i{display:block; height:100%; border-radius:3px}
+  .fill-done{width:100%; background:var(--accent)} .fill-rules{width:62%; background:var(--warn)}
+  .fill-todo{width:18%; background:var(--stop)}
+
+  /* 时间线 */
+  .timeline{list-style:none; padding:0; margin:6px 0 0; position:relative}
+  .timeline::before{content:""; position:absolute; left:8px; top:8px; bottom:10px; width:2px;
+                    background:var(--accent); opacity:.32}
+  .timeline li{position:relative; padding:0 0 20px 32px}
+  .timeline li:last-child{padding-bottom:0}
+  .timeline li::before{content:""; position:absolute; left:2px; top:5px; width:14px; height:14px;
+                       border-radius:50%; background:var(--bg); border:2px solid var(--accent)}
+  .timeline .when{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--accent)}
+  .timeline h3{font-size:14.5px; margin:1px 0 3px; font-weight:600}
+  .timeline p{margin:0; color:var(--ink2); font-size:13.5px; line-height:1.55}
+  .tags{margin-top:6px; display:flex; flex-wrap:wrap; gap:5px}
+  .tag{font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--accent);
+       background:var(--accent-soft); border-radius:5px; padding:2px 7px}
+
+  /* 截图 */
+  .shot{background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden;
+        box-shadow:0 4px 16px -2px rgba(0,0,0,.06)}
+  .shot img{width:100%; display:block}
+  .cap{padding:12px 16px; font-size:13px; color:var(--ink2); border-top:1px solid var(--line-soft)}
+  .cap b{color:var(--ink)}
+
+  /* 清单 */
+  ul.open{list-style:none; padding:0; margin:0}
+  ul.open li{position:relative; padding:0 0 11px 20px; font-size:14px; color:var(--ink2)}
+  ul.open li::before{content:""; position:absolute; left:2px; top:8px; width:6px; height:6px;
+                     border-radius:50%; background:var(--warn)}
+  ul.open li b{color:var(--ink)}
+  .foot{margin-top:44px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+  .foot .mono{font-size:12px}
+
+  @media (max-width:768px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .mods{grid-template-columns:1fr}
+    main{padding:30px 18px 52px}
+    h1{font-size:27px}
+    td.k{width:auto; white-space:normal}
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <h1>开发进度总览</h1>
+  <p class="sub">
+    2026-10-21 这一天：<b>画面几乎没变，变的是规则与引擎</b>。
+    14 条待定决策被拍板并落地，战斗从「掷一次 0.65 的硬币」换成了真引擎，
+    标定实测还揪出了两个只有跑起来才会露的坑。
+  </p>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="k">单元测试</div>
+      <div class="v">802 <em>→</em> 812</div>
+      <div class="d">全绿 · 新增 10 条</div>
+    </div>
+    <div class="stat">
+      <div class="k">变异看红</div>
+      <div class="v">18 <em>档</em></div>
+      <div class="d">每档改坏一处 · 守卫必红</div>
+    </div>
+    <div class="stat">
+      <div class="k">关闭的决策</div>
+      <div class="v">14 <em>条</em></div>
+      <div class="d">D-057 … D-070</div>
+    </div>
+    <div class="stat">
+      <div class="k">本次提交</div>
+      <div class="v">11 <em>笔</em></div>
+      <div class="d">全部已推送</div>
+    </div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+      <h2>今天改了什么（前 → 后）</h2>
+    </div>
+    <p class="sec-note">左边是今天早上的样子，右边是现在。</p>
+    <div class="card">
+      <table>
+        <thead><tr><th></th><th>今天之前</th><th>现在</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="k">战斗</td>
+            <td class="before">掷 0.65 硬币的占位实现；连「对手是谁」都没有</td>
+            <td class="after">真引擎：七个插拔点 + 性格×投入度换算 + 怪物三档 + 中毒 + AI 集火</td>
+          </tr>
+          <tr>
+            <td class="k">副本结果</td>
+            <td class="before">1000 天里 9989 场<b>全败</b>、掉落 0、成交 0</td>
+            <td class="after">能赢、能掉、能卖；胜率目标 70–90%（待标定复核）</td>
+          </tr>
+          <tr>
+            <td class="k">基础价格</td>
+            <td class="before">5/3/8 占位值，还被标成了<b>别的条目的编号</b></td>
+            <td class="after">3/2/5（D-057 已确认）· 内外两份配置不许分叉</td>
+          </tr>
+          <tr>
+            <td class="k">副本金币 X</td>
+            <td class="before">0.10 —— 是在<b>已经不存在的旧游戏</b>上测的</td>
+            <td class="after">0.05 —— 两档实测的固定点（+0.37 / −0.30 金·天）</td>
+          </tr>
+          <tr>
+            <td class="k">九种建筑</td>
+            <td class="before">九栋全部「待定」，谁都不敢动</td>
+            <td class="after">七栋<b>裁决不做</b>（人口/采集点/装备三个大概念挡在门外）+ 两栋功能已定</td>
+          </tr>
+          <tr>
+            <td class="k">改价的后果</td>
+            <td class="before">开发者一改价，<b>自检立刻红</b>、CI 跟着红</td>
+            <td class="after">换一张价格表跑自检，仍然全绿（机器背书）</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      <h2>基线 18 章 · 模块全景</h2>
+    </div>
+    <p class="sec-note">绿 = 做完；橙 = 规则/机制就位、还差内容或平衡；红 = 还没开工。格子里写的是<b>还差什么</b>。</p>
+    <div class="mods">
+      <div class="mod"><div class="t"><span class="dot done"></span>§3 核心循环</div><div class="g">闭环已跑通</div><div class="bar"><i class="fill-done"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot rules"></span>§4 英雄系统</div><div class="g">差装备数值体系</div><div class="bar"><i class="fill-rules"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot done"></span>§5 摆摊与经济</div><div class="g">差「完整城市成长」</div><div class="bar"><i class="fill-rules"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot rules"></span>§6 本土居民与剧情</div><div class="g">差剧情内容</div><div class="bar"><i class="fill-rules"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot done"></span>§7 村庄杂谈</div><div class="g">十类事件：五类已实现、五类已登记缺口</div><div class="bar"><i class="fill-done"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot rules"></span>§8 副本与战斗</div><div class="g"><b>今天落地</b>：规则已实现；差平衡验证</div><div class="bar"><i class="fill-rules"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot rules"></span>§9 关系与社会行为</div><div class="g">差纠纷/复仇链、幅度与触发源</div><div class="bar"><i class="fill-rules"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot rules"></span>§10 召唤与收集</div><div class="g">差概率池/保底/重复处理</div><div class="bar"><i class="fill-rules"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot todo"></span>§11 世界与大事件</div><div class="g">完全没开工（内容量最大）</div><div class="bar"><i class="fill-todo"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot rules"></span>§12 村庄与建筑</div><div class="g">七栋裁决不做；两栋差<b>建造流程</b></div><div class="bar"><i class="fill-rules"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot done"></span>§13/14/15 技术与规范</div><div class="g">结构守卫、验收规范、阶段纪律</div><div class="bar"><i class="fill-done"></i></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      <h2>这一天的时间线</h2>
+    </div>
+    <ol class="timeline">
+      <li>
+        <div class="when">21:00</div>
+        <h3>两轮问卷：8 项决策 + 2 张表，全部拍板</h3>
+        <p>价格、队伍人数、战斗形态、属性来源、伤害式子、命中、状态效果、敌方形态；加上战斗数值表与建筑/行为链表。</p>
+        <div class="tags"><span class="tag">D-057…D-064</span><span class="tag">D-065…D-067</span></div>
+      </li>
+      <li>
+        <div class="when">21:20</div>
+        <h3>战斗真做出来了</h3>
+        <p>占位实现连同「固定胜率 0.65」整类删除；领域层补上属性换算表、怪物三档、七个插拔点与回合引擎。<b>IT-31 从「缺」变成「已写」</b>。</p>
+        <div class="tags"><span class="tag">1773daf</span><span class="tag">IT-31</span></div>
+      </li>
+      <li>
+        <div class="when">21:30</div>
+        <h3>标定揪出「副本从不变胜」</h3>
+        <p>1000 天实测：9989 场全败、0 掉落、0 成交。根因是数值按 <b>4 人</b>小队算、而游戏只派 <b>2 人</b> —— 而且那张表的算式我自己就验错了。按两人小队重算，并补了一条「两人小队必须赢第一关」的断言。</p>
+        <div class="tags"><span class="tag">D-068</span><span class="tag">c6caee5</span></div>
+      </li>
+      <li>
+        <div class="when">21:40</div>
+        <h3>补跑标定 ⇒ 固定点浮出来了</h3>
+        <p>X=0.05 两个种子都稳态（+0.37 / −0.30 金·天）⇒ 旧推荐值 0.10 是在已经不存在的旧游戏上测的，作废。顺带发现胜率 100% ⇒ 怪物再调难。</p>
+        <div class="tags"><span class="tag">D-069</span><span class="tag">D-070</span></div>
+      </li>
+    </ol>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+      <h2>现在的画面</h2>
+    </div>
+    <p class="sec-note">这是刚才跑起来的实机画面（1280×720）。<b>诚实话：画面本身变化很小</b> —— 一天的进展在规则、引擎与数值里，不在美术上。</p>
+    <div class="shot">
+      <img src="qa/evidence/progress-now.png" alt="实机画面：破落村第 1 天清晨，村庄、村民名单与村庄杂谈" />
+      <div class="cap">
+        破落村 · 第 1 天 清晨 · 材料 40 · 在村 3/3 · 村庄杂谈已有内容。
+        村里有 3 座土屋与一个市集，村里 3 人各 100 金。
+        <b>但这 3 个人现在真的会打副本了</b>，而且这一版的副本<b>能赢</b>（昨天的版本 9989 场全败）。
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg>
+      <h2>还开着的</h2>
+    </div>
+    <div class="card">
+      <ul class="open">
+        <li><b>下一轮（你已选）</b>：关系变化的幅度与触发源 —— C2 只差「一次纠纷 = 关系 −N」的 N，和纠纷从哪来</li>
+        <li><b>建造流程</b>（D-003）：九栋建筑的功能已定，就差「怎么建」—— 成本 / 建造时间 / 有几级</li>
+        <li><b>阶段耗时</b>（T-001 / T-002）：战斗回合 ↔ 模拟时间的换算</li>
+        <li><b>标定复核</b>：怪物调难后（精英 150 / 首领 180）胜率是否落到 70–90%，X=0.05 是否仍平</li>
+        <li><b>「受伤 / 康复」</b>还没变成真的事件：战斗里英雄会掉血，但那不掉在英雄身上（§4.4 的状态清单仍待定）</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="foot">
+    数据来源：<span class="mono">production/38_开发完成度盘点_V1.0.md</span>（模块全景）·
+    <span class="mono">production/07_技术决策与待确认事项.md</span>（D-057…D-070）·
+    <span class="mono">production/qa/parameters.json</span>（参数台账）·
+    标定数据 <span class="mono">%TEMP%/ccgs-recal</span>（1000 天采集）
+  </div>
+
+</main>
+</body>
+</html>

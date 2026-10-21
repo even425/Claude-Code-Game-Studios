@@ -323,11 +323,17 @@ public class FormulaCombatTests
     [TestCase]
     public void PartyComposition_ChangesTheOutcome_AsTheRulePredicts()
     {
-        // Act —— 同一个副本、同一个敌人（普通档），只改队伍配置
+        // Act —— 同一个副本、同一个敌人（**首领档**），只改队伍配置
+        // ⚠️ 为什么用**首领档**：按 2 人小队重算怪物后（D-068），连「全挂机」的弱队
+        // 也能在 25 回合内打过精英 ⇒ 差异要到**第三档**才显出来
+        // （弱队每回合只造成 2 点伤害 ⇒ 30 回合打不死首领 ⇒ 超时判负；
+        //   强队每回合 16 点 ⇒ 8 回合打死）。
+        // ⇒ 而这正是设计要的：**弱队能打过前两场，但过不去首领** ⇒「选谁进队」有后果（D3 / IT-31）。
+        const int stage = 2;
         var strong = new FormulaCombat();
         var weak = new FormulaCombat();
-        var strongLog = strong.Resolve("遭遇一", Reckless(), 0);
-        var weakLog = weak.Resolve("遭遇一", Idle(), 0);
+        var strongLog = strong.Resolve("遭遇二", Reckless(), stage);
+        var weakLog = weak.Resolve("遭遇二", Idle(), stage);
 
         bool strongWon = strong.DidHeroesWin(strongLog);
         bool weakWon = weak.DidHeroesWin(weakLog);
@@ -338,7 +344,7 @@ public class FormulaCombatTests
 
         // 而且方向与规则预测一致：**输出不够的队伍打得更久**
         // （弱队每回合只造成 2 点伤害 ⇒ 30 回合打不死 ⇒ 超时判负；
-        //   强队每回合 16 点 ⇒ 8 回合打死 ⇒ 出手次数自然更少）
+        //   强队每回合 36 点 ⇒ 6 回合打死 ⇒ 出手次数自然更少）
         int strongAttacks = CountAttacks(strongLog);
         int weakAttacks = CountAttacks(weakLog);
         Assertions.AssertThat(weakAttacks > strongAttacks).IsTrue();
@@ -371,4 +377,39 @@ public class FormulaCombatTests
     /// <summary>数一数日志里有多少次出手（每条攻击记录算一次）。</summary>
     private static int CountAttacks(IReadOnlyList<BattleLogEntry> log)
         => log.Count(e => e.Summary.Contains("攻击", StringComparison.Ordinal));
+
+    // ── 7 · 可玩性：游戏实际派的是「2 人小队」 ────────────────────────────
+
+    /// <summary>
+    /// <b>游戏实际派出去的队伍是 2 人</b>（采集器 <c>DispatchOneDungeonForCollection</c>：
+    /// 「取前两个可用的人」；自检的 <c>--dungeon</c> 同样两人）
+    /// ⇒ 因此<b>批准的那张数值表必须让 2 人小队打得过</b>。
+    ///
+    /// <para><b>为什么这条必须写成断言</b>：D-065 的数值是按「混编 <b>4</b> 人」算的
+    /// （草案 §3 的算式就是这么写的），而游戏跑的是 2 人小队
+    /// ⇒ 两边的前提不一致 ⇒ 数值表在游戏里<b>不成立</b>。
+    /// ⇒ 这类「纸面上对、跑起来不成立」的偏差，<b>只有用游戏真实的队伍规模去跑</b>才看得见。</para>
+    /// </summary>
+    [TestCase]
+    public void TheActualTwoHeroParty_CanWinEveryStage()
+    {
+        var problems = new List<string>();
+
+        for (int stage = 0; stage < 3; stage++)
+        {
+            var combat = new FormulaCombat();
+            // 游戏里最常见的一支两人队：一个莽（能肝）+ 一个傲（随手）
+            var party = Party(("甲", "莽", "肝"), ("乙", "傲", "随手"));
+            var log = combat.Resolve("遭遇", party, stage);
+            bool won = combat.DidHeroesWin(log);
+
+            if (!won)
+            {
+                problems.Add($"第 {stage} 档（{CombatParameters.MonsterNameFor(stage)}）："
+                             + "两人小队打不赢 ⇒ 副本必然失败 ⇒ 玩家拿不到任何战利品");
+            }
+        }
+
+        Assertions.AssertThat(string.Join(" | ", problems)).IsEqual(string.Empty);
+    }
 }

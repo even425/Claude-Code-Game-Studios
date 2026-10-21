@@ -118,29 +118,30 @@
   <h1>开发进度总览</h1>
   <p class="sub">
     2026-10-21 这一天：<b>画面几乎没变，变的是规则与引擎</b>。
-    14 条待定决策被拍板并落地，战斗从「掷一次 0.65 的硬币」换成了真引擎，
-    标定实测还揪出了两个只有跑起来才会露的坑。
+    17 条待定决策被拍板并落地，战斗从「掷一次 0.65 的硬币」换成了真引擎，
+    标定实测还揪出了几个只有跑起来才会露的坑 —— 这一轮又补上了三个：
+    <b>难度目标从没被验过</b>、<b>关系变化没有幅度</b>、<b>回合数算了却被丢掉</b>。
   </p>
 
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 812</div>
-      <div class="d">全绿 · 新增 10 条</div>
+      <div class="v">802 <em>→</em> 827</div>
+      <div class="d">全绿 · 新增 25 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">18 <em>档</em></div>
+      <div class="v">23 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">14 <em>条</em></div>
-      <div class="d">D-057 … D-070</div>
+      <div class="v">17 <em>条</em></div>
+      <div class="d">D-057 … D-073</div>
     </div>
     <div class="stat">
       <div class="k">本次提交</div>
-      <div class="v">11 <em>笔</em></div>
+      <div class="v">13 <em>笔</em></div>
       <div class="d">全部已推送</div>
     </div>
   </div>
@@ -163,7 +164,7 @@
           <tr>
             <td class="k">副本结果</td>
             <td class="before">1000 天里 9989 场<b>全败</b>、掉落 0、成交 0</td>
-            <td class="after">能赢、能掉、能卖；胜率目标 70–90%（待标定复核）</td>
+            <td class="after">能赢、能掉、能卖；首领胜率实测 <b>86.7%</b>（目标 70–90%）</td>
           </tr>
           <tr>
             <td class="k">基础价格</td>
@@ -185,6 +186,21 @@
             <td class="before">开发者一改价，<b>自检立刻红</b>、CI 跟着红</td>
             <td class="after">换一张价格表跑自检，仍然全绿（机器背书）</td>
           </tr>
+          <tr>
+            <td class="k">难度目标</td>
+            <td class="before">写着「胜率 70–90%」，但<b>从没验过它落在哪</b>（实测 37.8%）</td>
+            <td class="after">首领 180 → <b>120</b>，实测 86.7%；而且胜率对血量是<b>台阶式</b>的 ⇒ 只能扫，不能估</td>
+          </tr>
+          <tr>
+            <td class="k">关系变化</td>
+            <td class="before">有「友好/敌对」的字样，但<b>没有幅度、没有触发源</b></td>
+            <td class="after">纠纷 <b>−10</b> / 成功 <b>+10</b>（等幅）· 触发源 = 副本失败；顺带补上 §7.2 的「关系恶化」事件</td>
+          </tr>
+          <tr>
+            <td class="k">副本耗时</td>
+            <td class="before">战斗<b>算得出回合数却被丢掉</b>，且丢了没有任何异常</td>
+            <td class="after">1 回合 = <b>0.25 游戏内小时</b>；读不出就<b>大声失败</b>，绝不悄悄当 0</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -201,9 +217,9 @@
       <div class="mod"><div class="t"><span class="dot rules"></span>§4 英雄系统</div><div class="g">差装备数值体系</div><div class="bar"><i class="fill-rules"></i></div></div>
       <div class="mod"><div class="t"><span class="dot done"></span>§5 摆摊与经济</div><div class="g">差「完整城市成长」</div><div class="bar"><i class="fill-rules"></i></div></div>
       <div class="mod"><div class="t"><span class="dot rules"></span>§6 本土居民与剧情</div><div class="g">差剧情内容</div><div class="bar"><i class="fill-rules"></i></div></div>
-      <div class="mod"><div class="t"><span class="dot done"></span>§7 村庄杂谈</div><div class="g">十类事件：五类已实现、五类已登记缺口</div><div class="bar"><i class="fill-done"></i></div></div>
-      <div class="mod"><div class="t"><span class="dot rules"></span>§8 副本与战斗</div><div class="g"><b>今天落地</b>：规则已实现；差平衡验证</div><div class="bar"><i class="fill-rules"></i></div></div>
-      <div class="mod"><div class="t"><span class="dot rules"></span>§9 关系与社会行为</div><div class="g">差纠纷/复仇链、幅度与触发源</div><div class="bar"><i class="fill-rules"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot done"></span>§7 村庄杂谈</div><div class="g">十类事件：<b>六类</b>已实现、四类已登记缺口</div><div class="bar"><i class="fill-done"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot rules"></span>§8 副本与战斗</div><div class="g"><b>今天落地</b>：规则已实现；难度已校准到目标区间</div><div class="bar"><i class="fill-rules"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot rules"></span>§9 关系与社会行为</div><div class="g"><b>今天落地</b>：幅度与触发源已定；差纠纷链与复仇链</div><div class="bar"><i class="fill-rules"></i></div></div>
       <div class="mod"><div class="t"><span class="dot rules"></span>§10 召唤与收集</div><div class="g">差概率池/保底/重复处理</div><div class="bar"><i class="fill-rules"></i></div></div>
       <div class="mod"><div class="t"><span class="dot todo"></span>§11 世界与大事件</div><div class="g">完全没开工（内容量最大）</div><div class="bar"><i class="fill-todo"></i></div></div>
       <div class="mod"><div class="t"><span class="dot rules"></span>§12 村庄与建筑</div><div class="g">七栋裁决不做；两栋差<b>建造流程</b></div><div class="bar"><i class="fill-rules"></i></div></div>
@@ -241,6 +257,40 @@
         <p>X=0.05 两个种子都稳态（+0.37 / −0.30 金·天）⇒ 旧推荐值 0.10 是在已经不存在的旧游戏上测的，作废。顺带发现胜率 100% ⇒ 怪物再调难。</p>
         <div class="tags"><span class="tag">D-069</span><span class="tag">D-070</span></div>
       </li>
+      <li>
+        <div class="when">21:50</div>
+        <h3>第三轮问卷：关系幅度 + 触发源 + 难度目标 + 耗时</h3>
+        <p>四问全部按建议拍板：N=10 / M=10、触发源 = 同队副本失败、首领调弱到 70–90%、阶段耗时一并定。</p>
+        <div class="tags"><span class="tag">D-071</span><span class="tag">D-072</span><span class="tag">D-073</span></div>
+      </li>
+      <li>
+        <div class="when">21:55</div>
+        <h3>难度目标从来没被验过</h3>
+        <p>D-070 写着「胜率预计 70–90%」，可<b>那是估值，没有人验过它落在哪</b> —— 实测只有 37.8%。而且采集器的胜率根本不能当难度指标（队伍轮换是确定性的，两个种子差 12 倍）⇒ 改用穷举 45 种两人队扫描：首领 180 → <b>120</b>，胜率 <b>86.7%</b>。</p>
+        <p>🔴 顺带发现：胜率对血量是<b>台阶式</b>的（85~125 都是 86.7%，130~170 都是 60.0%）⇒ <b>「拍一个数字」很容易拍不准，必须扫</b>。</p>
+        <div class="tags"><span class="tag">D-072</span><span class="tag">穷举 45 种两人队</span></div>
+      </li>
+      <li>
+        <div class="when">22:00</div>
+        <h3>关系规则落地，顺带补上一类杂谈事件</h3>
+        <p>一次纠纷 −10、一次副本成功 +10（等幅 ⇒ 一次失败抵掉一次成功）；触发源 = 同队副本失败。<b>顺带补上了基线 §7.2 十类里的「两名英雄关系恶化」</b> —— 它此前做不了，只因为「恶化的触发经历与变化量」没定。</p>
+        <p>⚠️ 幂等键用了<b>独立的前缀</b>：否则同一副本「先成功后失败」时，失败会被当成重复处理而<b>静默跳过</b> ⇒ 该降的关系没降。</p>
+        <div class="tags"><span class="tag">D-071</span><span class="tag">§7.2 缺口表 5/10 → 6/10</span></div>
+      </li>
+      <li>
+        <div class="when">22:05</div>
+        <h3>回合数算了却被丢掉</h3>
+        <p>战斗引擎算得出打了几回合，但 <code>Resolve</code> 只返回日志 ⇒ 回合数被丢掉（<code>04</code> 插拔点 7 的原意正是报出它），<b>而且丢了没有任何异常</b>。修法不只是「把数传出来」，还包括<b>读不出就大声失败</b> —— 悄悄当 0 的话，关系变化的时间坐标会整个塌掉。</p>
+        <p>⇒ 1 回合 = <b>0.25 游戏内小时</b>（三阶段 × 30 回合上限 ≈ 22.5 小时 ≈ 一天）。</p>
+        <div class="tags"><span class="tag">D-073</span><span class="tag">BattleLogReader</span></div>
+      </li>
+      <li>
+        <div class="when">22:10</div>
+        <h3>守卫自己也要被验</h3>
+        <p>新写的「首领胜率落在 70–90%」那条断言，变异时<b>把区间放宽到 0–100 之后它照样绿</b> ⇒ 那条断言当时是装饰。改成断言<b>具体哪 6 支队伍该输</b>（全部含「挂机」）⇒ 与任何区间写法无关，放宽也照样红。</p>
+        <p>⇒ 变异矩阵 <b>5/5</b>，全量 <b>827/827</b>，verify-all 全绿。</p>
+        <div class="tags"><span class="tag">mutate-d071-d073.py</span><span class="tag">827/827</span></div>
+      </li>
     </ol>
   </section>
 
@@ -267,18 +317,18 @@
     </div>
     <div class="card">
       <ul class="open">
-        <li><b>下一轮（你已选）</b>：关系变化的幅度与触发源 —— C2 只差「一次纠纷 = 关系 −N」的 N，和纠纷从哪来</li>
+        <li><b>标定要重跑</b>：D-072 改了首领血量 ⇒ 上一轮的标定数据<b>又作废一次</b>（同 D-069 的教训：改价格或战斗规则都要重测 X）</li>
         <li><b>建造流程</b>（D-003）：九栋建筑的功能已定，就差「怎么建」—— 成本 / 建造时间 / 有几级</li>
-        <li><b>阶段耗时</b>（T-001 / T-002）：战斗回合 ↔ 模拟时间的换算</li>
-        <li><b>标定复核</b>：怪物调难后（精英 150 / 首领 180）胜率是否落到 70–90%，X=0.05 是否仍平</li>
+        <li><b>副本在日历上占多久</b>：D-073 把<b>战斗侧</b>的耗时算出来了（回合 × 0.25 小时），但还没与「行程 11 小时」合并成一个总时长</li>
         <li><b>「受伤 / 康复」</b>还没变成真的事件：战斗里英雄会掉血，但那不掉在英雄身上（§4.4 的状态清单仍待定）</li>
+        <li><b>「某次交易发生纠纷」</b>仍缺：它要「次品 / 成色 / 真伪」机制 ⇒ 已裁决<b>暂不做</b>，要做就是新立项</li>
       </ul>
     </div>
   </section>
 
   <div class="foot">
     数据来源：<span class="mono">production/38_开发完成度盘点_V1.0.md</span>（模块全景）·
-    <span class="mono">production/07_技术决策与待确认事项.md</span>（D-057…D-070）·
+    <span class="mono">production/07_技术决策与待确认事项.md</span>（D-057…D-073）·
     <span class="mono">production/qa/parameters.json</span>（参数台账）·
     标定数据 <span class="mono">%TEMP%/ccgs-recal</span>（1000 天采集）
   </div>

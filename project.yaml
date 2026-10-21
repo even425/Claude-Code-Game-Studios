@@ -56,13 +56,17 @@ commands:
   # editor IS on PATH (C:\Tools\Godot\4.7.2\godot.exe). Only write a full path
   # when the probe failed to resolve the bare name.
   #
-  # build is unset for a different reason: the export preset name is a
-  # PROJECT-DEFINED string (whatever you typed in export_presets.cfg), not an
-  # engine default. Writing 'Linux/X11' — 4.6's shipped default — gives a
-  # Windows-targeting project `Unknown export preset`, or worse, silently
-  # builds the wrong platform. No export_presets.cfg exists yet. Set it with
-  # /settings once the project exports for Windows.
-  build: "[TO BE CONFIGURED]"
+  # build 指向**导出**（不是 dotnet build）——「可以正常构建」在本文的意思是
+  # 能产出**可分发的可执行文件**，不是能编译出 DLL。
+  #
+  # 预设名 "Windows Desktop" 是**项目定义的字符串**，与 export_presets.cfg 里的
+  # preset.0.name **必须一致** —— 两处不许分叉，由 ExportPresetTests 守住。
+  # ⚠️ 导出还需要 Godot 的导出模板（约 1.2 GB，装到
+  #    %APPDATA%\Godot\export_templates\4.7.2.stable.mono\）—— 那是**引擎的
+  #    运行时依赖**，不在版本库里。没装模板时本命令会报
+  #    "No export template found"（**环境没准备好**），
+  #    而**不是** "Unknown export preset"（**项目配错了**）—— 两种错要分得清。
+  build: "godot --headless --path . --export-release \"Windows Desktop\" build/windows/ClaudeCodeGameStudios.exe"
   # `test` is the C# path, verified by execution on 2026-10-17:
   #   `dotnet test` exits 0 on pass, 1 on failure, and a deliberately broken
   #   test was confirmed to report 失败 and exit 1. The GDScript runner

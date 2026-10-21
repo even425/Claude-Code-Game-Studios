@@ -64,7 +64,13 @@ dist/
 # Keep this un-ignore, or run `godot --headless --import` once after cloning.
 !**/.godot/global_script_class_cache.cfg
 *.translation
-export_presets.cfg
+# ⚠️ `export_presets.cfg` **要进版本库**（2026-10-21 改 —— 原先这里把它忽略了）。
+# 预设名是**项目定义的字符串**（"Windows Desktop"），而 `project.yaml` 的
+# `commands.build` 里也写着同一个名字 —— 两处分属两处、又不进版本库
+# ⇒ **必然分叉**，而分叉的后果是「Unknown export preset」（配置错）
+# 或更糟的「悄悄导出了错的平台」。
+# ⇒ Godot 官方也是这个建议：要团队共享导出设置，就把该文件提交。
+# （**导出模板**约 1.2 GB 仍在版本库之外 —— 那是引擎的运行时依赖，不是项目源码。）
 # Uncomment if using Godot:
 # *.import
 

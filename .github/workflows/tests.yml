@@ -183,3 +183,22 @@ jobs:
       - name: Run the runtime self-checks
         shell: pwsh
         run: python production/qa/run-selfchecks.py --summary "$env:GITHUB_STEP_SUMMARY"
+
+      # The export preset is a PROJECT-DEFINED string that lives in two places
+      # (export_presets.cfg and project.yaml's commands.build). This step
+      # proves Godot actually accepts it - and that the failure reason, if any,
+      # is "templates are missing" (environment) rather than "Unknown export
+      # preset" (misconfiguration). The --self-test half proves the judge
+      # itself still works: it deliberately uses a wrong preset name and
+      # requires Godot to reject it.
+      #
+      # This lives in the Godot job on purpose: the main dotnet-test job has
+      # no engine installed, and a check that needs the engine cannot live
+      # there without making CI permanently red.
+      - name: Check the export preset (and prove the judge works)
+        shell: pwsh
+        run: |
+          python production/qa/export-check.py --self-test
+          if ($LASTEXITCODE -ne 0) { throw "export-check self-test failed (exit $LASTEXITCODE)" }
+          python production/qa/export-check.py
+          if ($LASTEXITCODE -ne 0) { throw "export-check failed (exit $LASTEXITCODE)" }

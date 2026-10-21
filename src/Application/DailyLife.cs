@@ -182,6 +182,7 @@ public sealed class DailyLife
             if (result.Outcome != DecisionOutcome.Started) continue;   // 合法空转，不产生事件
 
             _emitted.Add(MakeEvent(
+                // §7.2（内部）—— 动作的开始与结束是内部信号，不进杂谈
                 new EventTypeId("HeroActionStarted"), state.Id.Value, "Hero.CurrentActivity",
                 state.Definition.Name, result.Chosen.Value, result.Target));
         }
@@ -199,6 +200,7 @@ public sealed class DailyLife
         {
             effect(activity, actor, target);
             _emitted.Add(MakeEvent(
+                // §7.2（内部）
                 new EventTypeId("HeroActionCompleted"), actor, "Hero.CurrentActivity",
                 state.Definition.Name, activity.Value, target));
             state.ClearTarget();

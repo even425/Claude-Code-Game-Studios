@@ -818,24 +818,28 @@ public partial class Main : Node2D
     private ClaudeCodeGameStudios.Data.EconomyLog? _economyLog;
 
     // ── 事件类型（对应基线 §7.2 的名单）──
+    // ⚠️ **每个事件类型都必须在这里标出它对应基线 §7.2 的哪一类**（写在 `new("…")` 那一行的行尾）。
+    //    这行标注是「事件类型 → 基线类」映射的**唯一真源** ——
+    //    `ChronicleEventCoverageTests` 直接读它，再去核对盘点文档 §6 的缺口表。
+    //    ⇒ 新增事件类型时忘了写标注，守卫会红（而不是默默多出一种没人归类的杂谈）。
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvSummoned =
         new("HeroSummoned");                 // §7.2「召唤到新英雄」
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvDispatched =
-        new("SquadDispatched");               // §7.2「大事件的发生」
+        new("SquadDispatched");               // §7.2「大事件的发生与结算」
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvDailyWork =
         new("VillageDailyWork");              // §7.2「村庄日常（采集、摆摊、社交等）」
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvDungeonFought =
-        new("DungeonEncounterFought");        // §7.2「大事件的发生」
+        new("DungeonEncounterFought");        // §7.2「大事件的发生与结算」
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvDungeonSettled =
-        new("DungeonSettled");                // §7.2「大事件的结算」
+        new("DungeonSettled");                // §7.2「大事件的发生与结算」＋「英雄首次完成副本」
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvBuildingDone =
         new("BuildingCompleted");             // §7.2「建筑建成 / 升级」
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvSocialized =
-        new("HeroSocialized");                 // 第三阶段 M5：英雄之间的社交
+        new("HeroSocialized");                 // §7.2「村庄日常（采集、摆摊、社交等）」—— 第三阶段 M5：英雄之间的社交
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvSquadBonded =
-        new("SquadBonded");                    // 第三阶段 M5：同队副本合作（一条聚合）
+        new("SquadBonded");                    // §7.2「大事件的发生与结算」—— 第三阶段 M5：同队副本合作（一条聚合）
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvTradeCompleted =
-        new("TradeCompleted");                 // 第四阶段 3B：英雄自主购物成交
+        new("TradeCompleted");                 // §7.2「村庄日常（采集、摆摊、社交等）」—— 第四阶段 3B：英雄自主购物成交
 
     /// <summary>
     /// 副本战利品结算（运行闭环验证与经济数据采集准备）。
@@ -851,7 +855,7 @@ public partial class Main : Node2D
     /// 分给了谁」变成一条<b>可落盘</b>的事实。</para>
     /// </remarks>
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvDungeonLooted =
-        new("DungeonLooted");
+        new("DungeonLooted");                 // §7.2「英雄首次完成副本」
 
     // ── 状态键 ──
     // 反装饰规则（03 §5.2 / 基线 §7.3）靠它们在**构造期**生效：

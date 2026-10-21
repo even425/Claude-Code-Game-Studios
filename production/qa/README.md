@@ -199,6 +199,7 @@ CI 同时把结果表写进 **job summary**（网页上直接看得到）。
 | `mutate-dungeon-party.py` | IT-05 队伍不满足参与条件时既不建任务也不开副本（+ 正向条件） |
 | `mutate-combat-party-input.py` | 战斗能拿到队伍配置（IT-31 的前置）：快照是值、且真的传到了解算器 |
 | `mutate-export-preset.py` | 导出预设：名两处一致 + Godot 真认它（预设错 vs 模板缺要分得清） |
+| `mutate-chronicle-event-coverage.py` | 杂谈十类事件：基线 ↔ 代码归类 ↔ 盘点缺口表三处不许脱节（含「正文数字 ↔ 自己的表」） |
 
 全部一起跑（**很慢** —— 每个脚本都要重建 + 重跑测试，建议过夜跑）：
 

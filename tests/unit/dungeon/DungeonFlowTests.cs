@@ -68,7 +68,7 @@ public class DungeonFlowTests
         public int Consulted { get; private set; }
 
         public IReadOnlyList<BattleLogEntry> Resolve(
-            string encounterName, CombatPartySnapshot party)
+            string encounterName, CombatPartySnapshot party, int stageIndex)
         {
             Calls++;
             ResolvedEncounters.Add(encounterName);
@@ -111,7 +111,7 @@ public class DungeonFlowTests
         public int Calls { get; private set; }
 
         public IReadOnlyList<BattleLogEntry> Resolve(
-            string encounterName, CombatPartySnapshot party)
+            string encounterName, CombatPartySnapshot party, int stageIndex)
         {
             Calls++;
             return new[]
@@ -142,7 +142,7 @@ public class DungeonFlowTests
         public int Consulted { get; private set; }
 
         public IReadOnlyList<BattleLogEntry> Resolve(
-            string encounterName, CombatPartySnapshot party)
+            string encounterName, CombatPartySnapshot party, int stageIndex)
         {
             Calls++;
             return null;

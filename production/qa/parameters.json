@@ -50,14 +50,6 @@
       "value": "5"
     },
     {
-      "file": "Application/PlaceholderCombat.cs",
-      "name": "PlaceholderHeroWinRate",
-      "kind": "参数",
-      "status": "【占位】P-07",
-      "note": "战斗占位胜率（0.65）",
-      "value": "0.65"
-    },
-    {
       "file": "Application/SimulationRunner.cs",
       "name": "PlaceholderSimSecondsPerDay",
       "kind": "参数",
@@ -255,6 +247,38 @@
       "kind": "参数",
       "status": "【待定】P-13（D-003）",
       "note": "村庄最高层级（5）—— 已登记在规则层台账的 P-13 项下；与 `VillageUpgradeService.MaxTier` **重复**（两处分叉的隐患：测试盯着，但不是台账）",
+      "value": "5"
+    },
+    {
+      "file": "Domain/Combat/CombatParameters.cs",
+      "name": "RoundsPerAction",
+      "kind": "参数",
+      "status": "【已确认】D-065",
+      "note": "出手间隔（回合）：每 2 回合出手一次（冷却 1 回合）",
+      "value": "2"
+    },
+    {
+      "file": "Domain/Combat/CombatParameters.cs",
+      "name": "RoundLimit",
+      "kind": "参数",
+      "status": "【已确认】D-065",
+      "note": "回合上限：超时判负（与 D-010 Q1「失败不给奖励」一致）",
+      "value": "30"
+    },
+    {
+      "file": "Domain/Combat/CombatParameters.cs",
+      "name": "PoisonDamagePerRound",
+      "kind": "参数",
+      "status": "【已确认】D-065",
+      "note": "中毒每回合的伤害（固定值，不走防御）",
+      "value": "2"
+    },
+    {
+      "file": "Domain/Combat/CombatParameters.cs",
+      "name": "PoisonDurationRounds",
+      "kind": "参数",
+      "status": "【已确认】D-065",
+      "note": "中毒持续的回合数（战斗结束即解除）",
       "value": "5"
     }
   ],
@@ -546,6 +570,25 @@
         "布匹=5",
         "木料=2",
         "石料=3"
+      ]
+    },
+    {
+      "id": "combat-archetypes",
+      "file": "src/Domain/Combat/CombatParameters.cs",
+      "status": "【已确认】D-065",
+      "note": "战斗属性表：性格定攻/防（莽 12/3 · 傲 8/8 · 随手 8/6）· 投入度定生命（肝 120 · 随手 80 · 挂机 60）· 挂机时攻防取 5/4 · 怪物三档（普通 8/4/120 · 精英 11/6/220 · 首领 14/8/340）",
+      "extractor": "combat-archetypes",
+      "expected": [
+        "莽=12,3,0",
+        "傲=8,8,0",
+        "随手=8,6,0",
+        "肝=0,0,120",
+        "随手=0,0,80",
+        "挂机=0,0,60",
+        "挂机=5,4,0",
+        "普通=8,4,120",
+        "精英=11,6,220",
+        "首领=14,8,340"
       ]
     }
   ]

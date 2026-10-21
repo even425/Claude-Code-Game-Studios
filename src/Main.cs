@@ -259,7 +259,7 @@ public partial class Main : Node2D
     /// <b>为什么不是字段初始化器</b>：C# 不允许字段初始化器引用<b>实例</b>字段，
     /// 而这里要传的正是 <see cref="_rng"/>。所以它在 <see cref="_Ready"/> 里赋值。
     /// </remarks>
-    private ClaudeCodeGameStudios.Application.PlaceholderCombat _combat = null!;
+    private ClaudeCodeGameStudios.Application.FormulaCombat _combat = null!;
     /// <summary>杂谈呈现。容器在场景构建时注入；本类不拥有 Godot 节点的生命周期。</summary>
     private ChroniclePresenter _chronicle = null!;
 
@@ -581,9 +581,12 @@ public partial class Main : Node2D
             RewardsFor, ApplyWrites, itemWriter: _itemGrant,
             walletWriter: _walletWriter);
 
-        // 战斗模块与本类其余随机同源 —— 否则只有战斗可复现，
-        // 而「战斗可复现、抽任务不可复现」是最坏的一种半成品。
-        _combat = new ClaudeCodeGameStudios.Application.PlaceholderCombat(_rng);
+        // 战斗规则（D-059…D-065）：**它不再有随机数** —— D-062 决定不设命中判定
+        // ⇒ 战斗完全确定 ⇒ 「战斗可复现、抽任务不可复现」那个半成品问题**自动消失**：
+        // 战斗不从共享随机流里取数，战斗与日常的随机**互不干扰**。
+        // ⇒ 也因此，副本胜负**不再**是「单场 0.65」的占位，而是**涌现值** ⇒
+        //    经济标定必须重跑（`production/qa/recalibrate.py`）。
+        _combat = new ClaudeCodeGameStudios.Application.FormulaCombat();
 
         // 日常循环的初始化必须早于 OnSummon —— 它要往 _states 里加条目
         // 第三阶段 M2：随机源改为 Main._rng（可存档），社交目标与关系权重在此注入。

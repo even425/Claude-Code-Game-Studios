@@ -247,6 +247,12 @@ public class ParameterLedgerTests
                     text, @"new ItemDefinition\(new ItemId\(""([^""]+)""\),\s*""[^""]*"",\s*ItemRarity\.(\w+)\)")
                 .Select(m => $"{m.Groups[1].Value}={m.Groups[2].Value}").ToList(),
 
+            // new("莽", 12, 3, 0) → "莽=12,3,0"（战斗属性表：D-065）
+            ["combat-archetypes"] = text => Regex.Matches(
+                    text, @"new\(""(?<n>[^""]+)""\s*,\s*(?<a>\d+)\s*,\s*(?<d>\d+)\s*,\s*(?<h>\d+)\)")
+                .Select(m => $"{m.Groups["n"].Value}={m.Groups["a"].Value},{m.Groups["d"].Value},{m.Groups["h"].Value}")
+                .ToList(),
+
             // config/prices.json： "石料": 5  → "石料=5"
             // ⚠️ **以 `_` 开头的键是注释**，它们的值是**字符串** ⇒ 正则只匹配数字值
             //    ⇒ 注释键天然被排除（不必在抽取器里特判）。

@@ -328,7 +328,10 @@ public sealed class DungeonFlow
 
         // 1. 解算：胜负由注入的 resolver 产出日志、由注入的 reader 读出结论。
         //    本类只转发，不判断。
-        var log = _resolver.Resolve(encounterName, _party)
+        //    ⚠️ **阶段序号由本类给**（`DungeonStage` 是 1 起的，战斗规则按 0 起算档位）：
+        //    阶段流转是副本模块的事（`04` §3.1 L4）⇒ 战斗规则不该自己去数阶段。
+        int stageIndex = (int)stage - 1;
+        var log = _resolver.Resolve(encounterName, _party, stageIndex)
                   ?? throw new InvalidOperationException(
                       $"战斗解算器 {nameof(IBattleResolver.Resolve)} 对遭遇「{encounterName}」返回了 null。"
                       + "没有日志的战斗无法被复核（基线 §8.5 D5）。");

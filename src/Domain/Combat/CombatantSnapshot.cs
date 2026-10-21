@@ -36,17 +36,25 @@ namespace ClaudeCodeGameStudios.Domain.Combat;
 /// 这里只提供<b>载体</b>，不规定里面该有什么。</para>
 /// </param>
 /// <param name="PreferenceWeights">玩法偏好的基础权重（偏好类别 ID → 权重）。【待定】P-06。</param>
+/// <param name="Stats">
+/// 战斗属性（攻击 / 防御 / 生命）。<b>【已确认】D-065</b>：按**性格**（攻/防）×
+/// **投入度**（生命）换算，见 <see cref="CombatParameters"/>。
+/// <para>⚠️ 默认是「<b>状态不明</b>」（全 0）⇒ 战斗引擎遇到它会**大声失败**
+/// ——「一个没有战斗属性的人参战」是不能悄悄发生的事。</para>
+/// </param>
 public readonly record struct CombatantSnapshot(
     string Id,
     string Name,
     IReadOnlyDictionary<string, double> TraitModifiers,
-    IReadOnlyDictionary<string, double> PreferenceWeights)
+    IReadOnlyDictionary<string, double> PreferenceWeights,
+    CombatStats Stats)
 {
     /// <summary>造一份快照：把两本字典<b>复制</b>一份（不是持有原对象）。</summary>
     /// <param name="id">英雄标识。</param>
     /// <param name="name">显示名。</param>
     /// <param name="traitModifiers">特质修正系数；null 视为空。</param>
     /// <param name="preferenceWeights">偏好权重；null 视为空。</param>
+    /// <param name="stats">战斗属性；不传 = <b>状态不明</b>（战斗引擎会拒绝开打）。</param>
     /// <remarks>
     /// <b>为什么要复制</b>：字典是可变引用。若快照直接持有原字典，
     /// 解算之后再改一次英雄状态，**已经算出来的战斗结果就变了**
@@ -56,11 +64,13 @@ public readonly record struct CombatantSnapshot(
         string id,
         string name,
         IReadOnlyDictionary<string, double>? traitModifiers = null,
-        IReadOnlyDictionary<string, double>? preferenceWeights = null)
+        IReadOnlyDictionary<string, double>? preferenceWeights = null,
+        CombatStats? stats = null)
         => new(id ?? string.Empty,
                name ?? string.Empty,
                Copy(traitModifiers),
-               Copy(preferenceWeights));
+               Copy(preferenceWeights),
+               stats ?? CombatStats.Unknown);
 
     private static IReadOnlyDictionary<string, double> Copy(
         IReadOnlyDictionary<string, double>? source)

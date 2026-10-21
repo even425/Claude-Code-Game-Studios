@@ -399,11 +399,21 @@ public partial class Main : Node2D
             .Select(id =>
             {
                 var st = _states.FirstOrDefault(s => s.Definition.Id.Value == id);
+                // 战斗属性：按**性格 × 投入度**换算（D-060 / D-065）。
+                // ⚠️ 它在**英雄个体**上（`HeroAgent`），不在静态定义里 ⇒ 要按标识找那个人；
+                // 找不到 ⇒ 属性「不明」⇒ 战斗会**大声失败**（而不是让一个没有战斗属性的人参战）。
+                var agent = crew.FirstOrDefault(h => h.Id.Value == id)
+                         ?? _heroes.FirstOrDefault(h => h.Id.Value == id);
+                var stats = agent is null
+                    ? ClaudeCodeGameStudios.Domain.Combat.CombatStats.Unknown
+                    : ClaudeCodeGameStudios.Domain.Combat.CombatParameters.ForHero(
+                        agent.Personality, agent.Diligence);
                 return ClaudeCodeGameStudios.Domain.Combat.CombatantSnapshot.Create(
                     id,
                     st?.Definition.Name ?? id,
                     st?.Definition.TraitModifiers,
-                    st?.Definition.PreferenceWeights);
+                    st?.Definition.PreferenceWeights,
+                    stats);
             })
             .ToArray());
 

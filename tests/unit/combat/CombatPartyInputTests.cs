@@ -49,7 +49,7 @@ public class CombatPartyInputTests
         public List<CombatPartySnapshot> Seen { get; } = new();
 
         public IReadOnlyList<BattleLogEntry> Resolve(
-            string encounterName, CombatPartySnapshot party)
+            string encounterName, CombatPartySnapshot party, int stageIndex)
         {
             Seen.Add(party);
             return new[]
@@ -77,7 +77,7 @@ public class CombatPartyInputTests
             MakeCombatant("h-2", "乙", 0.8, 1.2),
         });
 
-        spy.Resolve("遭遇一", party);
+        spy.Resolve("遭遇一", party, 0);
 
         Assertions.AssertThat(spy.Seen.Count).IsEqual(1);
         Assertions.AssertThat(spy.Seen[0]).IsSame(party);

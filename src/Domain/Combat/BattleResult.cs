@@ -259,15 +259,22 @@ public interface IBattleResolver
     /// </summary>
     /// <param name="encounterName">遭遇名称。</param>
     /// <param name="party">
-    /// 参战队伍的<b>状态快照</b>（谁在场、当时什么情况）。
+    /// 参战队伍的<b>状态快照</b>（谁在场、当时什么情况，<b>含战斗属性</b>）。
     /// <para>⚠️ <b>为什么必须有它</b>：原本这里只给一串标识，
     /// 战斗<b>结构上就看不到</b>「队伍是谁配置的」——
     /// 而基线 §14.3 的对照实验明确要求固定输入包含
     /// 「<b>相同的英雄队伍（成员、装备、状态）</b>」。
     /// ⇒ 缺了它，「<b>队伍配置按规则影响副本结果</b>」（IT-31）这条验收**写不出来</b>：
     /// 不是公式没定，而是<b>战斗压根拿不到输入</b>。</para>
-    /// <para>规则本身仍属【待定】T-004；本参数只负责<b>把输入递到手</b>。</para>
+    /// <para>规则本身属【已确认】D-059…D-065；本参数只负责<b>把输入递到手</b>。</para>
+    /// </param>
+    /// <param name="stageIndex">
+    /// 当前阶段序号（0 起）—— 决定<b>敌方是哪一档怪物</b>
+    /// （D-065：普通 / 精英 / 首领 一一对应副本的三个阶段）。
+    /// <para>⚠️ 为什么由<b>调用方</b>给：副本的阶段流转是副本模块的事（<c>04</c> §3.1 L4），
+    /// 战斗规则不该自己去数阶段。</para>
     /// </param>
     /// <returns>战斗日志。</returns>
-    IReadOnlyList<BattleLogEntry> Resolve(string encounterName, CombatPartySnapshot party);
+    IReadOnlyList<BattleLogEntry> Resolve(
+        string encounterName, CombatPartySnapshot party, int stageIndex);
 }

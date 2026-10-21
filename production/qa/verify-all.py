@@ -18,7 +18,10 @@
    领域层里多一行 `using Godot;` ⇒ 这里编译失败 ⇒ CI 红。
 6. `production/qa/param-inventory.py --check` —— 参数台账与代码一致
 7. （可选 `--with-screenshot`）截图自检 —— **需要显示器**，无头机器上跑不了
-8. （可选 `--with-mutations`）全部变异矩阵 —— 很慢，建议过夜跑
+8. （可选 `--with-mutations`）全部变异矩阵 —— 很慢，建议过夜跑；
+   **或 `--mutations <子串>` 只跑其中几个**（如 `--mutations settlement`）——
+   ⚠️ **为什么要有后者**：全量 19 个脚本要几小时 ⇒ **实际上没人会跑**
+   ⇒ 纪律等于靠自觉。改了一条守卫，就只验它对应的那一个（几分钟）。
 
 **跳过要说出来**：某一步因前提缺失被跳过时，脚本**明确打印「跳过了什么、为什么」**，
 并可用 `--require-all` 把「跳过」也变成失败（CI 上用它比较诚实）。
@@ -27,6 +30,7 @@
   python production/qa/verify-all.py
   python production/qa/verify-all.py --with-screenshot
   python production/qa/verify-all.py --with-mutations
+  python production/qa/verify-all.py --mutations settlement   # 只跑相关的变异
   python production/qa/verify-all.py --require-all
 """
 try:
@@ -69,22 +73,41 @@ def main():
     ap.add_argument("--with-screenshot", action="store_true",
                     help="也跑截图自检（需要显示器）")
     ap.add_argument("--with-mutations", action="store_true",
-                    help="也跑全部变异矩阵（很慢）")
+                    help="也跑变异矩阵（很慢）")
+    ap.add_argument("--mutations", default="",
+                    help="只跑文件名含这个子串的变异脚本（如 settlement）。"
+                         "**它自己就会打开变异矩阵**，不必再写 --with-mutations。"
+                         "⚠️ 为什么要它：全量 19 个脚本要几小时 ⇒ 实际上没人会跑"
+                         "⇒ 纪律等于靠自觉。改了一条守卫，就只验它对应的那一个")
     ap.add_argument("--require-all", action="store_true",
                     help="把「因前提缺失而跳过」也算失败")
     ap.add_argument("--skip-tests", action="store_true", help="跳过 dotnet test")
+    ap.add_argument("--skip-build", action="store_true",
+                    help="跳过两个 dotnet build（**只在你刚构建过时用**）")
+    ap.add_argument("--skip-checks", action="store_true",
+                    help="跳过真机自检 / I9 / 参数台账（**只在你刚跑过它们时用**）")
     args = ap.parse_args()
+
+    with_mutations = args.with_mutations or bool(args.mutations)
 
     results = []   # (名称, 状态)  状态 ∈ ok / fail / skip
 
     # 1. Debug —— headless 自检加载的就是这一份
-    ok = run("构建 Debug（headless 自检加载的是这份）",
-             ["dotnet", "build", "--nologo", "-v", "q"])
-    results.append(("构建 Debug", "ok" if ok else "fail"))
+    if args.skip_build:
+        results.append(("构建 Debug", "skip"))
+        print("\n=== 构建 Debug ===\n（--skip-build，跳过）")
+    else:
+        ok = run("构建 Debug（headless 自检加载的是这份）",
+                 ["dotnet", "build", "--nologo", "-v", "q"])
+        results.append(("构建 Debug", "ok" if ok else "fail"))
 
     # 2. Release —— 测试跑的是这一份
-    ok = run("构建 Release", ["dotnet", "build", "-c", "Release", "--nologo", "-v", "q"])
-    results.append(("构建 Release", "ok" if ok else "fail"))
+    if args.skip_build:
+        results.append(("构建 Release", "skip"))
+        print("\n=== 构建 Release ===\n（--skip-build，跳过）")
+    else:
+        ok = run("构建 Release", ["dotnet", "build", "-c", "Release", "--nologo", "-v", "q"])
+        results.append(("构建 Release", "ok" if ok else "fail"))
 
     # 3. 单元测试
     if args.skip_tests:
@@ -97,7 +120,10 @@ def main():
         results.append(("单元测试", "ok" if ok else "fail"))
 
     # 4. 真机自检
-    if not godot_available():
+    if args.skip_checks:
+        results.append(("真机自检", "skip"))
+        print("\n=== 真机自检 ===\n（--skip-checks，跳过）")
+    elif not godot_available():
         results.append(("真机自检", "skip"))
         print("\n=== 真机自检 ===\n（跳过：找不到 Godot —— 设 GODOT 环境变量）")
     else:
@@ -112,14 +138,22 @@ def main():
     #    断言（查产物的程序集引用里有没有 Godot）⇒ 反射、延迟加载也躲不过。
     #    ⚠️ 那个工程**必须零依赖** —— gdUnit4 会把 GodotSharp 传递带进来，
     #    那道门就形同虚设（详见该 csproj 的注释）。
-    ok = run("规则层脱离 Godot 编译并运行（I9）",
-             ["dotnet", "run", "--project", "tests/DomainPurity/DomainPurity.csproj",
-              "--nologo", "-v", "q"])
-    results.append(("规则层脱离 Godot（I9）", "ok" if ok else "fail"))
+    if args.skip_checks:
+        results.append(("规则层脱离 Godot（I9）", "skip"))
+        print("\n=== 规则层脱离 Godot（I9） ===\n（--skip-checks，跳过）")
+    else:
+        ok = run("规则层脱离 Godot 编译并运行（I9）",
+                 ["dotnet", "run", "--project", "tests/DomainPurity/DomainPurity.csproj",
+                  "--nologo", "-v", "q"])
+        results.append(("规则层脱离 Godot（I9）", "ok" if ok else "fail"))
 
     # 6. 参数台账
-    ok = run("参数台账与代码一致", [sys.executable, QA / "param-inventory.py", "--check"])
-    results.append(("参数台账", "ok" if ok else "fail"))
+    if args.skip_checks:
+        results.append(("参数台账", "skip"))
+        print("\n=== 参数台账 ===\n（--skip-checks，跳过）")
+    else:
+        ok = run("参数台账与代码一致", [sys.executable, QA / "param-inventory.py", "--check"])
+        results.append(("参数台账", "ok" if ok else "fail"))
 
     # 7. 截图（可选）
     if args.with_screenshot:
@@ -130,14 +164,30 @@ def main():
         print("\n=== 截图自检 ===\n（跳过：需要 --with-screenshot，且需要显示器）")
 
     # 8. 变异矩阵（可选）
-    if args.with_mutations:
+    if with_mutations:
         scripts = sorted(QA.glob("mutate-*.py"))
+        if args.mutations:
+            needle = args.mutations.lower()
+            picked = [s for s in scripts if needle in s.name.lower()]
+            if not picked:
+                # ⚠️ 打印 **ASCII 标记**：中文在某些控制台下会被按系统代码页解码成乱码
+                #    （本机 GBK）⇒ 靠中文断言的守卫会**永远红**（或永远绿，看运气）。
+                #    标记用 ASCII ⇒ 谁读都读得对。
+                print(f"\n[QA] NO-MUTATION-SCRIPTS-MATCH: no mutate-*.py contains "
+                      f"'{args.mutations}'")
+                print(f"!! 没有名字含「{args.mutations}」的变异脚本。"
+                      f"现有的：{', '.join(s.name for s in scripts)}")
+                results.append(("变异矩阵", "fail"))
+                picked = []
+            scripts = picked
         for s in scripts:
             ok = run(f"变异矩阵 {s.name}", [sys.executable, s])
             results.append((f"变异 {s.name}", "ok" if ok else "fail"))
+        if args.mutations and scripts:
+            print(f"\n（只跑了名字含「{args.mutations}」的 {len(scripts)} 个变异脚本）")
     else:
         results.append(("变异矩阵", "skip"))
-        print("\n=== 变异矩阵 ===\n（跳过：需要 --with-mutations）")
+        print("\n=== 变异矩阵 ===\n（跳过：需要 --with-mutations 或 --mutations）")
 
     # ── 汇总 ──
     print("\n" + "=" * 60)

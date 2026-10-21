@@ -95,6 +95,79 @@ public class QaToolingTests
         Assertions.AssertThat(string.Join(" | ", missing)).IsEmpty();
     }
 
+    // ── 断言 7：变异矩阵必须能**只跑相关的那几个** ────────────────────────
+
+    /// <summary>
+    /// <c>verify-all.py</c> 必须支持 <c>--mutations &lt;子串&gt;</c>：
+    /// 只跑文件名含该子串的变异脚本。
+    /// <para><b>为什么这是纪律能不能落地的关键</b>：全量 19 个变异脚本要<b>几小时</b>
+    /// ⇒ 实际上<b>没人会跑</b> ⇒「守卫必须变异看红」这条纪律等于<b>靠自觉</b>。
+    /// 有了筛选，「我改了一条守卫 ⇒ 只验它对应的那一个」就从几小时变成几分钟
+    /// ⇒ 纪律才<b>可执行</b>。</para>
+    /// <para><b>为什么测「参数存在」而不是真的跑一遍</b>：真的跑要几小时，
+    /// 而这条守卫每次 <c>dotnet test</c> 都要跑 ⇒ 必须<b>快</b>。
+    /// 行为（找不到时明确失败）由本文件下一条断言真的跑一次来验。</para>
+    /// </summary>
+    [TestCase]
+    public void VerifyAll_SupportsSelectingMutationScriptsByName()
+    {
+        var script = File.ReadAllText(Path.Combine(QaDir(), "verify-all.py"));
+
+        // 防空转：脚本得真的存在，而且不能小到不可能有这些能力
+        Assertions.AssertThat(script.Length).IsGreaterEqual(1000);
+
+        Assertions.AssertThat(script).Contains("--mutations");
+        // 筛选必须真的作用在「挑哪些脚本」上（而不是只是个没人用的参数）
+        Assertions.AssertThat(script).Contains("args.mutations");
+        Assertions.AssertThat(script).Contains("mutate-*.py");
+    }
+
+    /// <summary>
+    /// <c>--mutations</c> 给的名字<b>匹配不到任何脚本时必须失败</b> ——
+    /// 静默跳过就是「看起来跑过了、其实什么都没跑」。
+    /// <para>⚠️ 这是本仓库反复治的同一类病：<b>「跳过」必须说出来，
+    /// 而且在这里必须变成失败</b>（因为「只跑相关的」本来就是用户明确点的名）。</para>
+    /// <para>⚠️ 断言查的是 <b>ASCII 标记</b>，不是中文 ——
+    /// 中文在某些控制台下会被按系统代码页解码成乱码（本机 GBK），
+    /// 靠中文断言的守卫会**永远红**（或者永远绿，看运气）。</para>
+    /// </summary>
+    [TestCase]
+    public void VerifyAll_FailsWhenTheMutationFilterMatchesNothing()
+    {
+        var script = Path.Combine(QaDir(), "verify-all.py");
+
+        // 故意给一个不可能匹配上的名字 ⇒ 期望退出码非 0
+        var psi = new System.Diagnostics.ProcessStartInfo("python")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            WorkingDirectory = RepoRoot(),
+        };
+        foreach (var a in new[]
+        {
+            script, "--mutations", "zzz-no-such-mutation-script",
+            "--skip-tests", "--skip-build", "--skip-checks",
+        })
+        {
+            psi.ArgumentList.Add(a);
+        }
+
+        using var proc = System.Diagnostics.Process.Start(psi);
+        Assertions.AssertThat(proc is not null).IsTrue();
+        if (proc is null) return;
+
+        var stdout = proc.StandardOutput.ReadToEnd();
+        var stderr = proc.StandardError.ReadToEnd();
+        Assertions.AssertThat(proc.WaitForExit(120_000)).IsTrue();
+
+        // ⚠️ 把实际输出带进失败消息：否则「断言失败」只有一个空壳，
+        //    得再跑一次脚本才知道它到底说了什么。
+        Assertions.AssertThat($"exit={proc.ExitCode} stdout={stdout} stderr={stderr}")
+            .Contains("[QA] NO-MUTATION-SCRIPTS-MATCH");
+        Assertions.AssertThat(proc.ExitCode).IsNotEqual(0);
+    }
+
     // ── 断言 2：README 的变异矩阵一览必须与磁盘一致 ────────────────────
 
     /// <summary>

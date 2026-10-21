@@ -172,6 +172,25 @@ def main():
         "        pass  # 变异：故意不写摘要",
     ))
 
+    # ── ⑨ 变异筛选被拆掉 ───────────────────────────────────────────
+    #    「守卫必须变异看红」是本仓库的核心纪律，但全量 19 个脚本要几小时
+    #    ⇒ 实际上没人会跑 ⇒ 纪律等于靠自觉。筛选参数就是让纪律**可执行**的那一步。
+    results.append(mutate(
+        "verify-all.py 不再支持 --mutations 筛选（改了一条守卫就得跑全部）",
+        QA / "verify-all.py",
+        'ap.add_argument("--mutations", default="",',
+        'ap.add_argument("--mutations_disabled", default="",',
+    ))
+
+    # ── ⑩ 筛选匹配不到时静默跳过 ───────────────────────────────────
+    #    「看起来跑过了、其实什么都没跑」—— 本仓库反复治的同一类病。
+    results.append(mutate(
+        "筛选匹配不到脚本时静默跳过（不报错）",
+        QA / "verify-all.py",
+        '                print(f"\\n[QA] NO-MUTATION-SCRIPTS-MATCH: no mutate-*.py contains "',
+        '                print(f"\\n[QA] skipped: no mutate-*.py contains "',
+    ))
+
     print("---")
     bad = results.count(False)
     print(f"变异矩阵：{len(results) - bad}/{len(results)} 符合预期")

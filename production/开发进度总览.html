@@ -118,27 +118,28 @@
   <h1>开发进度总览</h1>
   <p class="sub">
     2026-10-21 这一天：<b>画面几乎没变，变的是规则与引擎</b>。
-    18 条待定决策被拍板并落地，战斗从「掷一次 0.65 的硬币」换成了真引擎，
-    标定实测还揪出了几个只有跑起来才会露的坑 —— 后面这三个最典型：
-    <b>难度目标从没被验过</b>、<b>关系变化没有幅度</b>、<b>回合数算了却被丢掉</b>。
+    20 条待定决策被拍板并落地，战斗从「掷一次 0.65 的硬币」换成了真引擎，
+    标定实测还揪出了几个只有跑起来才会露的坑 —— 后面这几个最典型：
+    <b>难度目标从没被验过</b>、<b>关系变化没有幅度</b>、<b>回合数算了却被丢掉</b>、
+    <b>退款代码是死代码</b>、<b>「权重」根本不是玩家拿到的比例</b>。
     最后一轮把<b>建造流程</b>也补上了：村里终于有两栋能盖的建筑。
   </p>
 
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 842</div>
-      <div class="d">全绿 · 新增 40 条</div>
+      <div class="v">802 <em>→</em> 850</div>
+      <div class="d">全绿 · 新增 48 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">28 <em>档</em></div>
+      <div class="v">35 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">18 <em>条</em></div>
-      <div class="d">D-057 … D-074</div>
+      <div class="v">20 <em>条</em></div>
+      <div class="d">D-057 … D-076</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -207,6 +208,16 @@
             <td class="before">九栋全是「待定」，<b>一栋也盖不了</b>；「怎么建」没定</td>
             <td class="after"><b>两栋能盖了</b>（围栏=范围 / 试炼塔=加生命），工期由人力决定，建成永久生效</td>
           </tr>
+          <tr>
+            <td class="k">副本占多久</td>
+            <td class="before">时长<b>写死 11 小时</b>，战斗花的时间<b>完全没进时间轴</b></td>
+            <td class="after"><b>行程 = 路程 + 战斗</b>（战斗耗时由真实回合数算）⇒ 「这趟占几天」算得出了</td>
+          </tr>
+          <tr>
+            <td class="k">掉落权重</td>
+            <td class="before">60/30/10 的<b>占位值</b>，而且「权重」与玩家拿到的量<b>根本不是一回事</b></td>
+            <td class="after">拍板的是<b>玩家拿到的份数 50/30/20</b> ⇒ 权重反推为 100/90/60（精确对上）</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -224,7 +235,7 @@
       <div class="mod"><div class="t"><span class="dot done"></span>§5 摆摊与经济</div><div class="g">差「完整城市成长」</div><div class="bar"><i class="fill-rules"></i></div></div>
       <div class="mod"><div class="t"><span class="dot rules"></span>§6 本土居民与剧情</div><div class="g">差剧情内容</div><div class="bar"><i class="fill-rules"></i></div></div>
       <div class="mod"><div class="t"><span class="dot done"></span>§7 村庄杂谈</div><div class="g">十类事件：<b>七类</b>已实现、三类已登记缺口</div><div class="bar"><i class="fill-done"></i></div></div>
-      <div class="mod"><div class="t"><span class="dot rules"></span>§8 副本与战斗</div><div class="g"><b>今天落地</b>：规则已实现；难度已校准到目标区间</div><div class="bar"><i class="fill-rules"></i></div></div>
+      <div class="mod"><div class="t"><span class="dot rules"></span>§8 副本与战斗</div><div class="g"><b>今天落地</b>：规则已实现；难度已校准；<b>副本真的占日历时间</b></div><div class="bar"><i class="fill-rules"></i></div></div>
       <div class="mod"><div class="t"><span class="dot rules"></span>§9 关系与社会行为</div><div class="g"><b>今天落地</b>：幅度与触发源已定；差纠纷链与复仇链</div><div class="bar"><i class="fill-rules"></i></div></div>
       <div class="mod"><div class="t"><span class="dot rules"></span>§10 召唤与收集</div><div class="g">差概率池/保底/重复处理</div><div class="bar"><i class="fill-rules"></i></div></div>
       <div class="mod"><div class="t"><span class="dot todo"></span>§11 世界与大事件</div><div class="g">完全没开工（内容量最大）</div><div class="bar"><i class="fill-todo"></i></div></div>
@@ -317,6 +328,21 @@
         <p>D-072 改了首领血量 ⇒ 旧数据作废 ⇒ 三档 X × 两种子 × 1000 天重测：<b>0.05 两个种子 +0.42 / −0.01 金/天</b>（稳态），0.07 偏涨 ⇒ <b>D-069 的推荐值依然成立</b>，不用改。守恒律 1000/1000 天全部成立。</p>
         <div class="tags"><span class="tag">1000 天 × 2 种子</span><span class="tag">守恒律 1000/1000</span></div>
       </li>
+      <li>
+        <div class="when">23:40</div>
+        <h3>副本终于「占了时间」</h3>
+        <p>副本时长原本是<b>写死的 11 小时</b>，而战斗是<b>在行程结束那一刻</b>整场解算的 ⇒ <b>战斗花的时间根本没进时间轴</b>。<br>
+        ⇒ 战斗完全确定 ⇒ <b>出发时就解算</b>，把战斗耗时并进行程，归来时用<b>同一份结果</b>结算（<b>不重算</b> —— 重算会换掉副本标识，幂等键就变了，同一场可能发两次奖）。</p>
+        <div class="tags"><span class="tag">D-075</span><span class="tag">行程 = 路程 + 战斗</span></div>
+      </li>
+      <li>
+        <div class="when">00:20</div>
+        <h3>「权重」根本不是玩家拿到的比例</h3>
+        <p>拍板的是「玩家拿到的份数 50/30/20」，而抽掉落是「抽 K 次、同种<b>份数累加</b>」⇒ 玩家拿到的是<b>权重 × 数量期望</b>。石头每次给 1-2 份（期望 1.5）⇒ 直接填 50/30/20，实测是 <b>60/24/16</b>（石头占六成，<b>与拍板意图相反</b>）。<br>
+        ⇒ 权重反推为 <b>100/90/60</b>：100×1.5 : 90 : 60 = 150:90:60 = <b>精确 50/30/20</b>。<br>
+        🔴 这是<b>实测两万次</b>才发现的 —— 只断言「表里写着 50」的话，那只是把表抄了一遍。</p>
+        <div class="tags"><span class="tag">D-076</span><span class="tag">实测 20000 次</span></div>
+      </li>
     </ol>
   </section>
 
@@ -346,9 +372,9 @@
     </div>
     <div class="card">
       <ul class="open">
-        <li><b>副本在日历上占多久</b>：D-073 把<b>战斗侧</b>的耗时算出来了（回合 × 0.25 小时），但还没与「行程 11 小时」合并成一个总时长 ⇒ 「这次副本占几天」仍然算不出</li>
+        <li><b>标定重跑中</b>：D-075（副本真的占时间）+ D-076（掉落份数比例变了）⇒ 经济必须重测 ⇒ 固定点可能移动</li>
         <li><b>建造流程的下一层</b>：围栏与试炼塔现在是<b>固定落点</b>（还没让玩家选位置），且一次只能盖一样</li>
-        <li><b>标定再跑一次</b>：D-074 加了建造流程（施工队与副本队<b>抢人力</b>）⇒ 副本数会变 ⇒ 经济要重测<br>（D-074 落地时已重测一次：X=0.05 仍是固定点）</li>
+        <li><b>掉落表的数量要不要分档</b>：现在三种物品都是「一次副本出 3-6 份」⇒ 越难的副本该给越多吗？</li>
         <li><b>「某次交易发生纠纷」</b>仍缺：它要「次品 / 成色 / 真伪」机制 ⇒ 已裁决<b>暂不做</b>，要做就是新立项</li>
       </ul>
     </div>
@@ -356,7 +382,7 @@
 
   <div class="foot">
     数据来源：<span class="mono">production/38_开发完成度盘点_V1.0.md</span>（模块全景）·
-    <span class="mono">production/07_技术决策与待确认事项.md</span>（D-057…D-074）·
+    <span class="mono">production/07_技术决策与待确认事项.md</span>（D-057…D-076）·
     <span class="mono">production/qa/parameters.json</span>（参数台账）·
     标定数据 <span class="mono">%TEMP%/ccgs-recal</span>（1000 天采集）
   </div>

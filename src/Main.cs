@@ -496,7 +496,8 @@ public partial class Main : Node2D
     private Job _pendingJob;
 
     private bool _selfTestDone;
-    private int _shotFrame = -1;
+    /// <summary>截图已等待的秒数（-1 = 没在截图）。<b>按时间</b>，不用帧数（见 ProcessShot）。</summary>
+    private double _shotSeconds = -1.0;
     private string _shotPath = "";
 
     private static readonly Job[] Jobs =

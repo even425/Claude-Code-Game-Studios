@@ -1141,18 +1141,34 @@ public partial class Main : Node2D
         return sb.ToString();
     }
 
+    /// <summary>
+    /// `--shot=<路径>`：跑够一段时间后截一张图并退出。
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠️ <b>为什么按「时间」而不是「帧数」计</b>：
+    /// 原来写的是 <c>_shotFrame += (int)(dt * 60)</c> ⇒ <b>用帧数当时间</b>。
+    /// 机器空闲时帧率极高（几百 fps ⇒ <c>dt × 60 &lt; 1</c>）
+    /// ⇒ <b>整数截断成 0</b> ⇒ 永远攒不到 30 帧 ⇒ <b>截图永远不发生</b>。
+    /// （实测：机器忙时能截，机器空闲时必卡 —— 同一个代码，行为取决于机器负载。）
+    /// ⇒ 改成<b>累计时间</b>：到点就截 ⇒ 行为与帧率无关。</para>
+    /// </remarks>
     private void ProcessShot(float dt)
     {
-        if (_shotFrame < 0)
+        if (_shotSeconds < 0)
+        {
             foreach (var a in OS.GetCmdlineUserArgs())
-                if (a.StartsWith("--shot=")) { _shotPath = a[7..]; _shotFrame = 0; }
-        if (_shotFrame < 0) return;
-        _shotFrame += (int)(dt * 60);
-        if (_shotFrame >= 30)
+            {
+                if (a.StartsWith("--shot=")) { _shotPath = a[7..]; _shotSeconds = 0.0; }
+            }
+        }
+        if (_shotSeconds < 0) return;
+
+        _shotSeconds += dt;
+        if (_shotSeconds >= 0.5)
         {
             var img = GetViewport().GetTexture().GetImage();
             GD.Print($"SHOT saved: {_shotPath} err={img.SavePng(_shotPath)}");
-            _shotFrame = -1;
+            _shotSeconds = -1.0;
             GetTree().Quit();
         }
     }

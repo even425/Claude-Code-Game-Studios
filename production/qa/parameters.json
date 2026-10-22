@@ -338,10 +338,10 @@
     },
     {
       "file": "Main.cs",
-      "name": "_shotFrame",
+      "name": "_shotSeconds",
       "kind": "非参数",
       "status": "哨兵",
-      "note": "截图帧哨兵（-1 = 没在截）"
+      "note": "截图已等待的秒数（-1 = 没在截图）—— **按时间**计，不用帧数"
     },
     {
       "file": "Main.cs",

@@ -69,6 +69,17 @@ public sealed record EconomyRow
     /// <summary>最终分配结果（谁拿到了什么）。</summary>
     public GrantLine[]? Grants { get; init; }
 
+    // ── 大事件结算（D-083）──
+
+    /// <summary>这次事件是什么（如「兽潮」）。</summary>
+    public string? Event { get; init; }
+
+    /// <summary>这次事件对<b>材料</b>的净变化（正 = 发，负 = 扣）。</summary>
+    public long? MaterialDelta { get; init; }
+
+    /// <summary>这次事件对<b>金币</b>的净变化（正 = 发，负 = 扣）。</summary>
+    public long? GoldDelta { get; init; }
+
     // ── 交易 ──
 
     /// <summary>买方英雄标识。</summary>
@@ -232,6 +243,18 @@ public sealed class EconomyLog : IDisposable
     public const string TradeKind = "TradeCompleted";
 
     /// <summary>
+    /// <b>大事件结算</b>行的类别标识（D-083）。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么必须有它</b>：兽潮每 7 天动一次村库的<b>材料与金币</b>
+    /// （赢了发、输了扣）⇒ 它是村库收支的<b>一个来源</b>。
+    /// 不记它 ⇒ 标定脚本看到的就是「村库的钱莫名少了」⇒
+    /// <b>每一次「钱去哪了」的追问都会先怀疑错方向</b>（实测：这次标定就是靠手写分析
+    /// 才把「材料 7.4 万」和「流通金在缩」归到兽潮头上）。
+    /// </remarks>
+    public const string WorldEventSettledKind = "WorldEventSettled";
+
+    /// <summary>
     /// 「想买未成」行的类别标识（<b>每英雄每原因一行</b>）。
     /// </summary>
     /// <remarks>
@@ -343,6 +366,7 @@ public sealed class EconomyLog : IDisposable
             DungeonSettledKind => BuildDungeonSettledRow(e),
             DungeonLootKind => BuildDungeonLootRow(e),
             TradeKind => BuildTradeRow(e),
+            WorldEventSettledKind => BuildWorldEventSettledRow(e),
             _ => null,
         };
 
@@ -600,6 +624,35 @@ public sealed class EconomyLog : IDisposable
             Amount = amount,
             SellerNet = sellerNet,
             VillageCut = villageCut,
+        };
+    }
+
+    /// <summary>由「大事件结算」事件构建一行（D-083）。</summary>
+    /// <param name="e">事件。</param>
+    /// <returns>行；载荷不完整时为 null。</returns>
+    /// <remarks>
+    /// ⚠️ **金额必须是机器可读的数字**（<c>material</c> / <c>gold</c> 两个载荷），
+    /// 不能是那句给人看的「兽潮守住：材料 +40」⇒ 分析脚本要能**直接加减**。
+    /// </remarks>
+    private EconomyRow? BuildWorldEventSettledRow(DomainEvent e)
+    {
+        if (!e.Payload.TryGetValue("event", out var what) || string.IsNullOrEmpty(what)) return null;
+        if (!e.Payload.TryGetValue("instance", out var instance) || string.IsNullOrEmpty(instance)) return null;
+
+        bool won = e.Payload.TryGetValue("succeeded", out var wonText) && wonText == "1";
+
+        return new EconomyRow
+        {
+            Kind = WorldEventSettledKind,
+            Id = e.Id.Value,
+            Day = DayOf(e.OccurredAtSimSeconds),
+            SimTime = e.OccurredAtSimSeconds,
+            Actor = e.Actor,
+            RunId = instance,
+            Place = what,
+            Won = won,
+            MaterialDelta = ReadLong(e.Payload, "material"),
+            GoldDelta = ReadLong(e.Payload, "gold"),
         };
     }
 

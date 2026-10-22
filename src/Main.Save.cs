@@ -61,9 +61,12 @@ public partial class Main : Node2D
             // R-05 第二轮 / D-052：村庄税额余数（0.5 新增）。
             // 它是「已经向买家收走、还没凑够 1 金」的钱，必须跟着存档走。
             VillageCutRemainder = _stallService.VillageCutCarry,
-            // 建筑：表现层的工地尚未进入领域 Village（属 D-003 / B1-B3），故为空。
-            // 这不是「忘了存」——是那边还没有可存的东西。
-            Buildings = new List<ClaudeCodeGameStudios.Data.BuildingSave>(),
+            // D-083：建筑入档。
+            // ⚠️ **之前这里是空的**（`new List<BuildingSave>()`）⇒ 读档后
+            // 玩家花 150 金 + 70 材料 + 工期盖的试炼塔**凭空消失**，
+            // 连「试炼塔给的永久加生命」都还在、塔却没了。
+            // ⇒ 转换逻辑住在 `BuildingPersistence`（生产代码，守卫直接调它）。
+            Buildings = ClaudeCodeGameStudios.Data.BuildingPersistence.Export(_villageModel),
         },
         Heroes = _states.Select(s =>
         {
@@ -347,6 +350,17 @@ public partial class Main : Node2D
         _village.SetTier(_tier);
         _buildProgress = 0f;
         _buildTarget = -1;
+
+        // ── D-083：建筑恢复 ──
+        // ⚠️ **在建的建筑也要恢复「施工状态」**：只恢复进度的话，
+        // 那栋楼会永远停在 40%（没人推进它了）⇒ 玩家的工期白等了。
+        var restoredBuildings = ClaudeCodeGameStudios.Data.BuildingPersistence.Import(
+            _villageModel, save.Village.Buildings,
+            onSkipped: msg => GD.Print($"LOAD {msg}"));
+
+        // 在建的（进度 < 1）重新登记为「施工中」⇒ 下一帧会继续推进。
+        _buildingService.RestoreConstructions(
+            restoredBuildings.Where(i => i.ConstructionProgress < 1.0));
 
         // 编成按**存档**恢复，不是「取前 N 个在场者」——
         // 后者是猜测，玩家挑好的搭配会被悄悄换掉，而且不报错。

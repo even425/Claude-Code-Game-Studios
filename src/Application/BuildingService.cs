@@ -188,6 +188,31 @@ public sealed class BuildingService
     }
 
     /// <summary>
+    /// <b>恢复「施工中」的状态</b>（D-083：读档用）。
+    /// </summary>
+    /// <param name="instances">读档后放在村里、且进度未满的建筑实例。</param>
+    /// <remarks>
+    /// ⚠️ **为什么必须恢复**：建造服务的「谁在施工」是<b>它自己的一份清单</b>
+    /// ⇒ 只恢复进度（建筑实例里的进度）而不恢复这份清单 ⇒
+    /// 那栋楼会**永远停在 40%**（没人推进它了）⇒ 玩家的工期白等了。
+    /// <para>⚠️ **施工人数不恢复**：人数每帧按「村里可用的人」重新分配（D-082）⇒
+    /// 存一个旧的人数反而会让人凭空多出/少掉人手。</para>
+    /// </remarks>
+    public void RestoreConstructions(IEnumerable<BuildingInstance> instances)
+    {
+        if (instances is null) throw new ArgumentNullException(nameof(instances));
+
+        foreach (var instance in instances)
+        {
+            var definition = BuildableBuildings.Find(instance.Id);
+            if (definition is null) continue;   // 不是「可建建筑」目录里的 ⇒ 不登记
+
+            _constructions[instance.Id.Value] = new Construction(
+                definition.Value, instance, 0, definition.Value.BaseBuildHours);
+        }
+    }
+
+    /// <summary>
     /// <b>把可用人力分给各在建建筑</b>（D-082：多栋同时施工）。
     /// </summary>
     /// <param name="availableWorkers">村里可用的总人数（<b>只算一次</b>）。</param>

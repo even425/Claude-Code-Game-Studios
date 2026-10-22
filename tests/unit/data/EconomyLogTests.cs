@@ -664,4 +664,95 @@ public class EconomyLogTests
             if (File.Exists(path)) File.Delete(path);
         }
     }
+
+    /// <summary>
+    /// D-083：<b>大事件结算要有一行</b>，且带<b>机器可读</b>的材料 / 金币净额。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **为什么必须有</b>：兽潮每 7 天动一次村库的钱与材料
+    /// ⇒ 它是村库收支的一个<b>来源</b>。不记它 ⇒ 标定脚本看到「村库的钱莫名少了」
+    /// ⇒ <b>每次追问「钱去哪了」都会先怀疑错方向</b>。
+    /// <para>⚠️ **金额要是数字**（<c>material</c> / <c>gold</c>），不是那句给人看的中文
+    /// ⇒ 分析脚本要能直接加减。</para>
+    /// </remarks>
+    [TestCase]
+    public void Append_WorldEventSettled_WritesRowWithMaterialAndGoldDeltas()
+    {
+        string path = TempPath("worldevent");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+
+            var e = DomainEvent.Create(
+                new EventId("WorldEventSettled:兽潮:0"), new EventTypeId("WorldEventSettled"), "兽潮",
+                occurredAtSimSeconds: 7 * SimSecondsPerDay,
+                changedStates: new[] { StHeroBag },
+                payload: new Dictionary<string, string>
+                {
+                    ["event"] = "兽潮",
+                    ["succeeded"] = "1",
+                    ["instance"] = "beast_tide@7.1",
+                    ["consequences"] = "兽潮守住：材料 +40",
+                    ["material"] = "40",
+                    ["gold"] = "20",
+                });
+
+            Assertions.AssertThat(log.Append(e)).IsTrue();
+
+            log.Close();
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var row = doc.RootElement;
+
+            Assertions.AssertThat(row.GetProperty("Kind").GetString()).IsEqual("WorldEventSettled");
+            Assertions.AssertThat(row.GetProperty("Place").GetString()).IsEqual("兽潮");
+            Assertions.AssertThat(row.GetProperty("Won").GetBoolean()).IsTrue();
+            // ⚠️ **必须是数字**（分析脚本要直接加减）。
+            Assertions.AssertThat(row.GetProperty("MaterialDelta").GetInt64()).IsEqual(40L);
+            Assertions.AssertThat(row.GetProperty("GoldDelta").GetInt64()).IsEqual(20L);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// D-083：兽潮<b>打输</b>也要有一行，净额是<b>负的</b>（村库真的少了）。
+    /// </summary>
+    [TestCase]
+    public void Append_WorldEventSettled_LossHasNegativeDeltas()
+    {
+        string path = TempPath("worldevent-loss");
+        try
+        {
+            using var log = new EconomyLog(path, SimSecondsPerDay);
+
+            var e = DomainEvent.Create(
+                new EventId("WorldEventSettled:兽潮:1"), new EventTypeId("WorldEventSettled"), "兽潮",
+                occurredAtSimSeconds: 14 * SimSecondsPerDay,
+                changedStates: new[] { StHeroBag },
+                payload: new Dictionary<string, string>
+                {
+                    ["event"] = "兽潮",
+                    ["succeeded"] = "0",
+                    ["instance"] = "beast_tide@14.1",
+                    ["material"] = "-15",
+                    ["gold"] = "-8",
+                });
+
+            Assertions.AssertThat(log.Append(e)).IsTrue();
+
+            log.Close();
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var row = doc.RootElement;
+
+            Assertions.AssertThat(row.GetProperty("Won").GetBoolean()).IsFalse();
+            Assertions.AssertThat(row.GetProperty("MaterialDelta").GetInt64()).IsEqual(-15L);
+            Assertions.AssertThat(row.GetProperty("GoldDelta").GetInt64()).IsEqual(-8L);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
 }

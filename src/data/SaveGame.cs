@@ -9,8 +9,22 @@ namespace ClaudeCodeGameStudios.Data;
 /// <summary>存档格式版本。基线 §13.7 要求存档带版本号并有迁移入口。</summary>
 public readonly record struct SaveVersion(int Major, int Minor)
 {
-    /// <summary>当前版本。<b>【已确认】</b>(0,8) —— R-05 第五轮 / D-081 升。</summary>
+    /// <summary>当前版本。<b>【已确认】</b>(0,9) —— R-05 第五轮 / D-083 升。</summary>
     /// <remarks>
+    /// <b>0,8 → 0,9</b>（`07` **D-083**）：存档里**建筑**终于真的存了
+    /// <list type="bullet">
+    /// <item><see cref="SaveGame.Village"/> 的 <see cref="BuildingSave"/> 列表
+    ///       （之前是**空的** ⇒ 读档后玩家盖的围栏/试炼塔**凭空消失**）</item>
+    /// <item>每个建筑的<b>影响区</b>（不存它 ⇒ 读档后的围栏**没有摆摊范围**）</item>
+    /// </list>
+    /// <para>
+    /// <b>为什么必须存</b>：建筑是玩家花<b>钱 + 材料 + 工期</b>换来的
+    /// ⇒ 读档后它们消失，等于把玩家的投入<b>白拿</b>。
+    /// </para>
+    /// <para>
+    /// 旧档<b>整份拒绝</b>（I11 + D-021/D-029/D-036 先例），<b>不</b>写迁移器。
+    /// </para>
+    /// <para>
     /// <b>0,7 → 0,8</b>（`07` **D-081**）：存档里增
     /// <list type="bullet">
     /// <item><see cref="WorldEventSave.State"/>（大事件实例的「可变部分」—— 商队还剩多少货）</item>
@@ -54,7 +68,7 @@ public readonly record struct SaveVersion(int Major, int Minor)
     /// 而升级花掉的金币已经记下了 → <b>账实不符</b>。这次一并补上。
     /// </para>
     /// </remarks>
-    public static SaveVersion Current => new(0, 8);
+    public static SaveVersion Current => new(0, 9);
 
     /// <inheritdoc />
     public override string ToString() => $"{Major}.{Minor}";
@@ -336,6 +350,18 @@ public sealed class BuildingSave
     public int H { get; set; }
     /// <summary>建造进度，<c>[0,1]</c>。</summary>
     public double Progress { get; set; }
+
+    /// <summary>
+    /// 影响区 X 方向半径（0 = 不影响任何地方）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>0.9 新增</b>：不存它 ⇒ 读档后的围栏**没有摆摊范围**
+    /// ⇒ 玩家会发现「围栏还在，但摆不了摊」。
+    /// </remarks>
+    public int AffectsAreaW { get; set; }
+
+    /// <summary>影响区 Y 方向半径（0 = 不影响任何地方）。<b>0.9 新增</b>。</summary>
+    public int AffectsAreaH { get; set; }
 }
 
 /// <summary>整个存档。</summary>
@@ -945,18 +971,9 @@ public static class SaveValidator
             }
         }
 
-        for (var i = 0; i < save.Village.Buildings.Count; i++)
-        {
-            var b = save.Village.Buildings[i];
-            var path = $"village.buildings[{i}]";
-            if (string.IsNullOrEmpty(b.Id)) errors.Add(new SaveError($"{path}.id", "建筑标识为空。"));
-            if (b.W <= 0 || b.H <= 0) errors.Add(new SaveError($"{path}", $"占地必须为正，实际 {b.W}×{b.H}。"));
-            if (b.Progress < 0.0 || b.Progress > 1.0)
-            {
-                errors.Add(new SaveError($"{path}.progress", $"建造进度 {b.Progress} 越出 [0,1]。"));
-            }
-        }
-
+        // ⚠️ **建筑的单项检查（标识 / 占地 / 进度 / 影响区）在下面统一做**
+        // （D-083：以前这里有一份，检查散在两处 ⇒ 改一处会漏另一处 ⇒ 变异矩阵抓不到）。
+        // 这里只留下**坐标冲突**那一项（基线 §13.7 明列「建筑坐标与占地冲突」）。
         // 建筑坐标冲突（基线 §13.7 明列「建筑坐标与占地冲突」）
         var occupied = new Dictionary<(int, int), int>();
         for (var i = 0; i < save.Village.Buildings.Count; i++)
@@ -1000,6 +1017,41 @@ public static class SaveValidator
                 "village.villageCutRemainder",
                 $"村庄税额余数 {save.Village.VillageCutRemainder} 超出合法范围 "
                 + $"[0, {ClaudeCodeGameStudios.Domain.Stall.StallFee.UnitsPerGold - 1}]。"));
+        }
+
+        // 建筑（0.9 新增 · D-083）：标识不能为空、占地尺寸为正、进度在 [0,1]、影响区非负。
+        //
+        // ⚠️ **这些值坏了 ⇒ 读档后会造出一个「解释不了」的村庄**
+        // （进度 > 1 的半成品、占地 0 的幽灵建筑）⇒ 必须在读之前拒掉。
+        var buildingIds = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < save.Village.Buildings.Count; i++)
+        {
+            var b = save.Village.Buildings[i];
+            var path = $"village.buildings[{i}]";
+
+            if (string.IsNullOrEmpty(b.Id))
+            {
+                errors.Add(new SaveError($"{path}.id", "建筑标识为空。"));
+            }
+            else if (!buildingIds.Add(b.Id))
+            {
+                errors.Add(new SaveError($"{path}.id", $"建筑标识重复：{b.Id}。"));
+            }
+
+            if (b.W <= 0 || b.H <= 0)
+            {
+                errors.Add(new SaveError($"{path}.size", $"建筑占地尺寸非法（{b.W}×{b.H}）—— 必须为正。"));
+            }
+
+            if (double.IsNaN(b.Progress) || b.Progress < 0.0 || b.Progress > 1.0)
+            {
+                errors.Add(new SaveError($"{path}.progress", $"建筑进度 {b.Progress} 超出合法范围 [0, 1]。"));
+            }
+
+            if (b.AffectsAreaW < 0 || b.AffectsAreaH < 0)
+            {
+                errors.Add(new SaveError($"{path}.affectsArea", "建筑影响区半径为负。"));
+            }
         }
 
         // 0.6 新增（D-054 阶段 4）：累计发放 / 累计销毁 / 村庄层级

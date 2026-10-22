@@ -129,18 +129,18 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 917</div>
-      <div class="d">全绿 · 新增 115 条</div>
+      <div class="v">802 <em>→</em> 924</div>
+      <div class="d">全绿 · 新增 122 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">63 <em>档</em></div>
+      <div class="v">68 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">24 <em>条</em></div>
-      <div class="d">D-057 … D-082</div>
+      <div class="v">25 <em>条</em></div>
+      <div class="d">D-057 … D-083</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -405,6 +405,14 @@
         🔴 造房子这边还揪出一个<b>真 bug</b>：每栋在建的房子都拿到<b>全村</b>的人力 ⇒ 两栋同时盖时<b>同一批人被算了两遍</b> ⇒ 人力凭空翻倍 ⇒ 现在人力<b>只算一次</b>再分配（多干活的先拿够、别栋分剩下的）。<br>
         ⚠️ 另外记下一条诚实结论：基线 §14.3 那条「防御设施影响兽潮」<b>当前不成立</b>（试炼塔的加血几乎不改变胜负）⇒ 记为<b>暂不适用</b>，不是「已通过」。</p>
         <div class="tags"><span class="tag">D-082</span><span class="tag">变异 5/5 × 2</span></div>
+      </li>
+      <li>
+        <div class="when">22:30</div>
+        <h3>两个「数据看不见」的口子补上了</h3>
+        <p>🔴 <b>建筑根本没进存档</b> ⇒ 读档后，玩家花 150 金 + 70 材料 + 工期盖的试炼塔<b>凭空消失</b>（连它给的永久加生命都还在、塔却没了）⇒ 现在建筑真的入档了（存档升 <b>0.9</b>，还带影响区——不然围栏读档后没地方摆摊），<b>在建的</b>也会继续盖，不会永远停在 40%。<br>
+        🔴 <b>大事件也没进经济流水</b> ⇒ 兽潮每 7 天动一次村库的钱与材料，却是村库收支的一个<b>来源</b> ⇒ 不记它，标定看到的就是「钱莫名少了」，每次追问都会先怀疑错方向 ⇒ 现在流水里有这一行，且金额是<b>机器可读的数字</b>。<br>
+        ⚠️ 顺带记下两次「<b>守卫是装饰品</b>」的实录：测试写的是<b>复制品</b>（改生产代码它不受影响 ⇒ 五档变异全绿）；断言只说「整体非法」（关掉被测那条检查它照样绿，因为<b>别的原因</b>也非法）⇒ 都已修。</p>
+        <div class="tags"><span class="tag">D-083</span><span class="tag">存档 0.9</span><span class="tag">变异 5/5</span></div>
       </li>
     </ol>
   </section>

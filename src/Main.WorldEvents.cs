@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using ClaudeCodeGameStudios.Domain.WorldEvents;
 
@@ -291,9 +292,23 @@ public partial class Main : Node2D
                 // 后果**实际落地**的说明（不是模板写的「打算给多少」——
                 // 扣不动的时候实际扣的数不一样，杂谈里要写真数）。
                 var applied = new List<string>();
+                // ⚠️ **机器可读的净额**（D-083）：经济流水要能直接加减
+                // ⇒ 载荷里给两个数字，而不是那句给人看的中文。
+                long materialDelta = 0;
+                long goldDelta = 0;
 
                 var outcome = _worldEvents.Settle(moved.Id, (key, effect) =>
                 {
+                    switch (effect.Kind)
+                    {
+                        case WorldEventEffect.KindMaterial:
+                            materialDelta += effect.Amount;
+                            break;
+                        case WorldEventEffect.KindGold:
+                            goldDelta += effect.Amount;
+                            break;
+                    }
+
                     applied.Add(ApplyWorldEventEffect(effect));
                 });
                 if (outcome is not null)
@@ -311,6 +326,8 @@ public partial class Main : Node2D
                             ["succeeded"] = outcome.Succeeded ? "1" : "0",
                             ["instance"] = moved.Id,
                             ["consequences"] = string.Join(" / ", notes),
+                            ["material"] = materialDelta.ToString(CultureInfo.InvariantCulture),
+                            ["gold"] = goldDelta.ToString(CultureInfo.InvariantCulture),
                         },
                         ev => Chronicle.WorldEventSettled(
                             (int)_clock.Day, ev.Payload["event"],

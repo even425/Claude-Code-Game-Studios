@@ -76,15 +76,30 @@ public sealed class VillageUpgradeService
     private readonly ResourceId _gold;
     private readonly ResourceId _material;
 
+    /// <summary>向村民采购建材（D-091）；没有它 = 只用村库材料池（既有行为）。</summary>
+    private readonly MaterialProcurement? _procurement;
+
+    /// <summary>候选卖方（D-091）。</summary>
+    private readonly Func<IReadOnlyList<HeroAgent>>? _heroes;
+
     /// <param name="village">村庄（金库与材料池都在它身上）。</param>
     /// <param name="gold">金币的资源种类。</param>
     /// <param name="material">材料的资源种类。</param>
+    /// <param name="procurement">向村民采购建材（D-091；可空 = 不采购）。</param>
+    /// <param name="heroes">候选卖方（D-091；可空 = 不采购）。</param>
     /// <exception cref="ArgumentNullException"><paramref name="village"/> 为 null。</exception>
-    public VillageUpgradeService(Village village, ResourceId gold, ResourceId material)
+    public VillageUpgradeService(
+        Village village,
+        ResourceId gold,
+        ResourceId material,
+        MaterialProcurement? procurement = null,
+        Func<IReadOnlyList<HeroAgent>>? heroes = null)
     {
         _village = village ?? throw new ArgumentNullException(nameof(village));
         _gold = gold;
         _material = material;
+        _procurement = procurement;
+        _heroes = heroes;
     }
 
     /// <summary>
@@ -133,6 +148,16 @@ public sealed class VillageUpgradeService
     /// <param name="tier">当前层级（0 起）。</param>
     /// <returns>层级已满 / 金币不足 / 材料不足 → false。</returns>
     public bool CanUpgrade(int tier)
+        => CanUpgrade(tier, CostFor(tier).Material);
+
+    /// <summary>
+    /// 现在能不能升这一级（<b>只读，不改状态</b>）；
+    /// 材料需求可被「向村民采购」补足（D-091）。
+    /// </summary>
+    /// <param name="tier">当前层级（0 起）。</param>
+    /// <param name="materialFromPool">要从<b>村库材料池</b>里扣的份数（其余靠采购补）。</param>
+    /// <returns>层级已满 / 金币不足 / 材料不足 → false。</returns>
+    public bool CanUpgrade(int tier, long materialFromPool)
     {
         if (tier < 0 || tier >= MaxTier) return false;
 
@@ -140,7 +165,7 @@ public sealed class VillageUpgradeService
         if (cost.Gold <= 0 || cost.Material <= 0) return false;
 
         return _village.Get(_gold) >= cost.Gold
-            && _village.Get(_material) >= cost.Material;
+            && _village.Get(_material) >= materialFromPool;
     }
 
     /// <summary>
@@ -155,24 +180,47 @@ public sealed class VillageUpgradeService
     /// </remarks>
     public bool TryUpgrade(int tier)
     {
-        if (!CanUpgrade(tier)) return false;
-
         var cost = CostFor(tier);
 
-        // 提交顺序（D-090）：
+        // 材料：**村库材料池 + 向村民采购的部分**（D-091）
+        // ⇒ 村民背包里的建材也算「村里凑得齐料」
+        // ⇒ **村民的背包终于有了用途**（他们卖掉的材料变成了建材）。
+        var plan = _procurement is null || _heroes is null
+            ? ProcurementPlan.Empty
+            : _procurement.Plan(cost.Material, _heroes());
+        long fromPool = cost.Material - plan.Qty;
+
+        // 金钱与材料**分别校验、一起提交**（I15）。
+        if (!CanUpgrade(tier, fromPool)) return false;
+
+        // 提交顺序（D-090 / D-091）：
         // ① **资产入池先做**（`Village.Add` 是唯一可能抛的一步：checked 溢出）
         //    ⇒ 抛的时候金币还没扣 ⇒ **没有半笔账**。
         // ② 金币出账（预检已过 ⇒ 不会失败）。
-        // ③ 材料出账。
+        // ③ **向村民采购材料**（D-091：他们拿钱，材料直接被建筑消耗）。
+        // ④ 材料池出账（剩下的部分）。
         _village.Add(Asset, cost.Gold);
 
-        if (!_village.TrySpend(_gold, cost.Gold)) return false;
+        if (!_village.TrySpend(_gold, cost.Gold))
+        {
+            _village.TrySpend(Asset, cost.Gold);   // 退回资产
+            return false;
+        }
 
-        if (!_village.TrySpend(_material, cost.Material))
+        if (_procurement is not null && !_procurement.Commit(plan))
+        {
+            // 采购失败 ⇒ 整笔退回（金币 + 资产）。
+            _village.Add(_gold, cost.Gold);
+            _village.TrySpend(Asset, cost.Gold);
+            return false;
+        }
+
+        if (fromPool > 0 && !_village.TrySpend(_material, fromPool))
         {
             // 理论不可达（预检已过，且期间没有别的写者）。真到了这里也要把账做平。
             _village.Add(_gold, cost.Gold);
-            _village.TrySpend(Asset, cost.Gold);   // 资产那一份也要退回去
+            _village.TrySpend(Asset, cost.Gold);
+            _procurement?.Rollback(plan);   // 采购的部分也要退回去
             return false;
         }
 

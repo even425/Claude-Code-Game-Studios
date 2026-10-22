@@ -11,6 +11,9 @@ public partial class Main : Node2D
     /// <summary>村庄收购站（D-087）。</summary>
     private ClaudeCodeGameStudios.Application.VillagePurchaseService _purchase = null!;
 
+    /// <summary>村庄向村民采购建材（D-091）。</summary>
+    private ClaudeCodeGameStudios.Application.MaterialProcurement _procurement = null!;
+
     /// <summary>
     /// 某个英雄采集了一次：材料进<b>他自己的背包</b>（D-086）。
     /// </summary>

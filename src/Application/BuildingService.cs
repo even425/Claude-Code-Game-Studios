@@ -33,15 +33,30 @@ public sealed class BuildingService
     private readonly ResourceId _gold;
     private readonly ResourceId _material;
 
+    /// <summary>向村民采购建材（D-091）；没有它 = 只用村库材料池（既有行为）。</summary>
+    private readonly MaterialProcurement? _procurement;
+
+    /// <summary>候选卖方（D-091）。</summary>
+    private readonly Func<IReadOnlyList<HeroAgent>>? _heroes;
+
     /// <param name="village">村庄（建筑与资源的唯一写者）。</param>
     /// <param name="gold">金币的资源种类。</param>
     /// <param name="material">材料的资源种类。</param>
+    /// <param name="procurement">向村民采购建材（D-091；可空 = 不采购）。</param>
+    /// <param name="heroes">候选卖方（D-091；可空 = 不采购）。</param>
     /// <exception cref="ArgumentNullException"><paramref name="village"/> 为 null。</exception>
-    public BuildingService(Village village, ResourceId gold, ResourceId material)
+    public BuildingService(
+        Village village,
+        ResourceId gold,
+        ResourceId material,
+        MaterialProcurement? procurement = null,
+        Func<IReadOnlyList<HeroAgent>>? heroes = null)
     {
         _village = village ?? throw new ArgumentNullException(nameof(village));
         _gold = gold;
         _material = material;
+        _procurement = procurement;
+        _heroes = heroes;
     }
 
     /// <summary>一栋正在施工的建筑。</summary>
@@ -91,9 +106,20 @@ public sealed class BuildingService
         if (IsCompleted(definition.Id)) return false;
         if (_constructions.ContainsKey(definition.Id.Value)) return false;
         if (_village.Get(_gold) < definition.GoldCost) return false;
-        if (_village.Get(_material) < definition.MaterialCost) return false;
+
+        // 材料：**村库材料池 + 向村民采购的部分**（D-091）⇒
+        // 「村民背包里有建材」也算「村里凑得齐料」⇒ 村民的背包**终于有了用途**。
+        long fromPool = definition.MaterialCost - ProcurementPlanOf(definition).Qty;
+        if (_village.Get(_material) < fromPool) return false;
 
         return true;
+    }
+
+    /// <summary>算一份采购计划（<b>只算不改</b>；没有采购服务时是空计划）。</summary>
+    private ProcurementPlan ProcurementPlanOf(BuildableBuilding definition)
+    {
+        if (_procurement is null || _heroes is null) return ProcurementPlan.Empty;
+        return _procurement.Plan(definition.MaterialCost, _heroes());
     }
 
     /// <summary>
@@ -117,11 +143,20 @@ public sealed class BuildingService
         // （CanStart 已查过两边都够 ⇒ TrySpend 不会失败）⇒ 那段代码是**死代码**，
         // 而死代码看起来在防「半笔账」，实际上**一次都没防过**。
         // ⇒ 先校验 ⇒ 一起扣 ⇒ **要么两边都扣，要么两边都不扣**，没有中间态。
+        //
+        // ⚠️ **D-091**：材料可能一部分从村民手里买（按市价付钱给他们），
+        // 一部分从村库材料池扣 ⇒ 采购与扣款**必须是同一次提交**。
+        var plan = ProcurementPlanOf(definition);
+        long fromPool = definition.MaterialCost - plan.Qty;
         if (_village.Get(_gold) < definition.GoldCost) return false;
-        if (_village.Get(_material) < definition.MaterialCost) return false;
+        if (_village.Get(_material) < fromPool) return false;
 
+        // ① 先向村民采购（拿不到货就整体不成立 ⇒ 状态不变）
+        if (_procurement is not null && !_procurement.Commit(plan)) return false;
+
+        // ② 再扣建造自己的成本
         _village.TrySpend(_gold, definition.GoldCost);
-        _village.TrySpend(_material, definition.MaterialCost);
+        if (fromPool > 0) _village.TrySpend(_material, fromPool);
 
         var instance = new BuildingInstance(
             definition.Id,
@@ -135,7 +170,10 @@ public sealed class BuildingService
         {
             // 落点被占（CanStart 已查过，但建造与放置之间状态可能变了）⇒ 退款。
             _village.Add(_gold, definition.GoldCost);
-            _village.Add(_material, definition.MaterialCost);
+            _village.Add(_material, fromPool);
+            // ⚠️ **采购的部分也要退回去**（D-091）：货还在村民手里没变成建材
+            // ⇒ 不能白拿人家的货（他们的钱要退回去，货要还回去）。
+            _procurement?.Rollback(plan);
             return false;
         }
 

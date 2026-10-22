@@ -151,7 +151,9 @@ public partial class Main : Node2D
         _upgradeService = new ClaudeCodeGameStudios.Application.VillageUpgradeService(
             _villageModel,
             ClaudeCodeGameStudios.Application.Stall.StallService.Gold,
-            MaterialsId);
+            MaterialsId,
+            _procurement,
+            () => _heroes);
         // M4 自主经济行为 —— random = (() => _rng.NextDouble())
         // 注入 _stallService 是必须的（行为触发后调 BuyFromStall）
         _heroBehavior = new ClaudeCodeGameStudios.Application.Stall.HeroBehaviorService(

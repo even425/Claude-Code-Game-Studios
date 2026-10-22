@@ -560,6 +560,17 @@ public partial class Main : Node2D
         // 摆摊、掉落、发放都拿同一张表，不能有的用外部表、有的用占位表。
         LoadPriceBook();
 
+        // D-091：村庄向村民采购建材（材料有了出口 ⇒ 闲人买来的材料不再是垃圾）。
+        // ⚠️ **必须早于 BuildScene**（村庄升级服务在那里创建，而它要这个采购服务）
+        // ⇒ 保留金用一个**延迟读取**的委托（_upgradeService 那时还没建好，但调用时才读）。
+        _procurement = new ClaudeCodeGameStudios.Application.MaterialProcurement(
+            _villageModel,
+            _priceBook,
+            ClaudeCodeGameStudios.Application.Stall.StallService.Gold,
+            () => _tier < ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier
+                ? _upgradeService.CostFor(_tier).Gold
+                : 0L);
+
         BuildScene();
 
         // 关系应用入口：社交、同队副本都走它（幂等键与双向规则在应用层）。
@@ -625,7 +636,9 @@ public partial class Main : Node2D
         _buildingService = new ClaudeCodeGameStudios.Application.BuildingService(
             _villageModel,
             new ClaudeCodeGameStudios.Domain.Village.ResourceId("金币"),
-            MaterialsId);
+            MaterialsId,
+            _procurement,
+            () => _heroes);
         _trialTower = new ClaudeCodeGameStudios.Application.TrialTowerService(_combat, _combat);
         _buildingCoordinator = new ClaudeCodeGameStudios.Application.BuildingCoordinator(
             _buildingService, _trialTower, id => _heroes.FirstOrDefault(h => h.Id.Value == id.Value));

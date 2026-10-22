@@ -287,6 +287,23 @@ public partial class Main : Node2D
             min, p25, med, p75, max, topId, topName,
             _caravanMarket.TotalDestroyedGold,
             _villageModel.Get(ClaudeCodeGameStudios.Application.VillageUpgradeService.Asset));
+
+        // ⚠️ **逐日守恒律自检**（D-091 引入的记账多了一条路 ⇒ 必须自己盯住）：
+        // 「Σ英雄钱包 + 村库金币 + 村庄资产 + 累计销毁 = 初始金币 + 累计发放」
+        // 对不上 ⇒ **当场打印**，而不是等标定脚本事后才发现。
+        // ⇒ 这一行是「账实不符」的唯一现场证据。
+        long lhs = heroGold + VillageGold
+                 + _villageModel.Get(ClaudeCodeGameStudios.Application.VillageUpgradeService.Asset)
+                 + destroyed;
+        long rhs = (long)_heroes.Count * 100 + _walletWriter.TotalGranted;
+        if (lhs != rhs)
+        {
+            GD.Print($"CONSERVATION 第{(int)_clock.Day}天 对不上：左边 {lhs} / 右边 {rhs}"
+                     + $"（差 {lhs - rhs}）· 英雄 {heroGold} · 村库 {VillageGold}"
+                     + $" · 资产 {_villageModel.Get(ClaudeCodeGameStudios.Application.VillageUpgradeService.Asset)}"
+                     + $" · 销毁 {destroyed} · 发放 {_walletWriter.TotalGranted}"
+                     + $" · 升级 {_upgradeService.UpgradesStarted}");
+        }
     }
 
     /// <summary>取有序数组的**线性插值**分位数（q ∈ [0,1]）。</summary>

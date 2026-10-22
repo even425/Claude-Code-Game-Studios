@@ -79,10 +79,20 @@ public partial class Main : Node2D
             delta.AddResource(_pendingRewardResource, _pendingRewardAmount);
         }
 
-        // ── 英雄个人：战利品（R-01 · D01–D04）──
-        foreach (var grant in loot.Grants)
+        // ── D-092：战利品**全村共享**（开发者拍板「参战者不再独占掉落」）──
+        //
+        // ⚠️ **为什么不再进参战者的背包**：实测（37 人 / 200 天）英雄金币
+        // 中位只有 6~9、最大 586 ⇒ **钱集中在副本队身上**，
+        // 根因就是「参战者把战利品在市场上卖掉，抽走闲人的钱」。
+        // ⇒ 战利品改成**全村共享**：折算成「材料」进村库材料池（1 份物品 = 1 份材料，
+        // 与 D-091 的口径一致）⇒ 副本仍是村子的共同利益，但没人能靠参战独享掉落。
+        //
+        // ⚠️ **参战者的金币报酬不变**（每人 X 金，不论成败：D-054-01 裁决 ①）。
+        long lootMaterial = 0;
+        foreach (var grant in loot.Grants) lootMaterial += grant.Quantity;
+        if (lootMaterial > 0)
         {
-            delta.AddItemGrant(grant.Hero, grant.Item, grant.Quantity);
+            delta.AddResource(MaterialsId.Value, lootMaterial);
         }
 
         return delta;
@@ -631,23 +641,27 @@ public partial class Main : Node2D
                 ev => Chronicle.SquadBack((int)_clock.Day, ev.Payload["names"],
                     ev.Payload["res"], int.Parse(ev.Payload["qty"])).Text);
 
-            // ── R-01：个人战利品入包 → 一条可追溯的事件 ──
-            // 物品进了英雄的背包（<c>StHeroBag</c>），这是<b>真的状态变化</b>，
-            // 所以它配得上一个事件；而事件必须说清「谁拿到了什么」。
+            // ── D-092：战利品**全村共享** → 一条可追溯的事件 ──
+            // 战利品进了**村库材料池**（<c>StVillageResource</c>），这是<b>真的状态变化</b>，
+            // 所以它配得上一个事件；而事件必须说清「这次掉了什么、共多少份」。
             if (!loot.IsEmpty)
             {
                 var lootLines = loot.Grants
-                    .Select(g => $"{NameOfHero(g.Hero)} {g.Item.Value}×{g.Quantity}")
+                    .GroupBy(g => g.Item.Value)
+                    .Select(g => $"{g.Key}×{g.Sum(x => x.Quantity)}")
                     .ToArray();
+                long lootTotal = loot.Grants.Sum(g => g.Quantity);
                 Emit(EvDungeonSettled, string.Join("、", names),
-                    new[] { StHeroBag, StSettlement },
+                    new[] { StVillageResource, StSettlement },
                     new Dictionary<string, string>
                     {
                         ["place"] = DungeonName,
                         ["names"] = string.Join("、", names),
                         ["loot"] = string.Join("、", lootLines),
+                        ["qty"] = lootTotal.ToString(),
                     },
-                    ev => $"{ev.Payload["names"]}从{ev.Payload["place"]}带回了战利品：{ev.Payload["loot"]}。");
+                    ev => $"{ev.Payload["names"]}从{ev.Payload["place"]}带回了战利品：{ev.Payload["loot"]}"
+                         + $"（共 {ev.Payload["qty"]} 份，进了村里的材料库，全村都能用）。");
             }
         }
         else if (!outcome.Succeeded)

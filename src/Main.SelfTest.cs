@@ -714,6 +714,8 @@ public partial class Main : Node2D
         foreach (var h in crew) h.Away = true;
 
         long matBefore = Mat;
+        // D-092：战利品进村库材料池 ⇒ 需要结算后的材料数对照。
+        long matAfter = Mat;
         int notesBefore = _chronicle.Count;
 
         // ── R-01：发放**之前**的背包快照（对照用）──
@@ -748,7 +750,8 @@ public partial class Main : Node2D
         GD.Print($"DUNGEONTEST 实例上挂着的结果 = {outcome.Run.BattleResultId}" +
                  $"（I3：只能有一个）");
         GD.Print($"DUNGEONTEST 副本状态 = {outcome.Run.Status} 整场成功 = {outcome.Succeeded}");
-        GD.Print($"DUNGEONTEST 材料 {matBefore} → {Mat}" +
+        matAfter = Mat;
+        GD.Print($"DUNGEONTEST 材料 {matBefore} → {matAfter}" +
                  $"（失败则必须不变：D-010 Q1 失败不给奖励）");
         // 整个资源快照：只打总数的话，「奖励进了别的桶」这类 bug 完全看不出来
         // —— 界面就显示一个材料数。踩过一次，所以这里连桶一起打。
@@ -793,67 +796,45 @@ public partial class Main : Node2D
         GD.Print($"DUNGEONTEST 重放同一结算键 → 英雄金币合计 {goldBeforeReplay} → {goldAfterReplay}" +
                  $"（必须不变：金币也在同一把幂等锁下，I4）");
 
-        // ── R-01：战利品分配与入包 ──
+        // ── D-092：战利品**全村共享**（不再进参战者的背包）──
         // 单测验的是分配规则与发放入口，验不了「游戏有没有真的把战利品
-        // 落到参战者的个人背包里」—— 那正是 D-018「奖励进错桶」的同一类风险。
+        // 放到村库材料池里」—— 那正是 D-018「奖励进错桶」的同一类风险。
         var loot = _lastDungeonLoot;
-        GD.Print($"DUNGEONTEST 战利品分配 = {loot.Grants.Count} 条（副本 {outcome.Run.Id}）：" +
+        long lootTotal = loot.Grants.Sum(g => g.Quantity);
+        GD.Print($"DUNGEONTEST 战利品 = {lootTotal} 份（副本 {outcome.Run.Id}）：" +
                  (loot.Grants.Count == 0 ? "（无）" :
-                  string.Join("、", loot.Grants.Select(g => $"{g.Hero.Value} {g.Item.Value}×{g.Quantity}"))));
+                  string.Join("、", loot.Grants.GroupBy(g => g.Item.Value)
+                      .Select(g => $"{g.Key}×{g.Sum(x => x.Quantity)}"))));
 
-        bool lootInBags = true;
-        long lootTotal = 0;
-        foreach (var g in loot.Grants)
-        {
-            var hero = _heroes.FirstOrDefault(h => h.Id == g.Hero);
-            if (hero is null) { lootInBags = false; continue; }
+        // 战利品应进**村库材料池**（全村共享）。
+        bool lootInVillage = matAfter >= matBefore + lootTotal;
+        GD.Print($"DUNGEONTEST 战利品进村库材料池 = {lootInVillage}"
+                 + $"（材料 {matBefore} → {matAfter}，战利品 {lootTotal} 份）"
+                 + $"（D-092：全村共享）");
 
-            long before = bagBefore.TryGetValue(g.Hero.Value, out var snap)
-                && snap.TryGetValue(g.Item.Value, out var n) ? n : 0;
-            long after = hero.Bag.Count(g.Item);
-            lootTotal += g.Quantity;
-
-            if (after - before != g.Quantity) lootInBags = false;
-            GD.Print($"  {hero.Name}：{g.Item.Value} {before} → {after}（应 +{g.Quantity}）");
-        }
-
-        // 参战者之外的英雄：一件都不能多（未参战者不参与分配）。
-        bool nobodyElseGotLoot = true;
+        // 参战者的背包里**不得多出战利品**（D-092 的反面）。
+        bool nobodyGotLootInBag = true;
         foreach (var hero in _heroes)
         {
-            if (loot.Grants.Any(g => g.Hero == hero.Id)) continue;
             foreach (var g in loot.Grants)
             {
                 long before = bagBefore.TryGetValue(hero.Id.Value, out var snap)
                     && snap.TryGetValue(g.Item.Value, out var n) ? n : 0;
-                if (hero.Bag.Count(g.Item) - before != 0) nobodyElseGotLoot = false;
+                if (hero.Bag.Count(g.Item) - before != 0) nobodyGotLootInBag = false;
             }
         }
+        GD.Print($"DUNGEONTEST 没人的背包里多了战利品 = {nobodyGotLootInBag}"
+                 + $"（D-092：参战者不再独占掉落）");
 
-        GD.Print($"DUNGEONTEST 战利品入包 = {lootInBags}，未参战者没拿到 = {nobodyElseGotLoot}" +
-                 $"（失败时两人都必须是 true：D-010 Q1 失败不给奖励）");
-
-        // ── R-01 M3：奖励要能存进档、读档后仍属于正确的人 ──
-        //
-        // **快照必须在这一刻取**：下面 M4 会故意把战利品摆上摊再卖掉 ——
-        // 卖完之后战利品在**买家**的背包里，摊主的背包已经空了。
-        // 若在卖完之后才查「摊主的存档里有没有这件战利品」，查到的自然是「没有」，
-        // 而那不是入档失败，是**查错了时机**。
-        // （R-05 的掉落表出来之前，每次掉落都是 19 份，卖 1 份还剩 18 份，
-        //    这个错误一直没暴露 —— 它被"数量足够多"掩盖了。）
+        // ── D-092 M3：村库的材料池要能存进档、读档后仍在 ──
+        //（材料池是村庄的资产，它一定要入档，否则读档后村庄的建筑供给没了）。
         var saveWithLoot = BuildSave();
-        bool lootPersisted = true;
-        foreach (var g in loot.Grants)
-        {
-            var heroSave = saveWithLoot.Heroes.FirstOrDefault(h => h.Id == g.Hero.Value);
-            long saved = heroSave?.Bag
-                .Where(b => b.ItemId == g.Item.Value)
-                .Sum(b => b.Count) ?? 0;
-            if (saved <= 0) lootPersisted = false;
-        }
-        GD.Print($"DUNGEONTEST 战利品已入档 = {lootPersisted}，" +
+        long savedMaterial = saveWithLoot.Village.Resources
+            .TryGetValue("材料", out long m) ? m : 0;
+        bool lootPersisted = savedMaterial >= matAfter;
+        GD.Print($"DUNGEONTEST 村库材料池已入档 = {lootPersisted}（存档 {savedMaterial} ≥ 现场 {matAfter}），" +
                  $"已结算键 {saveWithLoot.AppliedSettlementKeys.Count} 个" +
-                 $"（存档版本 {saveWithLoot.Version}，R-01 未新增字段）");
+                 $"（存档版本 {saveWithLoot.Version}）");
 
         // ── R-01 M4：拿到的物品要能真的开摊、被另一位英雄买走 ──
         // ⚠️ **这一段必须每次都跑**（真事：2026-10-21 查出来的）：
@@ -871,22 +852,14 @@ public partial class Main : Node2D
             var buyer = _heroes[1];
             var item = new ClaudeCodeGameStudios.Domain.Items.ItemId("石料");
 
-            if (loot.Grants.Count > 0)
+            // ⚠️ **D-092：战利品不再进任何人的背包** ⇒ 这条链（「物品能开摊、能被别人买走」）
+            // 固定用**配给路径**（生产路径的发放入口）验。
+            // 它验的是**链路**（物品 → 摊位 → 成交），不是「副本掉了什么」（那一份由上面的材料池断言负责）。
+            var give = _itemGrant.Grant(seller.Id, item, 1);
+            if (!give.Granted)
             {
-                var firstGrant = loot.Grants[0];
-                item = firstGrant.Item;
-                seller = _heroes.FirstOrDefault(h => h.Id == firstGrant.Hero) ?? seller;
-                buyer = _heroes.FirstOrDefault(h => h.Id != firstGrant.Hero) ?? buyer;
-            }
-            else
-            {
-                // 副本失败 ⇒ 没有战利品 ⇒ 配给摊主 1 份（生产路径），让这条链照样被验。
-                var give = _itemGrant.Grant(seller.Id, item, 1);
-                if (!give.Granted)
-                {
-                    GD.Print("DUNGEONTEST 战利品开摊链 = FAIL（配给失败，无法准备场景）");
-                    return;
-                }
+                GD.Print("DUNGEONTEST 战利品开摊链 = FAIL（配给失败，无法准备场景）");
+                return;
             }
 
             var gold = ClaudeCodeGameStudios.Application.Stall.StallService.Gold;

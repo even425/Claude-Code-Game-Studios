@@ -38,15 +38,31 @@ def sha(p: Path) -> str:
 
 
 def run_tests():
-    r = subprocess.run(
-        ["dotnet", "test", str(TESTS), "-c", "Release", "--nologo", "-v", "q",
-         "--filter", FILTER],
-        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    # ⚠️ **必须带构建**（不要加 `--no-build`）：实测在本机 `--no-build` 会让
+    # vstest 挂死（进程在、CPU 不涨），而带构建的同一条命令只要几秒。
+    # ⇒ 变异改的是源码 ⇒ 每次都必须重新编译进程序集。
+    try:
+        r = subprocess.run(
+            ["dotnet", "test", str(TESTS), "-c", "Release", "--nologo", "-v", "q",
+             "--filter", FILTER],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=300)
+    except subprocess.TimeoutExpired:
+        # ⚠️ **挂死不是「跑红」**：守卫的循环被改坏时会永远等下去
+        # ⇒ 这一档必须**明确报出来**（TIMEOUT），不能当成「没红 ⇒ 守卫生效」。
+        _kill_dotnet()
+        return -2, "TIMEOUT: 测试超过 300 秒未结束（守卫挂死，不是跑红）"
     out = r.stdout + r.stderr
     counts = re.findall(r"(?:失败|Failed):\s*(\d+)", out)
     if counts:
         return int(counts[-1]), out
     return -1, out
+
+
+def _kill_dotnet():
+    """清掉挂死的测试宿主（否则它会一直占着 CPU 与文件锁）。"""
+    subprocess.run(["taskkill", "/F", "/IM", "testhost.exe"], capture_output=True, text=True)
+    subprocess.run(["taskkill", "/F", "/IM", "dotnet.exe"], capture_output=True, text=True)
 
 
 def mutate(label, target: Path, old, new):
@@ -67,6 +83,9 @@ def mutate(label, target: Path, old, new):
     target.write_text(mutated, encoding="utf-8", newline="")
     try:
         failed, out = run_tests()
+        if failed == -2:
+            print(f"!!  变异 [{label}] -> TIMEOUT（守卫挂死，不是跑红）")
+            return False
         ok = failed > 0
         print(f"{'OK  ' if ok else '!!  '}变异 [{label}] -> "
               f"{'RED' if ok else 'GREEN'} (failed={failed}, 期望 RED)")

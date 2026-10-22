@@ -37,7 +37,7 @@ public class MainStructureTests
         ("模拟推进", new[]
         {
             "_Process", "TickBuild", "TickIndependentBuilds", "OnIndependentBuildingCompleted",
-            "TickWorldEvents", "InitWorldEvents", "ApplyWorldEventConsequence",
+            "TickWorldEvents", "InitWorldEvents", "ScaleBeastTideMonster", "BeastTideHeroStats",
             "RestoreWorldEvents",
             "RunCollect", "CollectOneDay", "RunDailyShoppingIfNeeded",
             "DispatchDungeonForCollection", "DispatchOneDungeonForCollection",
@@ -52,6 +52,7 @@ public class MainStructureTests
         {
             "RewardsFor", "ApplyWrites", "Deposit",
             "EmitTradeCompleted", "EmitDungeonLooted",
+            "ApplyWorldEventEffect", "ApplyVillageResourceChange",
         }),
         ("存档写入", new[]
         {

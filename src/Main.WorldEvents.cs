@@ -22,10 +22,20 @@ public partial class Main : Node2D
 
         // ⚠️ **两个实例刻意形状不同**（基线 §11.5）：兽潮有战斗、阶段多；
         // 商队**没有战斗**、阶段少 ⇒ 它是「框架是通用的」的可验证证据。
+        //
+        // ⚠️ **兽潮用自己的一份解算器**（D-080）：它的敌方规模**随村庄层级递增**
+        // ⇒ 同一个阶段序号，不同层级要打不同强度的怪 ⇒ 解算器得知道层级。
+        // （副本那边的那份**一行都没动** —— 默认行为不变。）
+        var beastTideCombat = new ClaudeCodeGameStudios.Application.FormulaCombat(
+            monsterStats: stage => ScaleBeastTideMonster(
+                ClaudeCodeGameStudios.Domain.Combat.CombatParameters.MonsterFor(stage), _tier));
+
         _worldEvents.Register(ClaudeCodeGameStudios.Application.WorldEventTemplates.BeastTide(
-            periodDays: WorldEventBeastTidePeriodDays, _combat, _combat));
+            periodDays: WorldEventBeastTidePeriodDays, beastTideCombat, beastTideCombat,
+            heroStats: BeastTideHeroStats,
+            tuning: () => BeastTideTuningBase.ScaledToTier(_tier)));
         _worldEvents.Register(ClaudeCodeGameStudios.Application.WorldEventTemplates.Caravan(
-            periodDays: WorldEventCaravanPeriodDays));
+            periodDays: WorldEventCaravanPeriodDays, CaravanOfferBase));
     }
 
     /// <summary>兽潮的触发周期（游戏内天数）。</summary>
@@ -33,6 +43,91 @@ public partial class Main : Node2D
 
     /// <summary>商队来访的触发周期（游戏内天数）。</summary>
     private const int WorldEventCaravanPeriodDays = 11;
+
+    /// <summary>
+    /// 兽潮的<b>基准数值</b>（层级 0 时用这些；层级更高时按
+    /// <see cref="BeastTideTuning.ScaledToTier"/> 放大）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **这些数是占位基准，不是拍板值** —— D-080 的数值待开发者拍板
+    /// （先跑标定实测出建议值）。取值理由：材料 40 ≈ 一次副本的材料（38），
+    /// 金币 20 ≈ 副本给英雄的金币量级（每人 5）。
+    /// </remarks>
+    private static readonly ClaudeCodeGameStudios.Application.BeastTideTuning BeastTideTuningBase =
+        new()
+        {
+            MaterialReward = WorldEventBeastTideMaterialReward,
+            GoldReward = WorldEventBeastTideGoldReward,
+            MaterialLoss = WorldEventBeastTideMaterialLoss,
+            GoldLoss = WorldEventBeastTideGoldLoss,
+        };
+
+    /// <summary>兽潮打赢给的材料（基准值；按村庄层级放大）。</summary>
+    private const long WorldEventBeastTideMaterialReward = 40;
+
+    /// <summary>兽潮打赢给的金币（基准值；按村庄层级放大）。</summary>
+    private const long WorldEventBeastTideGoldReward = 20;
+
+    /// <summary>兽潮打输赔的材料（基准值；按村庄层级放大）。</summary>
+    private const long WorldEventBeastTideMaterialLoss = 30;
+
+    /// <summary>兽潮打输赔的金币（基准值；按村庄层级放大）。</summary>
+    private const long WorldEventBeastTideGoldLoss = 15;
+
+    /// <summary>
+    /// 兽潮敌方的规模缩放：<b>每级村庄 +15%</b>（D-080 拍板「随村庄层级递增」）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **只缩放属性，不改怪的档位**（普通 / 精英 / 首领）⇒ 兽潮的「形状」不变，
+    /// 只是更强 ⇒ 与「规模递增」而不是「换一种怪」相符。
+    /// </remarks>
+    private const int WorldEventBeastTideScalePercentPerTier = 15;
+
+    /// <summary>商队的报价（D-080：低于市价、限量、限时）。</summary>
+    private static readonly ClaudeCodeGameStudios.Application.CaravanOffer CaravanOfferBase =
+        new(ItemId: "石料",
+            DiscountPercent: WorldEventCaravanDiscountPercent,
+            Stock: WorldEventCaravanStock);
+
+    /// <summary>商队的折扣（百分比；80 = 八折 = 低于市价）。</summary>
+    private const int WorldEventCaravanDiscountPercent = 80;
+
+    /// <summary>商队带多少货（份）—— 限量是「不产生无限套利」的前提。</summary>
+    private const long WorldEventCaravanStock = 30;
+
+    /// <summary>
+    /// 按村庄层级把兽潮的怪物属性放大。
+    /// </summary>
+    /// <param name="baseStats">该阶段的基础属性（档位表里的值）。</param>
+    /// <param name="tier">村庄层级（0 起）。</param>
+    /// <returns>放大后的属性。</returns>
+    private static ClaudeCodeGameStudios.Domain.Combat.CombatStats ScaleBeastTideMonster(
+        ClaudeCodeGameStudios.Domain.Combat.CombatStats baseStats, int tier)
+        => ClaudeCodeGameStudios.Application.BeastTideScale.ScaleMonster(
+            baseStats, tier, WorldEventBeastTideScalePercentPerTier);
+
+    /// <summary>
+    /// 守村英雄的战斗属性 —— <b>用他自己的</b>（D-080）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ 之前这里是<b>写死的 6/2/60</b> ⇒ 谁去守村、村里有没有强者，
+    /// 对兽潮的胜负**毫无影响** ⇒ 「守村」这件事是假的。
+    /// ⇒ 现在走英雄自己的属性（与副本那边同一套换算，含试炼塔的永久加生命）。
+    /// </remarks>
+    /// <param name="heroId">英雄标识。</param>
+    /// <returns>战斗属性。</returns>
+    /// <exception cref="InvalidOperationException">花名册里没有这个人（状态被改坏了）。</exception>
+    private ClaudeCodeGameStudios.Domain.Combat.CombatStats BeastTideHeroStats(string heroId)
+    {
+        var agent = _heroes.FirstOrDefault(h => h.Id.Value == heroId);
+        if (agent is null)
+        {
+            throw new InvalidOperationException(
+                $"兽潮参与者「{heroId}」不在花名册里 —— 状态被改坏了。");
+        }
+
+        return CombatStatsFor(agent);
+    }
 
     /// <summary>
     /// 每天推进一次大事件（D-079）。
@@ -95,10 +190,21 @@ public partial class Main : Node2D
             // ③ 结算：走到「结算」阶段就结一次。
             if (moved.Phase == WorldEventPhase.Settlement)
             {
-                var outcome = _worldEvents.Settle(moved.Id, ApplyWorldEventConsequence);
+                // 后果**实际落地**的说明（不是模板写的「打算给多少」——
+                // 扣不动的时候实际扣的数不一样，杂谈里要写真数）。
+                var applied = new List<string>();
+
+                var outcome = _worldEvents.Settle(moved.Id, (key, effect) =>
+                {
+                    applied.Add(ApplyWorldEventEffect(effect));
+                });
                 if (outcome is not null)
                 {
                     var template = _worldEvents.Template(moved.TemplateId);
+                    var notes = applied.Count > 0
+                        ? applied
+                        : outcome.Consequences.Values.Select(c => c.Description).ToList();
+
                     Emit(EvWorldEventSettled, template?.Name ?? moved.TemplateId,
                         new[] { StWorldEvent, StSettlement },
                         new Dictionary<string, string>
@@ -106,8 +212,7 @@ public partial class Main : Node2D
                             ["event"] = template?.Name ?? moved.TemplateId,
                             ["succeeded"] = outcome.Succeeded ? "1" : "0",
                             ["instance"] = moved.Id,
-                            ["consequences"] = string.Join(" / ",
-                                outcome.Consequences.Select(c => c.Value)),
+                            ["consequences"] = string.Join(" / ", notes),
                         },
                         ev => Chronicle.WorldEventSettled(
                             (int)_clock.Day, ev.Payload["event"],
@@ -118,18 +223,43 @@ public partial class Main : Node2D
     }
 
     /// <summary>
-    /// 把一条大事件的后果<b>应用出去</b>（基线 §11.4：事件系统不越权改数据）。
+    /// 把一条大事件后果<b>应用出去</b>（基线 §11.4：事件系统不越权改数据）。
     /// </summary>
     /// <remarks>
-    /// ⚠️ **这里只做「事情真的发生了」的记账**（发事件、记流水），
-    /// <b>不直接改</b>村庄资源 / 英雄属性 —— 那些由对应系统做。
-    /// ⇒ 兽潮与商队此刻都还没有「对村庄有实际影响」的规则（D-079 只落框架），
-    /// 所以后果的**内容**由模板给，这里只负责**落地与幂等**。
+    /// ⚠️ **这里只落「村庄资源」这一种后果**（D-080 拍板：兽潮只损资源、人畜无损）。
+    /// 资源写进 <b>村库</b>（材料桶 / 金币桶），走 <c>Village</c> 自己的入口
+    /// ⇒ 账是同一本账（守恒律照样成立）。
     /// </remarks>
-    private void ApplyWorldEventConsequence(string key, string description)
+    /// <param name="effect">结构化后果（种类 + 数量 + 说明）。</param>
+    /// <returns><b>实际落地</b>的说明（给人看；数字是实际发生的）。</returns>
+    private string ApplyWorldEventEffect(WorldEventEffect effect)
     {
-        GD.Print($"WORLDEVENT 后果 {key}：{description}");
+        switch (effect.Kind)
+        {
+            case WorldEventEffect.KindMaterial:
+                return ApplyVillageResourceChange(MaterialsId, effect, "材料");
+            case WorldEventEffect.KindGold:
+                return ApplyVillageResourceChange(
+                    ClaudeCodeGameStudios.Application.Stall.StallService.Gold, effect, "金币");
+            default:
+                return effect.Description;
+        }
     }
+
+    /// <summary>
+    /// 村库资源的加/减（正 = 给，负 = 扣）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>扣不动就只扣有的</b>：村库里的材料/金币不够时，
+    /// **扣到 0 为止**，**不欠账**（没有「负债」这个状态）——
+    /// 否则下一次结算就会凭空扣掉负数，或者让村库变成负数。
+    /// </remarks>
+    private string ApplyVillageResourceChange(
+        ClaudeCodeGameStudios.Domain.Village.ResourceId id,
+        WorldEventEffect effect,
+        string label)
+        => ClaudeCodeGameStudios.Application.WorldEventResourceApplier
+            .Apply(_villageModel, id, effect, label).Description;
 
     /// <summary>大事件簿的存档（读档用）。</summary>
     private void RestoreWorldEvents(IEnumerable<ClaudeCodeGameStudios.Data.WorldEventSave> saves)
@@ -151,7 +281,7 @@ public partial class Main : Node2D
             {
                 instance.Outcome = new WorldEventOutcome(
                     save.Succeeded.Value,
-                    new Dictionary<string, string>(StringComparer.Ordinal));
+                    new Dictionary<string, WorldEventEffect>(StringComparer.Ordinal));
             }
             instances.Add(instance);
         }

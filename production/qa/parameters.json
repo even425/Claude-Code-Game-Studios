@@ -352,6 +352,62 @@
       "status": "【技术值】D-079",
       "note": "上次推进大事件阶段时的游戏日（一个游戏日只推一次）",
       "value": "-1"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBeastTideScalePercentPerTier",
+      "kind": "参数",
+      "status": "【已确认】D-080",
+      "note": "兽潮规模随村庄层级递增的幅度（每级 +15%）—— D-080 拍板「随村庄层级递增」",
+      "value": "15"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBeastTideMaterialReward",
+      "kind": "参数",
+      "status": "【待拍板】D-080",
+      "note": "兽潮打赢给的材料（基准值，按村庄层级放大）—— D-080 拍板「材料 + 金币」；**数值待开发者拍板**（此为方案值：约等于一次副本的材料量）",
+      "value": "40"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBeastTideGoldReward",
+      "kind": "参数",
+      "status": "【待拍板】D-080",
+      "note": "兽潮打赢给的金币（基准值，按村庄层级放大）—— D-080 拍板「材料 + 金币」；**数值待开发者拍板**",
+      "value": "20"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBeastTideMaterialLoss",
+      "kind": "参数",
+      "status": "【待拍板】D-080",
+      "note": "兽潮打输赔的材料（基准值，按村庄层级放大）—— D-080 拍板「只损资源，人畜无损」；**数值待开发者拍板**",
+      "value": "30"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBeastTideGoldLoss",
+      "kind": "参数",
+      "status": "【待拍板】D-080",
+      "note": "兽潮打输赔的金币（基准值，按村庄层级放大）—— D-080 拍板「只损资源，人畜无损」；**数值待开发者拍板**",
+      "value": "15"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventCaravanDiscountPercent",
+      "kind": "参数",
+      "status": "【已确认】D-080",
+      "note": "商队的折扣（80 = 八折 = 低于市价）—— D-080 拍板「价格低于市价」；**数值待开发者拍板**",
+      "value": "80"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventCaravanStock",
+      "kind": "参数",
+      "status": "【已确认】D-080",
+      "note": "商队带多少货（份）—— D-080 拍板「限时限量」；限量是「不产生无限套利」的前提（低买高卖无限循环）；**数值待开发者拍板**",
+      "value": "30"
     }
   ],
   "nonParameters": [

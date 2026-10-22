@@ -140,6 +140,45 @@ public sealed class WorldEventInstance
     }
 }
 
+/// <summary>
+/// 一条后果的<b>结构化</b>形态（D-080）。
+/// </summary>
+/// <remarks>
+/// <para>⚠️ <b>为什么不能只留一句中文</b>：后果要**真的落到村庄的资源上**
+/// （兽潮打赢发材料与金币、打输扣材料与金币）⇒ 落地的那一层必须能读出
+/// <b>种类</b>与<b>数量</b>。若只给「材料 +120」这样的一句话，
+/// 落地层就只能<b>解析中文</b> ⇒ 改个措辞就悄悄失效，而且没有任何守卫能发现。</para>
+/// <para>⇒ 后果 = <b>结构化的种类与数量</b> + <b>给人看的说明</b>。
+/// 说明只负责显示，<b>不参与</b>任何判定。</para>
+/// <para>⚠️ <b>它不越权</b>（基线 §11.4）：它只<b>描述</b>要发生什么，
+/// 真正写状态的是应用层（各有各的系统入口）。</para>
+/// </remarks>
+/// <param name="Kind">
+/// 后果种类（机器读）：<c>material</c>（村庄材料）/ <c>gold</c>（村金库）/
+/// <c>none</c>（只说明、没有可落地的资源变化）。
+/// </param>
+/// <param name="Amount">
+/// 数量：<b>正 = 给</b>，<b>负 = 扣</b>。单位与种类对应（材料 = 份，金币 = 单位）。
+/// </param>
+/// <param name="Description">给人看的说明（只用于显示）。</param>
+public sealed record WorldEventEffect(
+    string Kind,
+    long Amount,
+    string Description)
+{
+    /// <summary>村庄材料。</summary>
+    public const string KindMaterial = "material";
+
+    /// <summary>村金库（金币）。</summary>
+    public const string KindGold = "gold";
+
+    /// <summary>没有可落地的资源变化（只有说明）。</summary>
+    public const string KindNone = "none";
+
+    /// <summary>这是一个「只说明」的后果。</summary>
+    public static WorldEventEffect None(string description) => new(KindNone, 0L, description);
+}
+
 /// <summary>一次事件结算的结果。</summary>
 /// <remarks>
 /// <para>⚠️ <b>它只「描述」后果，不直接改状态</b>（基线 §11.4 的系统边界：
@@ -148,8 +187,9 @@ public sealed class WorldEventInstance
 /// </remarks>
 /// <param name="Succeeded">这次事件算成成功还是失败。</param>
 /// <param name="Consequences">
-/// 后果描述：键 → 说明。<b>键</b>用于幂等（同一后果只应用一次）。
+/// 后果：键 → <see cref="WorldEventEffect"/>。<b>键</b>用于幂等（同一后果只应用一次）；
+/// <b>值</b>是结构化的（种类 + 数量 + 说明）⇒ 落地层不解析中文。
 /// </param>
 public sealed record WorldEventOutcome(
     bool Succeeded,
-    IReadOnlyDictionary<string, string> Consequences);
+    IReadOnlyDictionary<string, WorldEventEffect> Consequences);

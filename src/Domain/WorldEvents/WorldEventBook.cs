@@ -181,7 +181,7 @@ public sealed class WorldEventBook
     /// </remarks>
     public WorldEventOutcome? Settle(
         string instanceId,
-        Action<string, string> applyConsequence)
+        Action<string, WorldEventEffect> applyConsequence)
     {
         if (applyConsequence is null) throw new ArgumentNullException(nameof(applyConsequence));
         if (!_instances.TryGetValue(instanceId, out var instance)) return null;
@@ -197,11 +197,11 @@ public sealed class WorldEventBook
         var outcome = template.Settle(instance, instance.Participants);
         instance.Outcome = outcome;
 
-        foreach (var (key, description) in outcome.Consequences)
+        foreach (var (key, effect) in outcome.Consequences)
         {
             // ⚠️ **幂等的关键**：`MarkApplied` 返回 false ⇒ 之前已应用过 ⇒ 不再应用。
             if (!instance.MarkApplied(key)) continue;
-            applyConsequence(key, description);
+            applyConsequence(key, effect);
         }
 
         return outcome;

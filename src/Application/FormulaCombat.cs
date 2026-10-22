@@ -26,11 +26,27 @@ public sealed class FormulaCombat : IBattleResolver, IBattleOutcomeReader
 {
     private readonly BattleEngine _engine;
 
+    /// <summary>
+    /// 敌方属性的来源（按阶段序号）。<b>null = 用默认档位表</b>。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>为什么要有这个口子</b>（D-080）：兽潮的<b>规模随村庄层级递增</b>
+    /// ⇒ 同一个阶段序号，在不同层级要打<b>不同强度</b>的怪。
+    /// ⇒ 敌方属性不能写死在解算器里。
+    /// <para>⚠️ <b>默认行为不变</b>：不传这个委托 ⇒ 仍然走
+    /// <see cref="CombatParameters.MonsterFor"/> 的档位表 ⇒ 副本那边一行都不用改。</para>
+    /// </remarks>
+    private readonly Func<int, CombatStats>? _monsterStats;
+
     /// <summary>构造一个解算器。</summary>
     /// <param name="rules">插拔点的组合；<c>null</c> 用 D-065 的默认那一套。</param>
-    public FormulaCombat(BattleRules? rules = null)
+    /// <param name="monsterStats">
+    /// 敌方属性来源（按阶段序号）；<c>null</c> 用默认档位表。
+    /// </param>
+    public FormulaCombat(BattleRules? rules = null, Func<int, CombatStats>? monsterStats = null)
     {
         _engine = new BattleEngine(rules);
+        _monsterStats = monsterStats;
     }
 
     /// <summary>
@@ -53,7 +69,7 @@ public sealed class FormulaCombat : IBattleResolver, IBattleOutcomeReader
         var monster = new CombatantState(
             $"monster:{stageIndex}",
             CombatParameters.MonsterNameFor(stageIndex),
-            CombatParameters.MonsterFor(stageIndex));
+            _monsterStats?.Invoke(stageIndex) ?? CombatParameters.MonsterFor(stageIndex));
 
         var run = _engine.Run(new BattleInput(encounterName, heroes, new[] { monster }));
         return run.Log;

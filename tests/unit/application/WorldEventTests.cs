@@ -32,13 +32,25 @@ public class WorldEventTests
         var book = new WorldEventBook();
         var applied = new List<string>();
         book.Register(WorldEventTemplates.BeastTide(
-            periodDays: 7, new FormulaCombat(), new FormulaCombat()));
-        book.Register(WorldEventTemplates.Caravan(periodDays: 11));
+            periodDays: 7, new FormulaCombat(), new FormulaCombat(),
+            heroStats: _ => new CombatStats(6, 2, 60),
+            tuning: () => TestTuning));
+        book.Register(WorldEventTemplates.Caravan(
+            periodDays: 11, new CaravanOffer("石料", 80, 30)));
         return (book, applied);
     }
 
-    private static void Apply(List<string> applied, string key, string description)
-        => applied.Add($"{key}:{description}");
+    private static void Apply(List<string> applied, string key, WorldEventEffect effect)
+        => applied.Add($"{key}:{effect.Description}");
+
+    /// <summary>测试用的兽潮数值（基准，不缩放）。</summary>
+    private static readonly BeastTideTuning TestTuning = new()
+    {
+        MaterialReward = 40,
+        GoldReward = 20,
+        MaterialLoss = 30,
+        GoldLoss = 15,
+    };
 
     /// <summary>
     /// 把实例推进到「结算」阶段。
@@ -250,10 +262,10 @@ public class WorldEventTests
     public void Register_DuplicateTemplate_Throws()
     {
         var book = new WorldEventBook();
-        book.Register(WorldEventTemplates.Caravan(10));
+        book.Register(WorldEventTemplates.Caravan(10, new CaravanOffer("石料", 80, 30)));
 
         bool threw = false;
-        try { book.Register(WorldEventTemplates.Caravan(10)); }
+        try { book.Register(WorldEventTemplates.Caravan(10, new CaravanOffer("石料", 80, 30))); }
         catch (ArgumentException) { threw = true; }
 
         Assertions.AssertThat(threw).IsTrue();
@@ -266,7 +278,7 @@ public class WorldEventTests
         var book = new WorldEventBook();
 
         bool threw = false;
-        try { book.Register(WorldEventTemplates.Caravan(0)); }
+        try { book.Register(WorldEventTemplates.Caravan(0, new CaravanOffer("石料", 80, 30))); }
         catch (ArgumentException) { threw = true; }
 
         Assertions.AssertThat(threw).IsTrue();

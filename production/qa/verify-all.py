@@ -57,15 +57,35 @@ def godot_available():
     return bool(which("godot"))
 
 
-def run(label, argv, cwd=ROOT):
+def run(label, argv, cwd=ROOT, timeout=None):
     print(f"\n=== {label} ===")
     print("$ " + " ".join(str(a) for a in argv))
     t0 = time.time()
-    proc = subprocess.run([str(a) for a in argv], cwd=str(cwd))
+    try:
+        proc = subprocess.run([str(a) for a in argv], cwd=str(cwd), timeout=timeout)
+    except subprocess.TimeoutExpired:
+        dt = time.time() - t0
+        # ⚠️ **超时不是「通过」也不是「失败」——它是一次「没验成」**：
+        # 守护脚本里的循环被改坏时，测试会**挂死**而不是跑红
+        # （实测：D-077 那一档「不查余额」⇒ `while (TryPayCost())` 永远为真 ⇒ 挂死）。
+        # ⇒ 必须**明确报出来**并判为**不通过**，否则整轮验证会永远卡在这里。
+        print(f"--- {label}: TIMEOUT（超过 {timeout:.0f}s 仍未结束 ⇒ 没验成，不算通过）")
+        _kill_testhost()
+        return False
     dt = time.time() - t0
     ok = proc.returncode == 0
     print(f"--- {label}: {'OK' if ok else 'FAILED'}（{dt:.1f}s，退出码 {proc.returncode}）")
     return ok
+
+
+def _kill_testhost():
+    """清掉挂死的测试宿主（否则它会一直占着 CPU 与文件锁）。"""
+    for image in ("testhost.exe", "dotnet.exe"):
+        try:
+            subprocess.run(["taskkill", "/F", "/IM", image],
+                           capture_output=True, text=True)
+        except Exception:
+            pass
 
 
 def main():
@@ -181,7 +201,9 @@ def main():
                 picked = []
             scripts = picked
         for s in scripts:
-            ok = run(f"变异矩阵 {s.name}", [sys.executable, s])
+            # ⚠️ **每个变异脚本都有超时**：挂死的脚本**必须**被判为不通过，
+            # 而不是让整轮验证永远停在这里。
+            ok = run(f"变异矩阵 {s.name}", [sys.executable, "-u", s], timeout=600)
             results.append((f"变异 {s.name}", "ok" if ok else "fail"))
         if args.mutations and scripts:
             print(f"\n（只跑了名字含「{args.mutations}」的 {len(scripts)} 个变异脚本）")

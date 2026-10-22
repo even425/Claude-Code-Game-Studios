@@ -70,7 +70,12 @@ public class SummonServiceTests
         var (service, village) = NewService(250);
 
         int summoned = 0;
-        while (service.TryPayCost()) summoned++;
+        // ⚠️ **必须带护栏**（实测踩过）：若余额检查被改坏（变异档「TrySpend 不查余额」），
+        // `TryPayCost()` 会**永远为真** ⇒ 这个循环**挂死**而不是**跑红**
+        // ⇒ 变异矩阵那一档就变成「超时」，不是「看红」⇒ 等于**没验**。
+        // ⇒ 护栏 + 断言 = 改坏了会**明确失败**（招了 50 个 ≠ 2 个）。
+        int guard = 0;
+        while (service.TryPayCost() && guard++ < 50) summoned++;
 
         Assertions.AssertThat(summoned).IsEqual(2);          // 250 ⇒ 招 2 个，剩 50
         Assertions.AssertThat(village.Get(Gold)).IsEqual(50);

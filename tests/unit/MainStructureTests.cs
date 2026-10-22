@@ -38,7 +38,7 @@ public class MainStructureTests
         {
             "_Process", "TickBuild", "TickIndependentBuilds", "OnIndependentBuildingCompleted",
             "TickWorldEvents", "InitWorldEvents", "ScaleBeastTideMonster", "BeastTideHeroStats",
-            "ShouldTrigger", "RestoreWorldEvents",
+            "ShouldTrigger", "BeastTideEffectiveTier", "RestoreWorldEvents",
             "RunCollect", "CollectOneDay", "RunDailyShoppingIfNeeded",
             "DispatchDungeonForCollection", "DispatchOneDungeonForCollection",
             "OpenStallsForCollection", "UpgradeVillageForCollection",

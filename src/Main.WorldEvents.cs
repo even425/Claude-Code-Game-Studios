@@ -66,7 +66,8 @@ public partial class Main : Node2D
         // （副本那边的那份**一行都没动** —— 默认行为不变。）
         var beastTideCombat = new ClaudeCodeGameStudios.Application.FormulaCombat(
             monsterStats: stage => ScaleBeastTideMonster(
-                ClaudeCodeGameStudios.Domain.Combat.CombatParameters.MonsterFor(stage), _tier));
+                ClaudeCodeGameStudios.Domain.Combat.CombatParameters.MonsterFor(stage),
+                BeastTideEffectiveTier()));
         _beastTideCombat = beastTideCombat;
 
         _worldEvents.Register(ClaudeCodeGameStudios.Application.WorldEventTemplates.BeastTide(
@@ -172,6 +173,19 @@ public partial class Main : Node2D
         ClaudeCodeGameStudios.Domain.Combat.CombatStats baseStats, int tier)
         => ClaudeCodeGameStudios.Application.BeastTideScale.ScaleMonster(
             baseStats, tier, WorldEventBeastTideScalePercentPerTier);
+
+    /// <summary>
+    /// 兽潮的<b>实际规模等级</b>：村庄层级 − 已建成的围栏数（D-085 拍板）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **每次现算**（不缓存）：围栏是**建好之后**才挡得住兽潮
+    /// ⇒ 触发前预演与真正结算都用**同一份**当前值 ⇒ 预演与实战不会打架。
+    /// </remarks>
+    /// <returns>实际规模等级。</returns>
+    private int BeastTideEffectiveTier()
+        => ClaudeCodeGameStudios.Application.BeastTideScale.TierWithDefenses(
+            _tier,
+            ClaudeCodeGameStudios.Application.BeastTideScale.CompletedFenceCount(_villageModel));
 
     /// <summary>
     /// 守村英雄的战斗属性 —— <b>用他自己的</b>（D-080）。

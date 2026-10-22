@@ -17,6 +17,49 @@ namespace ClaudeCodeGameStudios.Application;
 public static class BeastTideScale
 {
     /// <summary>
+    /// 兽潮的<b>实际规模等级</b>：村庄层级 − 围栏数（D-085 拍板「围栏 ⇒ 兽潮规模 −1 级」）。
+    /// </summary>
+    /// <param name="villageTier">村庄层级（0 起）。</param>
+    /// <param name="completedFences">已建成的围栏数。</param>
+    /// <returns>实际规模等级（<b>最低 0</b> —— 围栏再多也不会让兽潮变成「负级」）。</returns>
+    /// <remarks>
+    /// ⚠️ **为什么围栏能挡兽潮**（D-085 拍板）：兽潮的规模随村庄层级增长，
+    /// 而**围栏是村庄唯一的防御建筑** ⇒ 「筑墙 ⇒ 兽潮弱一级」把防御设施变成了
+    /// 一条**可经营的策略**，也让基线 §14.3 那条验收重新有了可观察的指标
+    /// （防御设施改变了结算结果）。
+    /// <para>⚠️ <b>最低 0</b>：围栏不能把兽潮「减成负数」⇒ 层级 0 的村庄
+    /// 有一座围栏也只是**保持 0 级**，不是「更弱的兽潮」。</para>
+    /// </remarks>
+    public static int TierWithDefenses(int villageTier, int completedFences)
+    {
+        if (completedFences < 0) throw new ArgumentOutOfRangeException(nameof(completedFences));
+        int tier = villageTier - completedFences;
+        return tier < 0 ? 0 : tier;
+    }
+
+    /// <summary>
+    /// 村里有几座<b>已建成</b>的围栏（在建的不算 —— 半成品墙挡不住兽潮）。
+    /// </summary>
+    /// <param name="village">村庄。</param>
+    /// <returns>围栏数。</returns>
+    public static int CompletedFenceCount(
+        ClaudeCodeGameStudios.Domain.Village.Village village)
+    {
+        if (village is null) throw new ArgumentNullException(nameof(village));
+
+        string fenceId = ClaudeCodeGameStudios.Domain.Village.BuildableBuildings.Fence.Id.Value;
+        int count = 0;
+        foreach (var b in village.Buildings)
+        {
+            if (b.Id.Value != fenceId) continue;
+            // 建造进度到 1 才算建成（D-074：建成后才生效）。
+            if (b.ConstructionProgress >= 1.0) count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
     /// 按村庄层级把某阶段的怪物属性放大。
     /// </summary>
     /// <param name="baseStats">该阶段的基础属性（档位表里的值）。</param>

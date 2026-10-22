@@ -219,6 +219,30 @@ public static class Chronicle
         return new Entry(day, tpl, null);
     }
 
+    /// <summary>
+    /// 从商队买了东西（基线 §7.2「村庄日常（采集、摆摊、社交等）」；D-081）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **这是独立的一种事件**，不并进「摆摊成交」：商队成交的**钱全进村库**
+    /// （不是 5% 摊位费）⇒ 若并进交易事件，经济流水的「村抽 = 成交额 5%」那条等式
+    /// 就会被这一行**弄坏**（它算的是摊位成交，不是商队寄售）。
+    /// </remarks>
+    /// <param name="day">游戏日。</param>
+    /// <param name="who">谁买的。</param>
+    /// <param name="item">买了什么。</param>
+    /// <param name="qty">买了几份。</param>
+    /// <param name="price">一份多少钱。</param>
+    public static Entry CaravanBought(int day, string who, string item, int qty, int price)
+    {
+        string tpl = Pick(new[]
+        {
+            $"{who}从商队那儿买了{qty}份{item}，一份{price}金，比村里便宜。",
+            $"商队摆开摊子，{who}买走了{qty}份{item}（{price}金一份）。",
+            $"{who}在商队的摊子上挑了{qty}份{item}。价钱比市价低。",
+        });
+        return new Entry(day, tpl, who);
+    }
+
     public static Entry SiteOpened(int day, string what, int workers)
     {
         string tpl = workers switch

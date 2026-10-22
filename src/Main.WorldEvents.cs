@@ -36,7 +36,23 @@ public partial class Main : Node2D
             tuning: () => BeastTideTuningBase.ScaledToTier(_tier)));
         _worldEvents.Register(ClaudeCodeGameStudios.Application.WorldEventTemplates.Caravan(
             periodDays: WorldEventCaravanPeriodDays, CaravanOfferBase));
+
+        // D-081：商队市场（开摊 / 在售列表 / 成交）。
+        // ⚠️ **延迟取实例**（委托而不是直接持有簿）：本方法跑在 `BuildScene` 之后，
+        // 而簿就是这里才建的 ⇒ 直接持有没问题，但**委托更省心**：
+        // 将来读档整份替换簿，委托照样指向同一个字段。
+        _caravanMarket = new ClaudeCodeGameStudios.Application.CaravanMarketService(
+            findInstance: id => _worldEvents?.Instances
+                .FirstOrDefault(i => string.Equals(i.Id, id, StringComparison.Ordinal)),
+            listInstances: () => _worldEvents?.Instances
+                ?? (IReadOnlyList<WorldEventInstance>)Array.Empty<WorldEventInstance>(),
+            prices: _priceBook,
+            village: _villageModel,
+            heroLookup: id => _heroes.FirstOrDefault(h => h.Id == id));
     }
+
+    /// <summary>商队市场（D-081）。</summary>
+    private ClaudeCodeGameStudios.Application.CaravanMarketService _caravanMarket = null!;
 
     /// <summary>兽潮的触发周期（游戏内天数）。</summary>
     private const int WorldEventBeastTidePeriodDays = 7;
@@ -163,6 +179,17 @@ public partial class Main : Node2D
         if (instance is not null)
         {
             var template = _worldEvents.Template(instance.TemplateId);
+
+            // D-081：商队实例一触发就**开摊**（算单价、锁库存进实例状态）。
+            // ⚠️ **限时不在这里管**：窗口 = 实例处于「进行中」阶段 ⇒ 阶段机一到结算就自动关窗。
+            if (instance.TemplateId == ClaudeCodeGameStudios.Application.WorldEventTemplates.CaravanId)
+            {
+                if (!_caravanMarket.OpenStall(instance, CaravanOfferBase))
+                {
+                    GD.Print($"WORLDEVENT 商队没开摊：「{CaravanOfferBase.ItemId}」不在价格表里。");
+                }
+            }
+
             Emit(EvWorldEventStarted, template?.Name ?? instance.TemplateId,
                 new[] { StWorldEvent },
                 new Dictionary<string, string>
@@ -280,6 +307,8 @@ public partial class Main : Node2D
             };
             instance.Phase = (WorldEventPhase)save.Phase;
             foreach (var key in save.AppliedConsequences) instance.MarkApplied(key);
+            // D-081：实例状态（商队还剩多少货）—— **不读回来，读档就能白嫖**。
+            foreach (var (key, value) in save.State) instance.SetState(key, value);
             if (save.Succeeded.HasValue)
             {
                 instance.Outcome = new WorldEventOutcome(

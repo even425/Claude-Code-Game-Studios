@@ -97,6 +97,7 @@ public class MainStructureTests
         "OnRosterItemActivated", "OnSummon", "OnSummonPaid", "SummonHero", "OnTask", "OnUpgrade",
         "OnBuild", "OnBuildFence", "OnBuildTower", "OnTrialTower", "RefreshBuildButton",
         "OnStall", "OnStallConfirm", "OnMarket", "OnManualTradeCompleted",
+        "OnCaravan", "OnCaravanBought",   // D-081：商队面板（玩家命令入口）
         "OnSave", "OnLoad",
         "Refresh", "RefreshRoster", "RosterLine", "ShoppingNoteFor",
         "RefreshRelationSummary", "TierName",

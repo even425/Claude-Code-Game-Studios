@@ -953,6 +953,8 @@ public partial class Main : Node2D
         new("WorldEventStarted");              // §7.2「大事件的发生与结算」—— D-079：大事件预兆
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvWorldEventSettled =
         new("WorldEventSettled");             // §7.2「大事件的发生与结算」—— D-079：大事件结算
+    private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvCaravanTrade =
+        new("CaravanTrade");                  // §7.2「村庄日常（采集、摆摊、社交等）」—— D-081：商队成交
 
     /// <summary>
     /// 副本战利品结算（运行闭环验证与经济数据采集准备）。

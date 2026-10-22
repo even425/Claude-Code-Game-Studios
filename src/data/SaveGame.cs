@@ -9,8 +9,20 @@ namespace ClaudeCodeGameStudios.Data;
 /// <summary>存档格式版本。基线 §13.7 要求存档带版本号并有迁移入口。</summary>
 public readonly record struct SaveVersion(int Major, int Minor)
 {
-    /// <summary>当前版本。<b>【已确认】</b>(0,7) —— R-05 第五轮 / D-079 升。</summary>
+    /// <summary>当前版本。<b>【已确认】</b>(0,8) —— R-05 第五轮 / D-081 升。</summary>
     /// <remarks>
+    /// <b>0,7 → 0,8</b>（`07` **D-081**）：存档里增
+    /// <list type="bullet">
+    /// <item><see cref="WorldEventSave.State"/>（大事件实例的「可变部分」—— 商队还剩多少货）</item>
+    /// </list>
+    /// <para>
+    /// <b>为什么必须存</b>：商队的货是<b>限量</b>的（限量是「不产生无限套利」的前提）⇒
+    /// 卖掉多少必须跟着存档走 ⇒ 否则**读档就能白嫖**（读一次档货就补满）。
+    /// </para>
+    /// <para>
+    /// 旧档<b>整份拒绝</b>（I11 + D-021/D-029/D-036 先例），<b>不</b>写迁移器。
+    /// </para>
+    /// <para>
     /// <b>0,6 → 0,7</b>（`07` **D-079** 拍板）：存档里增
     /// <list type="bullet">
     /// <item><see cref="SaveGame.WorldEvents"/>（进行中的大事件实例）</item>
@@ -42,7 +54,7 @@ public readonly record struct SaveVersion(int Major, int Minor)
     /// 而升级花掉的金币已经记下了 → <b>账实不符</b>。这次一并补上。
     /// </para>
     /// </remarks>
-    public static SaveVersion Current => new(0, 7);
+    public static SaveVersion Current => new(0, 8);
 
     /// <inheritdoc />
     public override string ToString() => $"{Major}.{Minor}";
@@ -515,6 +527,15 @@ public sealed class WorldEventSave
 
     /// <summary>结算结果（成功与否；未结算时为 null）。</summary>
     public bool? Succeeded { get; set; }
+
+    /// <summary>
+    /// <b>实例状态</b>（0,8 新增，D-081）：这一次事件的「可变部分」。
+    /// </summary>
+    /// <remarks>
+    /// <b>必须存</b>：商队带 30 份货、卖掉 7 份 ⇒ 剩 23 份 ⇒
+    /// 不存它，读档后又是 30 份 ⇒ 玩家能靠读档<b>无限进货</b> ⇒ <b>限量就白限量了</b>。
+    /// </remarks>
+    public Dictionary<string, string> State { get; set; } = new();
 }
 
 /// <summary>
@@ -623,6 +644,30 @@ public static class SaveValidator
                         {
                             errors.Add(new SaveError(
                                 $"{path}.participants", $"参与者「{pid}」在英雄列表中不存在 —— 引用断了。"));
+                        }
+                    }
+                }
+
+                // 实例状态（0,8 新增，D-081）：键与值都不能为空。
+                // ⚠️ **空键会让所有空键的状态被当成同一个**（与「空的后果键」同一族问题）。
+                if (ev.State is null)
+                {
+                    errors.Add(new SaveError($"{path}.state", "实例状态为 null。"));
+                }
+                else
+                {
+                    foreach (var (key, value) in ev.State)
+                    {
+                        if (string.IsNullOrEmpty(key))
+                        {
+                            errors.Add(new SaveError($"{path}.state", "存在空的状态键。"));
+                            break;
+                        }
+
+                        if (string.IsNullOrEmpty(value))
+                        {
+                            errors.Add(new SaveError($"{path}.state", $"状态「{key}」的值为空。"));
+                            break;
                         }
                     }
                 }

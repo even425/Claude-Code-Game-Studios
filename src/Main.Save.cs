@@ -136,6 +136,8 @@ public partial class Main : Node2D
             Participants = e.Participants.ToList(),
             AppliedConsequences = e.AppliedConsequences.OrderBy(k => k, StringComparer.Ordinal).ToList(),
             Succeeded = e.Outcome?.Succeeded,
+            // D-081：实例状态（商队还剩多少货）—— **不存它，读档就能白嫖**。
+            State = e.State.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal),
         }).ToList(),
         // 第四阶段 M4：摊位（库存是从英雄背包挪走的货）、购买幂等键、每日购物闸门。
         // 三者缺一，读档都会造出「存档前没发生过的世界」。

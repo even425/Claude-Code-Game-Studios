@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using GdUnit4;
 using Godot;
 using ClaudeCodeGameStudios.Presentation;
@@ -90,12 +92,65 @@ public class UiLayoutTests
     }
 
     [TestCase]
-    public void LeftPanel_ContentFitsItsHeight()
+    public void LeftColumn_Scrolls_SoBottomButtonsStayReachable()
     {
-        // 左栏内容（标题 + 花名册 + 队伍标题 + 队伍文字 + 6 个按钮 + 间距）
-        // 不得高过面板本身，否则底部按钮会被挤出屏幕。
-        float content = UiLayout.LeftContentMinHeight;
-        Assertions.AssertThat(content).IsLessEqual(UiLayout.PanelHeight);
+        // ⚠️ **这条替代了旧的「内容不得高过面板」**（D-081 修的界面缺陷）：
+        // 左栏内容的高度**不是常量** ——「队伍」区会随村庄层级长行（升级选项 + 建筑选项），
+        // 按钮也从一个长到十一个 ⇒ 任何固定高度都会把底部的按钮挤出屏幕。
+        // 实测：11 个按钮里**只有 3 个能看见**，「发布任务 / 升级村庄 / 建围栏 /
+        // 建试炼塔 / 进试炼塔 / 存盘 / 读盘」全都点不到。
+        // ⇒ 左栏必须**可滚动** ⇒ 内容多高都能滚到。
+        Assertions.AssertThat(UiLayout.LeftColumnScrolls).IsTrue();
+    }
+
+    [TestCase]
+    public void ButtonCount_MatchesTheButtonsActuallyInTheCode()
+    {
+        // ⚠️ **以前这条是装饰性的**：`ButtonCount` 写着 7，而代码里早就有 10 个按钮
+        // ⇒ 「内容装得下」那条守卫一直绿着，而屏幕上的按钮**早被挤出去了**。
+        // ⇒ 现在直接**数代码里的 MakeButton( 调用数** ⇒ 这个数字从此漂移不了。
+        int actual = CountMakeButtonCalls();
+        Assertions.AssertThat(actual).IsEqual(UiLayout.ButtonCount);
+    }
+
+    /// <summary>数 <c>src/Main*.cs</c> 里真的建了多少个左栏按钮。</summary>
+    /// <returns>调用次数。</returns>
+    private static int CountMakeButtonCalls()
+    {
+        var srcDir = Path.Combine(RepoRoot(), "src");
+        int count = 0;
+        foreach (var file in Directory.EnumerateFiles(srcDir, "Main*.cs"))
+        {
+            foreach (var line in File.ReadAllLines(file))
+            {
+                string trimmed = line.TrimStart();
+                if (trimmed.StartsWith("//") || trimmed.StartsWith("///")) continue;
+                // ⚠️ **别把 MakeButton 的定义本身算进去**（它也含 "MakeButton("）。
+                if (trimmed.Contains("static Button MakeButton(", StringComparison.Ordinal)) continue;
+                if (trimmed.Contains("MakeButton(", StringComparison.Ordinal)) count++;
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>仓库根目录（测试程序集在 <c>tests/bin/...</c> 下）。</summary>
+    /// <returns>根目录路径。</returns>
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(
+            Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "Claude-Code-Game-Studios.csproj")))
+            {
+                return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new DirectoryNotFoundException("找不到仓库根目录");
     }
 
     [TestCase]

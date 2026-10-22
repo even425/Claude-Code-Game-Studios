@@ -121,6 +121,41 @@ public sealed class WorldEventInstance
     private readonly HashSet<string> _appliedConsequences = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// <b>实例状态</b>（字符串键 → 字符串值）—— 这一次的「可变部分」（D-081）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么需要它</b>：模板给的是<b>规则</b>，而有些规则需要「这一次还剩多少」
+    /// 才能算：商队带来 30 份货、卖掉 7 份 ⇒ 剩 23 份 ⇒ 这个「23」<b>必须随存档走</b>
+    /// （否则读档后又是 30 份 ⇒ 玩家能靠读档无限进货 ⇒ <b>限量就白限量了</b>）。</para>
+    /// <para>⚠️ <b>只读视图</b>（不变量 IT-27：领域层不得把可变集合暴露成公开属性）⇒
+    /// 外部只能读，写入走 <see cref="SetState"/>（唯一写入口）。</para>
+    /// </remarks>
+    public IReadOnlyDictionary<string, string> State => _state;
+
+    private readonly Dictionary<string, string> _state = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 写入一个实例状态（<b>唯一的写入口</b>）。
+    /// </summary>
+    /// <param name="key">状态键（不能为空）。</param>
+    /// <param name="value">状态值（不能为空）。</param>
+    /// <exception cref="ArgumentException">键或值为空。</exception>
+    public void SetState(string key, string value)
+    {
+        if (string.IsNullOrEmpty(key))
+        {
+            throw new ArgumentException("实例状态键不能为空。", nameof(key));
+        }
+
+        if (string.IsNullOrEmpty(value))
+        {
+            throw new ArgumentException("实例状态值不能为空。", nameof(value));
+        }
+
+        _state[key] = value;
+    }
+
+    /// <summary>
     /// 记下一个后果<b>已被应用</b>。
     /// </summary>
     /// <param name="key">后果键。</param>

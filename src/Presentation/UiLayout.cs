@@ -85,14 +85,31 @@ public static class UiLayout
     public const float ButtonMinHeight = 31f;
 
     /// <summary>
-    /// 左栏按钮个数。R-02 增加了「看摊位」，6 → 7。
+    /// 左栏按钮个数。<b>要跟着按钮一起改</b>（D-081 之后是 11 个）。
     /// </summary>
     /// <remarks>
-    /// <b>这个数字要跟着按钮一起改</b>：<see cref="LeftContentMinHeight"/> 用它算
-    /// 左栏内容的高度，加了按钮不改这里，内容就会溢出面板、底部按钮被挤出屏幕。
-    /// <c>UiLayoutTests.LeftPanel_ContentFitsItsHeight</c> 守着这条。
+    /// <para>⚠️ <b>这条以前是装饰性的</b>：<c>LeftContentMinHeight</c> 拿它算左栏高度，
+    /// 而<b>代码里真实的按钮数</b>早就跟它对不上了（写着 7、实际 10 个）⇒
+    /// 那条「内容不得高过面板」的守卫<b>一直绿着</b>，而屏幕上的按钮**早被挤出去了**。
+    /// ⇒ 现在 <c>UiLayoutTests</c> 直接**数代码里的 <c>MakeButton(</c> 调用数**并与它比对
+    /// ⇒ 这条数字从此**漂移不了</b>。</para>
+    /// <para>⚠️ <b>而且「内容装得下」已经不成立了</b>：左栏的「队伍」区会随村庄层级
+    /// 长出更多行（升级选项、建哪些建筑）⇒ 固定高度必然把底部的按钮挤出屏幕 ⇒
+    /// 左栏改成<b>可滚动</b>（见 <see cref="LeftColumnScrolls"/>）。</para>
     /// </remarks>
-    public const int ButtonCount = 7;
+    public const int ButtonCount = 11;
+
+    /// <summary>
+    /// 左栏<b>是否可滚动</b>：<b>是</b>（D-081 修的界面缺陷）。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么必须滚动</b>：左栏内容的高度<b>不是常量</b> ——
+    /// 「队伍」区会随村庄层级长行（升级选项 + 建筑选项），
+    /// 按钮也从一个长到十一个 ⇒ 任何固定高度都会把底部的按钮（存盘/读档）挤出屏幕
+    /// ⇒ 实测：11 个按钮里<b>只有 3 个能看见</b>，其余 8 个点不到。
+    /// ⇒ 改成滚动容器 ⇒ 内容多高都能滚到。
+    /// </remarks>
+    public const bool LeftColumnScrolls = true;
 
     /// <summary>
     /// 左栏内容的最小高度。两个标题 + 花名册 + 队伍文字 + 6 个按钮 + 9 个间隔。

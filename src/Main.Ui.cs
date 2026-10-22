@@ -47,13 +47,29 @@ public partial class Main : Node2D
 
         // === M8 v1.2 布局：三栏互不相交（几何全部来自 UiLayout，可被测试引用） ===
         // === 左栏：花名册 + 队伍 + 按钮   中间：地图条带   右栏：杂谈 ===
-        var left = new VBoxContainer
+        //
+        // ⚠️ **左栏是滚动的**（D-081 修的界面缺陷）：左栏内容的高度**不是常量** ——
+        // 「队伍」区会随村庄层级长行（升级选项 + 建筑选项），按钮也从一个长到十一个
+        // ⇒ 任何固定高度都会把底部的按钮挤出屏幕（实测：11 个按钮只有 3 个看得见，
+        // 「发布任务 / 升级村庄 / 建围栏 / 建试炼塔 / 进试炼塔 / 存盘 / 读盘」全都点不到）。
+        // ⇒ 外面套一层 ScrollContainer ⇒ 内容多高都能滚到。
+        //
+        // ⚠️ **ScrollContainer 放在场景根上（不是 VBox 里）** —— 它的最小尺寸恒为 (0,0)，
+        // 放在 VBox 里会被压成 0 高（2026-10-19「花名册没有名字」就是这一族）。
+        var leftScroll = new ScrollContainer
         {
             Position = new Vector2(UiLayout.LeftX, UiLayout.PanelTopY),
             Size = new Vector2(UiLayout.LeftW, UiLayout.PanelHeight),
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
         };
+        AddChild(leftScroll);
+
+        var left = new VBoxContainer
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+        };
+        leftScroll.AddChild(left);
         left.AddThemeConstantOverride("separation", (int)UiLayout.VBoxSeparation);
-        AddChild(left);
 
         left.AddChild(Header($"村里的人（点名字组队，上限 {SquadMax}）"));
         // 花名册是 ItemList 本身在滚动：最小高度给 UiLayout.RosterMinHeight，
@@ -93,6 +109,8 @@ public partial class Main : Node2D
         _btnSummon = MakeButton("招募一个人", left, OnSummonPaid);
         _btnStall = MakeButton("摆摊", left, OnStall);
         _btnMarket = MakeButton("看摊位", left, OnMarket);
+        // D-081：商队面板（商队来访期间才看得到货）。
+        _btnCaravan = MakeButton("看看商队", left, OnCaravan);
         _btnSave = MakeButton("存盘", left, OnSave);
         _btnLoad = MakeButton("读盘", left, OnLoad);
         // 修 Phase 1 自检写盘 bug：user:// → 本地路径

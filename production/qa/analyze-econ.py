@@ -84,6 +84,15 @@ def analyze(path, label, verbose=True):
         d["份"] += t.get("Qty") or 0
         d["金"] += t.get("Amount") or 0
 
+    # ── 大事件（D-083）：兽潮每 7 天动一次村库的钱与材料 ──
+    # ⚠️ **为什么单列**：它是村库收支的一个**来源**（赢了发、输了扣）⇒
+    # 不看它，就会把「村库的钱少了」当成谜 ⇒ **每次追问都先怀疑错方向**。
+    events = [r for r in rows if r.get("Kind") == "WorldEventSettled"]
+    event_won = sum(1 for r in events if r.get("Won"))
+    event_material = sum(r.get("MaterialDelta") or 0 for r in events)
+    event_gold = sum(r.get("GoldDelta") or 0 for r in events)
+    event_by_kind = Counter(r.get("Place") for r in events)
+
     # ── 未成原因 ──
     missed = [r for r in rows if r.get("Kind") == "ShoppingMissed"]
     reason_counter = Counter(r.get("Reason") for r in missed)
@@ -200,6 +209,9 @@ def analyze(path, label, verbose=True):
         "tax_ok": tax_ok, "last_carry": last_carry,
         "tax_amount": tax_amount, "tax_cut": tax_cut,
         "growth": growth,
+        "events": len(events), "event_won": event_won,
+        "event_material": event_material, "event_gold": event_gold,
+        "event_by_kind": dict(event_by_kind),
         "last_snap": snaps[-1] if snaps else None,
     }
 
@@ -209,6 +221,19 @@ def analyze(path, label, verbose=True):
         print(f"总行数        : {len(rows)}   类别 {dict(kinds)}")
         print(f"副本          : {len(settled)} 场，成功 {won}"
               + (f"（成功率 {won / len(settled) * 100:.2f}%）" if settled else ""))
+        if events:
+            span = days if days else 1
+            print(f"大事件        : {len(events)} 次，守住 {event_won}"
+                  f"（{event_won / len(events) * 100:.1f}%）"
+                  f"   材料净额 {event_material:+d} / 金币净额 {event_gold:+d}"
+                  f"   （{event_material / span:+.2f} 材料·天 / {event_gold / span:+.2f} 金·天）")
+            print("  按事件        : " + "  ".join(
+                f"{k} {v}次" for k, v in event_by_kind.most_common()))
+        else:
+            # ⚠️ **「0 次」也要说出来**：不写的话，读者会以为「没这条指标」而不是
+            # 「这段时间一次都没发生」⇒ 两种情况的排查方向完全不同
+            # （实测：兽潮在 37 人闲人阵容下**从不触发** ⇒ 标定里一条都没有）。
+            print("大事件        : **0 次**（这段时间一次都没发生）")
         if loot_rows:
             total = sum(drop_counter.values())
             print("掉落分布      : " + "  ".join(
@@ -290,7 +315,8 @@ def group_summary(name, samples):
     print(f"{'指标':<16}{'最小':>12}{'最大':>12}{'均值':>12}")
     for key in ["rows", "settled", "won", "loot_sessions", "trades", "qty",
                 "amount", "village_cut", "missed", "snaps", "conserve_ok",
-                "conserve_skip", "growth"]:
+                "conserve_skip", "growth", "events", "event_won",
+                "event_material", "event_gold"]:
         vals = [s[key] for s in samples if s.get(key) is not None]
         if not vals:
             print(f"{key:<16}{'(无数据)':>12}")

@@ -63,6 +63,14 @@ public readonly record struct CombatArchetype(string Name, int Attack, int Defen
 /// </list></para>
 /// <para><b>怪物的三档</b>一一对应副本的三个阶段（普通 = 遭遇一 · 精英 = 遭遇二 · 首领 = 最终目标），
 /// 怪物**会动手**（D-064）⇒ 才有「谁打谁」的 AI 与「英雄受伤」这条 §7.2 缺口。</para>
+///
+/// <para>🔴 <b>「贪」的缺口（D-084 补上的）</b>：游戏会创建三种性格
+/// （莽 / 傲 / 贪，见 <c>HeroFactory</c> 的世界表），而这张表原先<b>只有三种里的两种</b>。
+/// ⇒ 任何<b>贪</b>的英雄去算战斗属性都会**抛异常**：
+/// ① 兽潮的「守得住吗」预演每 7 天抛一次 ⇒ <b>那天的世界事件整段被跳过</b>；
+/// ② 采集里凡是队伍里有贪英雄的副本 ⇒ 被 <c>catch</c> <b>静默丢弃</b>
+/// （实测：1958 场副本结算里，约三分之一的英雄<b>从没参过战</b> ⇒ <b>标定数据一直是偏的</b>）。
+/// ⇒ 守门：<c>CombatParametersTests</c> 有一条「<b>游戏能创建的性格都必须在表里</b>」的断言。</para>
 /// </remarks>
 public static class CombatParameters
 {
@@ -72,6 +80,8 @@ public static class CombatParameters
         new("莽", 12, 3, 0),
         new("傲", 8, 8, 0),
         new("随手", 8, 6, 0),
+        // 「贪」：**D-084 补上的**（此前**表里没有它** ⇒ 详见类注释的「缺口」段）。
+        new("贪", 10, 5, 0),
     };
 
     /// <summary>投入度 → 生命。<b>攻 / 防那两列是 0</b>（攻 / 防由性格定）。</summary>

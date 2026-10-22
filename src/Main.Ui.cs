@@ -1161,6 +1161,9 @@ public partial class Main : Node2D
     /// `--shot=<路径>`：跑够一段时间后截一张图并退出。
     /// </summary>
     /// <remarks>
+    /// <para>⚠️ <b>截图前先跑多久</b>由 <c>--shotdelay=</c> 给（解析在 <c>Main.ResolveShotDelay</c>）：
+    /// 默认 0.5 秒只能拍到「开局那一刻」，而**很多有意义的东西要跑几天才出现**
+    /// （D-091 的村庄收购站：村庄升级攒够资产之后才开张）。</para>
     /// <para>⚠️ <b>为什么按「时间」而不是「帧数」计</b>：
     /// 原来写的是 <c>_shotFrame += (int)(dt * 60)</c> ⇒ <b>用帧数当时间</b>。
     /// 机器空闲时帧率极高（几百 fps ⇒ <c>dt × 60 &lt; 1</c>）
@@ -1180,7 +1183,7 @@ public partial class Main : Node2D
         if (_shotSeconds < 0) return;
 
         _shotSeconds += dt;
-        if (_shotSeconds >= 0.5)
+        if (_shotSeconds >= _shotDelay)
         {
             var img = GetViewport().GetTexture().GetImage();
             GD.Print($"SHOT saved: {_shotPath} err={img.SavePng(_shotPath)}");

@@ -503,6 +503,32 @@ public partial class Main : Node2D
     private double _shotSeconds = -1.0;
     private string _shotPath = "";
 
+    /// <summary>截图前要跑多久（秒）—— 由 <c>--shotdelay=</c> 给（默认 0.5 秒）。</summary>
+    private double _shotDelay = 0.5;
+
+    /// <summary>
+    /// 读 <c>--shotdelay=</c>（截图前先跑多久）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **为什么需要它**：默认的 0.5 秒只能拍到「开局那一刻」
+    /// （三个人、空村子）。而**有意义的画面要跑几天才出现**
+    /// （例如 D-091 的村庄收购站：村庄升级攒够资产之后才开张）
+    /// ⇒ 没有这个参数，证据图只能拍到「什么都还没发生」的村子。
+    /// </remarks>
+    private void ResolveShotDelay()
+    {
+        foreach (var a in OS.GetCmdlineUserArgs())
+        {
+            if (!a.StartsWith("--shotdelay=")) continue;
+            if (double.TryParse(a[11..], System.Globalization.NumberStyles.Float,
+                                System.Globalization.CultureInfo.InvariantCulture, out double delay)
+                && delay >= 0)
+            {
+                _shotDelay = delay;
+            }
+        }
+    }
+
     private static readonly Job[] Jobs =
     {
         new("北坡采石",     "石料", 14, 3f,  false),
@@ -559,6 +585,7 @@ public partial class Main : Node2D
         // 价格表（D-054 阶段 7）：**必须先于所有用价的服务**装载 ——
         // 摆摊、掉落、发放都拿同一张表，不能有的用外部表、有的用占位表。
         LoadPriceBook();
+        ResolveShotDelay();
 
         // D-091：村庄向村民采购建材（材料有了出口 ⇒ 闲人买来的材料不再是垃圾）。
         // ⚠️ **必须早于 BuildScene**（村庄升级服务在那里创建，而它要这个采购服务）

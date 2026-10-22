@@ -102,7 +102,7 @@ public class MainStructureTests
         "Refresh", "RefreshRoster", "RosterLine", "ShoppingNoteFor",
         "ActiveSitesText",   // D-082：顶栏显示在施工的几栋（表现层）
         "RefreshRelationSummary", "TierName",
-        "_UnhandledInput", "ProcessShot",
+        "_UnhandledInput", "ProcessShot", "ResolveShotDelay",
         "VisibleTextSnapshot",        // MT-04：玩家可见的界面文字快照（表现层）
         // 事件管道：领域事件 → 杂谈条目
         "Add", "PublishEvent", "Emit",

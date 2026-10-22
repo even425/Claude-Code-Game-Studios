@@ -458,6 +458,13 @@
     },
     {
       "file": "Main.cs",
+      "name": "_shotDelay",
+      "kind": "非参数",
+      "status": "初始值",
+      "note": "截图前先跑多久的初值（秒）—— 由 --shotdelay= 覆盖；只是截图工具的默认值，不参与任何玩法"
+    },
+    {
+      "file": "Main.cs",
       "name": "_shotSeconds",
       "kind": "非参数",
       "status": "哨兵",

@@ -89,6 +89,15 @@ CHECKS = [
         "forbid": ["FAIL"],
         "zeros": [],
     },
+    {
+        # D-088：商队成交在**真实游戏**里第一次跑一笔
+        # （标定里商队成交一直是 0 笔 ⇒ 这条规则只被单测验过）。
+        "name": "caravan",
+        "args": ["--caravan"],
+        "require": ["CARAVANTEST 钱对=True 货对=True ⇒ PASS"],
+        "forbid": ["FAIL"],
+        "zeros": [],
+    },
 ]
 
 

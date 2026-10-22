@@ -75,7 +75,7 @@ public class MainStructureTests
         "SelfTest", "RunEconomySelfTest", "RunClickSelfTest", "RunEventsSelfTest",
         "RunTradeSelfTest", "RunMarketSelfTest", "RunShoppingSelfTest",
         "RunGrantSelfTest", "RunRelationsSelfTest", "RunSaveSelfTest",
-        "RunDungeonSelfTest",
+        "RunDungeonSelfTest", "RunCaravanSelfTest",
         "SelfTestEnsurePresentAndIdle",   // 自检夹具：把英雄摆成「在场且空闲」
     };
 

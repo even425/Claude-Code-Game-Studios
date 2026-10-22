@@ -819,6 +819,7 @@ public partial class Main : Node2D
             return;
         }
         if (OS.GetCmdlineUserArgs().Contains("--market") && !_marketTestDone) RunMarketSelfTest();
+        if (OS.GetCmdlineUserArgs().Contains("--caravan") && !_caravanTestDone) RunCaravanSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--shop") && !_shopTestDone) RunShoppingSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a is "--save" or "--load") && !_saveTestDone)
         {
@@ -927,6 +928,9 @@ public partial class Main : Node2D
     private bool _dungeonTestDone;
     private bool _tradeTestDone;
     private bool _marketTestDone;
+
+    /// <summary><c>--caravan</c> 自检跑过了没（D-088：商队成交在真实游戏里的第一次）。</summary>
+    private bool _caravanTestDone;
     private bool _collectDone;
 
     /// <summary>采集目标天数（0 = 不采集）。</summary>

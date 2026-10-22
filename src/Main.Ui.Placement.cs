@@ -105,6 +105,37 @@ public partial class Main : Node2D
     }
 
     /// <summary>
+    /// 把「村里已建成的建筑」喂给视图，让玩家<b>看得见自己盖在哪</b>（D-093）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **为什么每帧都要做**：建筑是<b>玩家自己放</b>的（落点不固定）⇒ 地图上必须有它的位置，
+    /// 否则「放下之后」就再也找不到它了。
+    /// <para>⚠️ **只画标记不画房子**：村庄的房子是手绘装饰、不跟格位走 ⇒ 画房子就是撒谎。</para>
+    /// </remarks>
+    private void UpdateBuildingMarks()
+    {
+        var marks = new System.Collections.Generic.List<VillageView.VillageBuildingMark>();
+        foreach (var b in _villageModel.Buildings)
+        {
+            // ⚠️ **市集不算**：它是开局就有的、且它的「影响区」是整个村子
+            // （画出来会是一大块半透明 ⇒ 反而看不清玩家自己盖的围栏）。
+            if (b.Id.Value == "village_square") continue;
+            // ⚠️ **施工中也画**：玩家放下之后要看得见自己放在哪儿
+            // ⇒ 建成了（影响区开始生效）再变成「已建成」的颜色。
+            bool done = b.Status == ClaudeCodeGameStudios.Domain.Village.BuildingStatus.Completed;
+            bool building = b.Status == ClaudeCodeGameStudios.Domain.Village.BuildingStatus.UnderConstruction;
+            if (!done && !building) continue;
+
+            var definition = ClaudeCodeGameStudios.Domain.Village.BuildableBuildings.Find(b.Id);
+            string label = definition?.Name ?? b.Id.Value;
+            marks.Add(new VillageView.VillageBuildingMark(
+                b.GridX, b.GridY, b.AffectsAreaW, b.AffectsAreaH, label, done));
+        }
+
+        _village.SetBuildingMarks(marks);
+    }
+
+    /// <summary>
     /// 每帧更新放置预览（跟随鼠标）。
     /// </summary>
     /// <remarks>

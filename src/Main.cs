@@ -788,9 +788,11 @@ public partial class Main : Node2D
             VillagePurchaseRound();
 
             // 4c-0. 放置模式的预览跟随鼠标（D-093）。
-        UpdatePlacementPreview();
+            //     ⚠️ **已建建筑的标记不在这里更新** —— 那要**每帧**更新
+            //     （建筑是玩家当场放下的 ⇒ 只在日切更新就晚了一整天）。
+            UpdatePlacementPreview();
 
-        // 4c. 自主卖货（D-086）：背包里有可卖的东西就开摊 ⇒
+            // 4c. 自主卖货（D-086）：背包里有可卖的东西就开摊 ⇒
             //     没参与副本的人也有收入（否则他们的钱包永远是空的）。
             //     ⚠️ 与采集器**共用同一份**（`OpenStallsForIdleHeroes`）⇒ 测到的就是玩到的。
             OpenStallsForIdleHeroes();
@@ -824,6 +826,10 @@ public partial class Main : Node2D
 
         // 4b. 大事件（D-079）：按游戏日推进一次（触发 → 阶段 → 结算）。
         TickWorldEvents();
+
+        // 4b-1. 地图上「已建成的建筑」标记（D-093）—— **每帧**更新
+        //   （玩家随时可能放下新建筑 ⇒ 放在日切里会晚一整天才显示）。
+        UpdateBuildingMarks();
 
         // 5. 出征回来了没有
         if (Expending && _clock.AbsoluteHour >= _pendingEnd) ResolveExpedition();

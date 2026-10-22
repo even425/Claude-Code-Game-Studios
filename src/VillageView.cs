@@ -155,6 +155,31 @@ public partial class VillageView : Node2D
         QueueRedraw();
     }
 
+    /// <summary>地图上已建成建筑的标记（D-093：放下之后要看得见）。</summary>
+    private readonly List<VillageBuildingMark> _buildingMarks = new();
+
+    /// <summary>一个已建成建筑在地图上的标记。</summary>
+    /// <param name="GridX">格位 X。</param>
+    /// <param name="GridY">格位 Y。</param>
+    /// <param name="AffectsW">影响区 X 半径。</param>
+    /// <param name="AffectsH">影响区 Y 半径。</param>
+    /// <param name="Label">名字（画在标记上）。</param>
+    /// <param name="Done">已建成（影响区已生效）。</param>
+    public readonly record struct VillageBuildingMark(
+        int GridX, int GridY, int AffectsW, int AffectsH, string Label, bool Done = true);
+
+    /// <summary>设置「地图上已建成的建筑」标记。</summary>
+    /// <param name="marks">标记列表。</param>
+    public void SetBuildingMarks(IReadOnlyList<VillageBuildingMark> marks)
+    {
+        _buildingMarks.Clear();
+        if (marks is not null)
+        {
+            foreach (var m in marks) _buildingMarks.Add(m);
+        }
+        QueueRedraw();
+    }
+
     /// <summary>
     /// 把本节点的局部坐标换回格位（D-093）。
     /// </summary>
@@ -180,9 +205,84 @@ public partial class VillageView : Node2D
             return false;
         }
 
-        gridX = (int)MathF.Round(gx);
-        gridY = (int)MathF.Round(gy);
+        int gxi = (int)MathF.Round(gx);
+        int gyi = (int)MathF.Round(gy);
+
+        // ⚠️ **落点只能在可见的地图上**（D-093）。
+        // 地板是 0..MapW × 0..MapH；村庄的影响区（市集的）较大，连到地板之外
+        // ⇒ 若不限，玩家会在「空里」点一下就把楼房放了 ⇒ 地图上出现一个悬在半空的标记。
+        if (gxi < 0 || gxi >= MapW || gyi < 0 || gyi >= MapH)
+        {
+            gridX = gxi;
+            gridY = gyi;
+            return false;   // 不在地图上 ⇒ 没有落点
+        }
+
+        gridX = gxi;
+        gridY = gyi;
         return true;
+    }
+
+    /// <summary>
+    /// 画「影响区」（**裁到可见地图内**）。
+    /// </summary>
+    /// <param name="gridX">中心格位 X。</param>
+    /// <param name="gridY">中心格位 Y。</param>
+    /// <param name="affectsW">影响区 X 半径。</param>
+    /// <param name="affectsH">影响区 Y 半径。</param>
+    /// <param name="color">颜色（含 alpha）。</param>
+    /// <remarks>
+    /// ⚠️ **为什么要裁**：市集的影响区很大（11×11，中心在 (-5,-5)）
+    /// ⇒ 不裁的话，半透明区会覆盖到地图之外的「天空」里（看着像一层模糊的幕布）。
+    /// </remarks>
+    private void DrawAffectsArea(int gridX, int gridY, int affectsW, int affectsH, Color color)
+    {
+        if (affectsW <= 0 || affectsH <= 0) return;
+
+        int minX = Math.Max(0, gridX - (affectsW - 1));
+        int maxX = Math.Min(MapW, gridX + affectsW);
+        int minY = Math.Max(0, gridY - (affectsH - 1));
+        int maxY = Math.Min(MapH, gridY + affectsH);
+        if (minX >= maxX || minY >= maxY) return;
+
+        var area = new[]
+        {
+            P(minX, minY), P(maxX, minY), P(maxX, maxY), P(minX, maxY),
+        };
+        DrawPolygon(area, new[] { color });
+    }
+
+    /// <summary>画「已建成的建筑」：影响区（半透明）+ 一个带名字的标记。</summary>
+    /// <remarks>
+    /// ⚠️ <b>为什么要画</b>：玩家把围栏放下之后，影响区（摆摊能摆到哪儿）就是这次放置的价值
+    /// ⇒ 看不见就等于没放。只画「标记」而不画「房子」：房子是手绘装饰、不跟格位走。
+    /// </remarks>
+    private void DrawBuildingMarks()
+    {
+        foreach (var m in _buildingMarks)
+        {
+            if (m.AffectsW > 0 && m.AffectsH > 0)
+            {
+                int minX = m.GridX - (m.AffectsW - 1);
+                int maxX = m.GridX + (m.AffectsW - 1);
+                int minY = m.GridY - (m.AffectsH - 1);
+                int maxY = m.GridY + (m.AffectsH - 1);
+                var area = new[]
+                {
+                    P(minX, minY), P(maxX + 1, minY), P(maxX + 1, maxY + 1), P(minX, maxY + 1),
+                };
+                DrawPolygon(area, new[] { new Color(0.45f, 0.85f, 0.55f, 0.10f) });
+            }
+
+            var cell = new[]
+            {
+                P(m.GridX, m.GridY), P(m.GridX + 1, m.GridY),
+                P(m.GridX + 1, m.GridY + 1), P(m.GridX, m.GridY + 1),
+            };
+            // 已建成 = 蓝色；施工中 = 琥现色（「还没能用」）。
+            var mark = m.Done ? new Color(0.55f, 0.8f, 0.95f, 0.45f) : new Color(0.95f, 0.72f, 0.35f, 0.45f);
+            DrawPolygon(cell, new[] { mark });
+        }
     }
 
     /// <summary>画放置预览（合法 = 绿，非法 = 红）+ 影响区。</summary>
@@ -191,18 +291,8 @@ public partial class VillageView : Node2D
         if (_previewX == int.MinValue) return;
 
         // 影响区预览（半透明的大圆——围栏的作用就是「围墙能围到哪儿」）。
-        if (_previewAffectsW > 0 && _previewAffectsH > 0)
-        {
-            int minX = _previewX - (_previewAffectsW - 1);
-            int maxX = _previewX + (_previewAffectsW - 1);
-            int minY = _previewY - (_previewAffectsH - 1);
-            int maxY = _previewY + (_previewAffectsH - 1);
-            var area = new[]
-            {
-                P(minX, minY), P(maxX + 1, minY), P(maxX + 1, maxY + 1), P(minX, maxY + 1),
-            };
-            DrawPolygon(area, new[] { new Color(0.45f, 0.85f, 0.55f, 0.14f) });
-        }
+        DrawAffectsArea(_previewX, _previewY, _previewAffectsW, _previewAffectsH,
+            new Color(0.45f, 0.85f, 0.55f, 0.14f));
 
         var cell = new[]
         {
@@ -234,6 +324,9 @@ public partial class VillageView : Node2D
 
         items.Sort((a, b) => a.key.CompareTo(b.key));
         foreach (var it in items) it.draw();
+
+        // 已建成的建筑标记（影响区）先画。
+        DrawBuildingMarks();
 
         // 放置预览画在最上层（否则会被地面的楼房遮住）。
         DrawPlacementPreview();

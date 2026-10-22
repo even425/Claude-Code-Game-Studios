@@ -40,9 +40,10 @@ public partial class Main : Node2D
         GD.Print($"BUILDTEST 点「建围栏」后：放置模式={inPlacement}，还没开工={nothingStarted}");
 
         // ② 放到**合法**的格位：市集的影响区里、且没被占的地方。
-        //    市集在 (-5,-5)、影响区 11×11 ⇒ (-3,-3) 合法且没被占。
-        int gx = -3;
-        int gy = -3;
+        //    市集在 (-5,-5)、影响区 11×11 ⇒ (2,2) 合法、没被占，
+        //    **而且在可见地图上**（0..14 × 0..9）⇒ 标记会画在地图里，看得见。
+        int gx = 2;
+        int gy = 2;
         bool legal = _buildingService.CanPlaceAt(fence, gx, gy);
         PlacePendingAt(gx, gy);
 

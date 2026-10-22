@@ -639,8 +639,12 @@ public partial class Main : Node2D
 
         // 日常循环的初始化必须早于 OnSummon —— 它要往 _states 里加条目
         // 第三阶段 M2：随机源改为 Main._rng（可存档），社交目标与关系权重在此注入。
+        // ⚠️ **D-086**：采集的材料进**采集者自己的背包**（⇒ 能卖 ⇒ 才是个人收入），
+        // 不再直接进村庄材料池（那个池子已经过剩到 7.5 万份了）。
+        _gather = new ClaudeCodeGameStudios.Application.GatherService(_stallService, _priceBook);
         _life = new DailyLife(_rng, DailyLife.DefaultEffects(
-            n => Deposit(n), d => _buildProgress = MathF.Min(1f, _buildProgress + (float)d),
+            (actorId, n) => GatherFor(actorId, n),
+            d => _buildProgress = MathF.Min(1f, _buildProgress + (float)d),
             onSocial: OnSocialCompleted),
             activityDurationSeconds: _clock.SimSecondsPerDay * DailyLife.PlaceholderActionFractionOfDay,
             targetCandidates: SocialTargetCandidates,
@@ -728,6 +732,11 @@ public partial class Main : Node2D
                 GD.Print($"SOAK 第{_clock.Day}天 {_clock.Clock} 在村{_heroes.Count(h => h.Present)}/{_heroes.Count} " +
                          $"材料{Mat} 层级{_tier} 杂谈{_chronicle.Count}条 | " +
                          string.Join(" ", _chronicle.Recent(3)));
+
+            // 4c. 自主卖货（D-086）：背包里有可卖的东西就开摊 ⇒
+            //     没参与副本的人也有收入（否则他们的钱包永远是空的）。
+            //     ⚠️ 与采集器**共用同一份**（`OpenStallsForIdleHeroes`）⇒ 测到的就是玩到的。
+            OpenStallsForIdleHeroes();
 
             // 采集：副本 → 摆摊。**挂在日切上** —— 跟着真实游戏循环走，
             // 采集器只在日界插一脚，不自己推进时间（自己推进会跳过

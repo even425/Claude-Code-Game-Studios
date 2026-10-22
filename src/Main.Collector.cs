@@ -87,7 +87,9 @@ public partial class Main : Node2D
     private void CollectOneDay()
     {
         DispatchDungeonForCollection();
-        OpenStallsForCollection();
+        // ⚠️ **D-086**：开摊走**游戏的那一份**（`OpenStallsForIdleHeroes`），
+        // 不再是采集器自己的一套 ⇒ 「测到的」就是「玩到的」。
+        OpenStallsForIdleHeroes();
         UpgradeVillageForCollection();
         RecordEconomySnapshot();
     }
@@ -167,53 +169,15 @@ public partial class Main : Node2D
     }
 
     /// <summary>
-    /// 采集用摆摊：让每个有可售物品的英雄开一个摊。
+    /// 采集用摆摊：<b>已并入游戏的那一份</b>（D-086）。
     /// </summary>
     /// <remarks>
-    /// <b>一人一摊</b>（D-023）：先收旧摊再开新摊。
-    /// <b>一次摆 3 份</b>：留出多次成交的余地 —— 摆完就卖光，采不到价格分布。
+    /// ⚠️ 原来这里有**采集器自己的一套**开摊逻辑（还带一条「今天卖哪一样」的轮换）。
+    /// 那条轮换本是**压测专用**的做法，却决定了整个市场的商品分布
+    /// （实测：成交额一度有 87–91% 集中在布匹 ⇒ 是采集器规则主导的，不是游戏规则）。
+    /// ⇒ 现在它<b>升为游戏规则</b>，游戏与采集器<b>共用同一份实现</b>
+    /// （`OpenStallsForIdleHeroes`）⇒ <b>测到的就是玩到的</b>。
     /// </remarks>
-    private void OpenStallsForCollection()
-    {
-        var book = _priceBook;
-        int day = (int)_clock.Day;
-
-        for (int i = 0; i < _heroes.Count; i++)
-        {
-            var h = _heroes[i];
-            if (h.Away || h.ToSite) continue;
-
-            var existing = _stallService.GetStall(h.Id);
-            if (existing is not null && existing.Status != ClaudeCodeGameStudios.Domain.Stall.StallStatus.Closed)
-            {
-                _stallService.CloseStall(h.Id);
-            }
-
-            // ── D-054-07：多商品摆摊 ──
-            //
-            // **原策略**：摆 `Bag.Snapshot()` 里的**第一个**可售物品就 `break`。
-            // 于是「谁的背包里先有布匹，谁就卖布匹」→ 整个市场只有一个商品在流通
-            // （实测：成交额 87–91% 集中在布匹，**是采集器规则主导的**，不是游戏规则）。
-            //
-            // **新策略**：**按日轮换** —— 每个英雄按 `(日序 + 英雄序) % 可售物品数`
-            // 选今天卖哪一样。效果：① 三种材料都进市场；② 英雄能买到不同材料，
-            // 背包不会被单一商品占满（「在玩的钱」上限才真正可达）。
-            //
-            // **注意「一人一摊」（D-023）没有破**：一个英雄**仍然只有一个摊**，
-            // 轮换的是「今天这个摊卖什么」，不是「同时摆多个摊」。
-            var sellable = new List<ClaudeCodeGameStudios.Domain.Items.ItemId>();
-            foreach (var (item, count) in h.Bag.Snapshot())
-            {
-                if (book.IsSellable(item) && count >= 1) sellable.Add(item);
-            }
-
-            if (sellable.Count == 0) continue;
-
-            var chosen = sellable[(day + i) % sellable.Count];
-            long qty = Math.Min(3, h.Bag.Count(chosen));
-            _stallService.PlaceStall(h.Id, chosen, qty, _clock.Now);
-        }
-    }
 
     /// <summary>
     /// 采集用升级：<b>金库与材料都够就升一级</b>（D-054 阶段 3）。

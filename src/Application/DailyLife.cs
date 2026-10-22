@@ -237,7 +237,11 @@ public sealed class DailyLife
     }
 
     /// <summary>构造默认效果表：采集加材料、建屋推工地、社交交给调用方。</summary>
-    /// <param name="addMaterials">加材料。参数为加的份数。</param>
+    /// <param name="addMaterials">
+    /// 加材料。<b>参数 = (采集者的英雄标识, 加的份数)</b>。
+    /// ⚠️ **为什么带英雄标识**（D-086）：材料要进<b>采集者自己的背包</b>（⇒ 才能卖 ⇒ 才是收入），
+    /// 而「是谁采的」只有英雄标识说得准（名字可能重复）。
+    /// </param>
     /// <param name="advanceBuild">推进工地进度。参数为推进的比例。</param>
     /// <param name="onSocial">社交完成时的处理（写关系 + 发事件）；参数为发起者与目标。</param>
     /// <returns>活动标识 → 效果。</returns>
@@ -248,14 +252,14 @@ public sealed class DailyLife
     /// 让它编译期就暴露，而不是等到某个英雄第一次社交时炸掉。</para>
     /// </remarks>
     public static Dictionary<ActivityId, ActivityEffect> DefaultEffects(
-        Action<int> addMaterials, Action<double> advanceBuild,
+        Action<string, int> addMaterials, Action<double> advanceBuild,
         Action<string, HeroId> onSocial)
     {
         if (onSocial is null) throw new ArgumentNullException(nameof(onSocial));
 
         return new Dictionary<ActivityId, ActivityEffect>
         {
-            [new ActivityId("采集")] = (_, _, _) => addMaterials(1),
+            [new ActivityId("采集")] = (_, actor, _) => addMaterials(actor, 1),
             [new ActivityId("建屋")] = (_, _, _) => advanceBuild(PlaceholderBuildProgressPerAction),
             [new ActivityId("社交")] = (_, actor, target) => onSocial(actor, target),
         };

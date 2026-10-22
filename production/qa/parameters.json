@@ -408,6 +408,22 @@
       "status": "【已确认】D-080",
       "note": "D-080 拍板：商队带多少货（份）—— 限量是「不产生无限套利」的前提（低买高卖无限循环）",
       "value": "30"
+    },
+    {
+      "file": "Application/GatherService.cs",
+      "name": "GatheredAmountPerDay",
+      "kind": "参数",
+      "status": "【已确认】D-086",
+      "note": "自主采集一次得到的份数（每天 1 份石料）—— D-086 拍板：给没参与副本的人一个收入来源",
+      "value": "1"
+    },
+    {
+      "file": "Application/GatherService.cs",
+      "name": "StallQuantityPerOpen",
+      "kind": "参数",
+      "status": "【已确认】D-086",
+      "note": "自动开摊一次摆多少份（留出多次成交的余地）",
+      "value": "3"
     }
   ],
   "nonParameters": [

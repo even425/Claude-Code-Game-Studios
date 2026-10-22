@@ -39,9 +39,9 @@ public class MainStructureTests
             "_Process", "TickBuild", "TickIndependentBuilds", "OnIndependentBuildingCompleted",
             "TickWorldEvents", "InitWorldEvents", "ScaleBeastTideMonster", "BeastTideHeroStats",
             "ShouldTrigger", "BeastTideEffectiveTier", "RestoreWorldEvents",
-            "RunCollect", "CollectOneDay", "RunDailyShoppingIfNeeded",
+            "RunCollect", "CollectOneDay", "OpenStallsForIdleHeroes", "RunDailyShoppingIfNeeded",
             "DispatchDungeonForCollection", "DispatchOneDungeonForCollection",
-            "OpenStallsForCollection", "UpgradeVillageForCollection",
+            "UpgradeVillageForCollection",
         }),
         ("战斗执行", new[]
         {
@@ -50,7 +50,7 @@ public class MainStructureTests
         }),
         ("结算入账", new[]
         {
-            "RewardsFor", "ApplyWrites", "Deposit",
+            "RewardsFor", "ApplyWrites", "Deposit", "GatherFor",
             "EmitTradeCompleted", "EmitDungeonLooted",
             "ApplyWorldEventEffect", "ApplyVillageResourceChange",
         }),

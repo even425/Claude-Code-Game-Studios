@@ -129,8 +129,8 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 931</div>
-      <div class="d">全绿 · 新增 129 条</div>
+      <div class="v">802 <em>→</em> 938</div>
+      <div class="d">全绿 · 新增 136 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
@@ -139,8 +139,8 @@
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">27 <em>条</em></div>
-      <div class="d">D-057 … D-085</div>
+      <div class="v">28 <em>条</em></div>
+      <div class="d">D-057 … D-086</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -431,6 +431,14 @@
         ⇒ 顺带把基线 §14.3 那条验收<b>重新激活</b>了：它要的「防御设施改变了至少一项结算指标」现在<b>有指标可看</b>（守不守得住、资源多少）⇒ D-082 当时记的「暂不适用」已撤销。<br>
         ⚠️ 另外两件已拍板、但<b>还没实现</b>：副本难度保持 100%（不动）、<b>自主采集每天 1 份材料</b>（查代码发现它还差「材料进背包 + 自动卖出」两截 ⇒ 下一轮做）。</p>
         <div class="tags"><span class="tag">D-085</span><span class="tag">变异 4/4</span></div>
+      </li>
+      <li>
+        <div class="when">01:40</div>
+        <h3>没参与副本的人，也有了一条收入链</h3>
+        <p><b>自主采集</b>：空闲英雄自己采石伐木 ⇒ 材料进<b>他自己的背包</b>（每天 1 份）⇒ 背包里有可卖的就<b>自动开摊</b>（按价格表定价、5% 摊位费 ⇒ <b>不新造经济</b>）⇒ 别人买 ⇒ 他真的拿到钱。<br>
+        🔴 顺带修掉一个我自己造成的<b>回归</b>：把采集器与游戏「统一成同一份实现」时，我漏了「<b>卖光了就收摊重开</b>」那一步 ⇒ 摊子永远是空的 ⇒ <b>市场直接停摆</b>（成交 4867 笔 → <b>37 笔</b>）⇒ <b>标定当场抓到了它</b>。<br>
+        ⚠️ 但要如实说：<b>收入链闭合了，分布问题没解决</b>（英雄金币中位 6 → 4，最大 438 → 475）⇒ 我之前「根因是收入只来自副本」的诊断<b>只对了一半</b> ⇒ 真正的机制是<b>卖方与买方在转移</b>，而<b>没参与副本的人只有支出、没有产出</b>（他们的钱买材料，材料却囤在村库里）⇒ 下一个要拍板的问题是「<b>没参与的人买材料做什么</b>」。</p>
+        <div class="tags"><span class="tag">D-086</span><span class="tag">变异 5/5</span><span class="tag">分布仍待解</span></div>
       </li>
     </ol>
   </section>

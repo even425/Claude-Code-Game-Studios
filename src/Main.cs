@@ -303,6 +303,9 @@ public partial class Main : Node2D
     /// <summary>建造与试炼的接线（D-074：玩家命令 → 领域动作）。</summary>
     private ClaudeCodeGameStudios.Application.BuildingCoordinator _buildingCoordinator = null!;
 
+    /// <summary>召唤的扣费服务（D-077：召唤要花 100 金）。</summary>
+    private ClaudeCodeGameStudios.Application.SummonService _summonService = null!;
+
     /// <summary>给英雄钱包发金币的写入入口（D-054-01；记「累计发放」）。</summary>
     private ClaudeCodeGameStudios.Application.WalletGrantService _walletWriter = null!;
 
@@ -626,6 +629,10 @@ public partial class Main : Node2D
         _trialTower = new ClaudeCodeGameStudios.Application.TrialTowerService(_combat, _combat);
         _buildingCoordinator = new ClaudeCodeGameStudios.Application.BuildingCoordinator(
             _buildingService, _trialTower, id => _heroes.FirstOrDefault(h => h.Id.Value == id.Value));
+
+        // D-077：召唤要花 100 金（从村金库扣）。
+        _summonService = new ClaudeCodeGameStudios.Application.SummonService(
+            _villageModel, ClaudeCodeGameStudios.Application.Stall.StallService.Gold);
 
         // 日常循环的初始化必须早于 OnSummon —— 它要往 _states 里加条目
         // 第三阶段 M2：随机源改为 Main._rng（可存档），社交目标与关系权重在此注入。

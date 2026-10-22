@@ -90,7 +90,7 @@ public partial class Main : Node2D
         _btnBuildFence = MakeButton("建围栏", left, OnBuildFence);
         _btnBuildTower = MakeButton("建试炼塔", left, OnBuildTower);
         _btnTrialTower = MakeButton("进试炼塔", left, OnTrialTower);
-        _btnSummon = MakeButton("招募一个人", left, OnSummon);
+        _btnSummon = MakeButton("招募一个人", left, OnSummonPaid);
         _btnStall = MakeButton("摆摊", left, OnStall);
         _btnMarket = MakeButton("看摊位", left, OnMarket);
         _btnSave = MakeButton("存盘", left, OnSave);
@@ -447,40 +447,6 @@ public partial class Main : Node2D
         }
 
         _squad.Add(h);
-        Refresh();
-    }
-
-    private void OnSummon()
-    {
-        var s = HeroFactory.Summon();
-        // M7 / D-030：把 HeroId 同步到 HeroAgent（M2 挂账兑现）。
-        // **同一个 id 必须在 Add 之前算好**：原来 Agent 用 Add 前的 Count、Definition 用
-        // Add 后的 Count，于是两边恒差 1（h-0 vs h-1）。M4 之前没有任何东西同时引用两边，
-        // 直到摊位的 OwnerId（Agent）要去 heroes[]（Definition Id）里找引用才暴露。
-        //
-        // I1（同一 Id 只对应一个英雄实体）：Id 由 `HeroIdAllocator` 分配，
-        // **不用 `_heroes.Count`** —— 人数当序号在花名册连续时没问题，
-        // 但读档后花名册若缺一号（h-0 / h-2），下一个就会拿到 h-2 ⇒ **两个英雄同号**
-        // ⇒ 读档时两个状态映射到同一个实体（存档错乱，不是显示错乱）。
-        string id = _heroIds.Next();
-        s.Hero.AssignId(new HeroId(id));
-        _heroes.Add(s.Hero);
-        _states.Add(new HeroState(new HeroDefinition(
-            new HeroId(id), s.Hero.Name, s.WorldName,
-            preferenceWeights: new Dictionary<string, double>(StringComparer.Ordinal)
-            {
-                // 【待定 / P3-D05】性格影响「社交」活动权重；采集/建屋仍取恒等 1。
-                ["社交"] = SocialPreferenceWeight(s.Hero.Personality),
-            })));
-        _village.AddHero(s.Hero);
-        _village.HasPeople = true;
-        Emit(EvSummoned, s.Hero.Name, new[] { StHeroRoster },
-            new Dictionary<string, string>
-            {
-                ["world"] = s.WorldName, ["trait"] = s.Trait,
-                ["personality"] = s.Hero.Personality,
-            },
-            _ => Chronicle.Summoned((int)_clock.Day, s.Hero, s.WorldName, s.Trait).Text);
         Refresh();
     }
 
@@ -951,8 +917,13 @@ public partial class Main : Node2D
             _btnUpgrade.Disabled = !_upgradeService.CanUpgrade(_tier);
         }
 
-        _btnSummon.Disabled = false;
-        _btnSummon.Text = $"招募一个人（{_heroes.Count} 人在村里）";
+        // ---- 召唤按钮（D-077：花 100 金从村金库招人）----
+        // ⚠️ 按钮上**要写费用**：升级按钮已经这么做了（D-054-02 的教训：
+        // 只显示材料会让玩家以为「升级不要钱」）⇒ 召唤同理。
+        _btnSummon.Text = _summonService.CanSummon
+            ? $"招募一个人  ·  {SummonService.GoldCost}金（村金库 {_summonService.VillageGold}）"
+            : $"招募一个人（村金库不足 {_summonService.VillageGold}/{SummonService.GoldCost} 金）";
+        _btnSummon.Disabled = !_summonService.CanSummon;
 
         // ---- D-074：独立建筑的三个按钮 ----
         RefreshBuildButton(_btnBuildFence, BuildableBuildings.Fence);
@@ -1097,7 +1068,7 @@ public partial class Main : Node2D
         if (@event is not InputEventKey { Pressed: true } k) return;
         switch (k.Keycode)
         {
-            case Key.F: OnSummon(); break;
+            case Key.F: OnSummonPaid(); break;
             case Key.R: OnTask(); break;
             case Key.Q: OnUpgrade(); break;
         }

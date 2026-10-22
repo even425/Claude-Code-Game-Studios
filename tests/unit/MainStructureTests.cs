@@ -91,7 +91,7 @@ public class MainStructureTests
         "AgentOf", "IsOnMission", "IsPresent",
         "SocialTargetCandidates", "OnSocialCompleted", "SocialStageLine",
         "SocialPreferenceWeight",
-        "OnRosterItemActivated", "OnSummon", "OnTask", "OnUpgrade",
+        "OnRosterItemActivated", "OnSummon", "OnSummonPaid", "SummonHero", "OnTask", "OnUpgrade",
         "OnBuild", "OnBuildFence", "OnBuildTower", "OnTrialTower", "RefreshBuildButton",
         "OnStall", "OnStallConfirm", "OnMarket", "OnManualTradeCompleted",
         "OnSave", "OnLoad",

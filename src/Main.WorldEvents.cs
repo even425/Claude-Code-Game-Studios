@@ -49,9 +49,9 @@ public partial class Main : Node2D
     /// <see cref="BeastTideTuning.ScaledToTier"/> 放大）。
     /// </summary>
     /// <remarks>
-    /// ⚠️ **这些数是占位基准，不是拍板值** —— D-080 的数值待开发者拍板
-    /// （先跑标定实测出建议值）。取值理由：材料 40 ≈ 一次副本的材料（38），
-    /// 金币 20 ≈ 副本给英雄的金币量级（每人 5）。
+    /// ⚠️ **这些数是开发者拍板的**（D-080）：材料 40 ≈ 一次副本的材料量；
+    /// 输的数**刻意比赢的小得多**（15 / 8）—— 实测发现**弱阵容（挂机）无论缩放多少都守不住**
+    /// ⇒ 若损失够重，弱村子会**永久失血** ⇒ 失败代价必须温和。
     /// </remarks>
     private static readonly ClaudeCodeGameStudios.Application.BeastTideTuning BeastTideTuningBase =
         new()
@@ -69,19 +69,22 @@ public partial class Main : Node2D
     private const long WorldEventBeastTideGoldReward = 20;
 
     /// <summary>兽潮打输赔的材料（基准值；按村庄层级放大）。</summary>
-    private const long WorldEventBeastTideMaterialLoss = 30;
+    private const long WorldEventBeastTideMaterialLoss = 15;
 
     /// <summary>兽潮打输赔的金币（基准值；按村庄层级放大）。</summary>
-    private const long WorldEventBeastTideGoldLoss = 15;
+    private const long WorldEventBeastTideGoldLoss = 8;
 
     /// <summary>
-    /// 兽潮敌方的规模缩放：<b>每级村庄 +15%</b>（D-080 拍板「随村庄层级递增」）。
+    /// 兽潮敌方的规模缩放：<b>每级村庄 +8%</b>（D-080 拍板「随村庄层级递增」）。
     /// </summary>
     /// <remarks>
     /// ⚠️ **只缩放属性，不改怪的档位**（普通 / 精英 / 首领）⇒ 兽潮的「形状」不变，
     /// 只是更强 ⇒ 与「规模递增」而不是「换一种怪」相符。
+    /// <para>⚠️ **8% 是实测出来的**（不是拍脑袋）：兽潮 = 三阶段逐场打、30 回合超时判负。
+    /// 实测 3 人阵容：8% ⇒ 常规阵容到 5 级都守得住（精英阶段已 26–28 回合，逼近上限）；
+    /// 10% ⇒ 5 级时中等阵容**超时判负**；15% ⇒ 4 级就守不住 ⇒ 村子被自己的发展卡死。</para>
     /// </remarks>
-    private const int WorldEventBeastTideScalePercentPerTier = 15;
+    private const int WorldEventBeastTideScalePercentPerTier = 8;
 
     /// <summary>商队的报价（D-080：低于市价、限量、限时）。</summary>
     private static readonly ClaudeCodeGameStudios.Application.CaravanOffer CaravanOfferBase =

@@ -358,47 +358,47 @@
       "name": "WorldEventBeastTideScalePercentPerTier",
       "kind": "参数",
       "status": "【已确认】D-080",
-      "note": "兽潮规模随村庄层级递增的幅度（每级 +15%）—— D-080 拍板「随村庄层级递增」",
-      "value": "15"
+      "note": "D-080 拍板：兽潮规模随村庄层级递增的幅度（每级 +8 个百分点）—— 实测三档：8% 时常规阵容到五级仍守得住且精英阶段已逼近回合上限，10% 起五级超时判负，15% 四级就守不住",
+      "value": "8"
     },
     {
       "file": "Main.WorldEvents.cs",
       "name": "WorldEventBeastTideMaterialReward",
       "kind": "参数",
-      "status": "【待拍板】D-080",
-      "note": "兽潮打赢给的材料（基准值，按村庄层级放大）—— D-080 拍板「材料 + 金币」；**数值待开发者拍板**（此为方案值：约等于一次副本的材料量）",
+      "status": "【已确认】D-080",
+      "note": "D-080 拍板：兽潮打赢给的材料（基准值，按村庄层级放大）",
       "value": "40"
     },
     {
       "file": "Main.WorldEvents.cs",
       "name": "WorldEventBeastTideGoldReward",
       "kind": "参数",
-      "status": "【待拍板】D-080",
-      "note": "兽潮打赢给的金币（基准值，按村庄层级放大）—— D-080 拍板「材料 + 金币」；**数值待开发者拍板**",
+      "status": "【已确认】D-080",
+      "note": "D-080 拍板：兽潮打赢给的金币（基准值，按村庄层级放大）",
       "value": "20"
     },
     {
       "file": "Main.WorldEvents.cs",
       "name": "WorldEventBeastTideMaterialLoss",
       "kind": "参数",
-      "status": "【待拍板】D-080",
-      "note": "兽潮打输赔的材料（基准值，按村庄层级放大）—— D-080 拍板「只损资源，人畜无损」；**数值待开发者拍板**",
-      "value": "30"
+      "status": "【已确认】D-080",
+      "note": "D-080 拍板：兽潮打输赔的材料（基准值，按村庄层级放大）—— 刻意远小于奖励：实测弱阵容必守不住，代价太重会让弱村子永久失血",
+      "value": "15"
     },
     {
       "file": "Main.WorldEvents.cs",
       "name": "WorldEventBeastTideGoldLoss",
       "kind": "参数",
-      "status": "【待拍板】D-080",
-      "note": "兽潮打输赔的金币（基准值，按村庄层级放大）—— D-080 拍板「只损资源，人畜无损」；**数值待开发者拍板**",
-      "value": "15"
+      "status": "【已确认】D-080",
+      "note": "D-080 拍板：兽潮打输赔的金币（基准值，按村庄层级放大）",
+      "value": "8"
     },
     {
       "file": "Main.WorldEvents.cs",
       "name": "WorldEventCaravanDiscountPercent",
       "kind": "参数",
       "status": "【已确认】D-080",
-      "note": "商队的折扣（80 = 八折 = 低于市价）—— D-080 拍板「价格低于市价」；**数值待开发者拍板**",
+      "note": "D-080 拍板：商队的折扣（百分比；八十表示付市价的八成 = 低于市价）",
       "value": "80"
     },
     {
@@ -406,7 +406,7 @@
       "name": "WorldEventCaravanStock",
       "kind": "参数",
       "status": "【已确认】D-080",
-      "note": "商队带多少货（份）—— D-080 拍板「限时限量」；限量是「不产生无限套利」的前提（低买高卖无限循环）；**数值待开发者拍板**",
+      "note": "D-080 拍板：商队带多少货（份）—— 限量是「不产生无限套利」的前提（低买高卖无限循环）",
       "value": "30"
     }
   ],

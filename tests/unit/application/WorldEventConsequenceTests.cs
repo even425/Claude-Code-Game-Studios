@@ -32,8 +32,8 @@ public class WorldEventConsequenceTests
     {
         MaterialReward = 40,
         GoldReward = 20,
-        MaterialLoss = 30,
-        GoldLoss = 15,
+        MaterialLoss = 15,
+        GoldLoss = 8,
     };
 
     /// <summary>造一个兽潮模板：胜负由「英雄属性 vs 怪物属性」决定（战斗是确定的）。</summary>
@@ -153,33 +153,38 @@ public class WorldEventConsequenceTests
     /// D-080 ③：兽潮的<b>规模随村庄层级递增</b> —— 层级越高，怪越强。
     /// </summary>
     /// <remarks>
-    /// ⚠️ 断言的是<b>具体的强多少</b>（每级 +15% ⇒ 2 级 = ×1.30），
-    /// 不是「比上一层强」这种可被放宽的区间断言。
+    /// ⚠️ 断言的是<b>具体的强多少</b>，不是「比上一层强」这种可被放宽的区间断言。
+    /// <para>⚠️ <b>数字是整数截断后的真值</b>：缩放用整数百分比算
+    /// （<c>6 × 116 / 100 = 6.96 → 6</c>）⇒ 低层级的**攻击**几乎不动，
+    /// 变强主要体现在**生命**上（60 → 74 → 84）。
+    /// ⇒ 断言写的是**实测出来的**那个数，不是「按公式算出来应该多少」。</para>
     /// </remarks>
     [TestCase]
     public void BeastTide_StrongerAtHigherTier()
     {
         var baseStats = new CombatStats(6, 2, 60);
 
-        var tier0 = BeastTideScale.ScaleMonster(baseStats, tier: 0, percentPerTier: 15);
-        var tier2 = BeastTideScale.ScaleMonster(baseStats, tier: 2, percentPerTier: 15);
-        var tier5 = BeastTideScale.ScaleMonster(baseStats, tier: 5, percentPerTier: 15);
+        var tier0 = BeastTideScale.ScaleMonster(baseStats, tier: 0, percentPerTier: 8);
+        var tier3 = BeastTideScale.ScaleMonster(baseStats, tier: 3, percentPerTier: 8);
+        var tier5 = BeastTideScale.ScaleMonster(baseStats, tier: 5, percentPerTier: 8);
 
         // 层级 0 = 原样。
         Assertions.AssertThat(tier0.Attack).IsEqual(6);
         Assertions.AssertThat(tier0.Health).IsEqual(60);
 
-        // 2 级 = ×1.30（6 → 7.8 → 7；60 → 78）。
-        Assertions.AssertThat(tier2.Attack).IsEqual(7);
-        Assertions.AssertThat(tier2.Health).IsEqual(78);
+        // 3 级 = ×1.24（6 → 7.44 → 7；60 → 74.4 → 74）。
+        Assertions.AssertThat(tier3.Attack).IsEqual(7);
+        Assertions.AssertThat(tier3.Health).IsEqual(74);
 
-        // 5 级 = ×1.75（6 → 10.5 → 10；60 → 105）。
-        Assertions.AssertThat(tier5.Attack).IsEqual(10);
-        Assertions.AssertThat(tier5.Health).IsEqual(105);
+        // 5 级 = ×1.40（6 → 8.4 → 8；60 → 84）。
+        Assertions.AssertThat(tier5.Attack).IsEqual(8);
+        Assertions.AssertThat(tier5.Health).IsEqual(84);
 
         // 层级越高越强（单调）。
-        Assertions.AssertThat(tier5.Attack > tier2.Attack).IsTrue();
-        Assertions.AssertThat(tier2.Attack > tier0.Attack).IsTrue();
+        Assertions.AssertThat(tier5.Attack > tier3.Attack).IsTrue();
+        Assertions.AssertThat(tier3.Attack > tier0.Attack).IsTrue();
+        Assertions.AssertThat(tier5.Health > tier3.Health).IsTrue();
+        Assertions.AssertThat(tier3.Health > tier0.Health).IsTrue();
     }
 
     /// <summary>

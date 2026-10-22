@@ -36,6 +36,16 @@ public class BuildingServiceTests
         var village = new Village("test");
         village.Add(Gold, gold);
         village.Add(Material, material);
+        // 「市集」（真实游戏开局就有它，影响区 11×11）。
+        // ⚠️ **为什么夹具里要有它**（D-093）：
+        // 新规则「落点必须在村子的地盘里」守的是「落在至少一个已建成建筑的影响区里」
+        // ⇒ 没有市集就没有「村子的地盘」。
+        // 不放市集的夹具会让「能开工」这条断言失效。
+        village.TryPlace(new ClaudeCodeGameStudios.Domain.Village.BuildingInstance(
+            new ClaudeCodeGameStudios.Domain.Village.BuildingId("village_square"),
+            gridX: -5, gridY: -5, footprintW: 1, footprintH: 1,
+            constructionProgress: 1.0,
+            affectsAreaW: 11, affectsAreaH: 11));
         return (new BuildingService(village, Gold, Material), village);
     }
 
@@ -53,8 +63,10 @@ public class BuildingServiceTests
         Assertions.AssertThat(started).IsTrue();
         Assertions.AssertThat(village.Get(Gold)).IsEqual(500 - fence.GoldCost);
         Assertions.AssertThat(village.Get(Material)).IsEqual(400 - fence.MaterialCost);
-        Assertions.AssertThat(village.Buildings.Count).IsEqual(1);
-        Assertions.AssertThat(village.Buildings[0].Status).IsEqual(BuildingStatus.UnderConstruction);
+        Assertions.AssertThat(village.Buildings.Count).IsEqual(2);   // 市集 + 新建的那一栋
+        // ⚠️ **按标识取**（不用下标 0）：夹具里现在还有市集（D-093 的落点规则）。
+        var newBuilding = village.Buildings.First(b => b.Id.Value == fence.Id.Value);
+        Assertions.AssertThat(newBuilding.Status).IsEqual(BuildingStatus.UnderConstruction);
     }
 
     /// <summary>钱不够 ⇒ <b>材料也不许扣</b>（I15：两边都不扣）。</summary>
@@ -69,7 +81,7 @@ public class BuildingServiceTests
         Assertions.AssertThat(started).IsFalse();
         Assertions.AssertThat(village.Get(Gold)).IsEqual(10);
         Assertions.AssertThat(village.Get(Material)).IsEqual(400);   // ← 关键：材料没动
-        Assertions.AssertThat(village.Buildings.Count).IsEqual(0);
+        Assertions.AssertThat(village.Buildings.Count).IsEqual(1);   // 只有市集
     }
 
     /// <summary>材料不够 ⇒ 金币也不许扣（另一半）。</summary>
@@ -216,7 +228,7 @@ public class BuildingServiceTests
 
         service.TryStart(fence, workers: 1);
 
-        var building = village.Buildings[0];
+        var building = village.Buildings.First(b => b.Id.Value == fence.Id.Value);
         Assertions.AssertThat(building.Status).IsEqual(BuildingStatus.UnderConstruction);
         // 未建成 ⇒ 影响区判定一律 false（BuildingInstance.IsCellInAffectsArea）。
         Assertions.AssertThat(building.IsCellInAffectsArea(0, 0)).IsFalse();
@@ -233,7 +245,7 @@ public class BuildingServiceTests
         service.SetWorkers(fence.Id, 1);
         service.AdvanceConstruction(fence.BaseBuildHours);
 
-        var building = village.Buildings[0];
+        var building = village.Buildings.First(b => b.Id.Value == fence.Id.Value);
         Assertions.AssertThat(building.Status).IsEqual(BuildingStatus.Completed);
         Assertions.AssertThat(building.IsCellInAffectsArea(0, 0)).IsTrue();
     }

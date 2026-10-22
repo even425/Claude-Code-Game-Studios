@@ -129,8 +129,8 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 967</div>
-      <div class="d">全绿 · 新增 165 条</div>
+      <div class="v">802 <em>→</em> 973</div>
+      <div class="d">全绿 · 新增 171 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
@@ -139,8 +139,8 @@
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">34 <em>条</em></div>
-      <div class="d">D-057 … D-092</div>
+      <div class="v">35 <em>条</em></div>
+      <div class="d">D-057 … D-093</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -497,6 +497,18 @@
         这两条是<b>规则的副作用</b>，要不要抵消需要单独拍板。</p>
         <div class="tags"><span class="tag">D-092</span><span class="tag">分布拉平</span><span class="tag">真机自检已跟</span></div>
       </li>
+      <li>
+        <div class="when">07:05</div>
+        <h3>围栏不再固定在一处：玩家自己点地图选落点</h3>
+        <p>点「建围栏 / 建试炼塔」⇒ <b>进入放置模式</b>（不再直接开工）⇒ 鼠标移到哪儿，
+        就显示<b>半透明的落点标记</b>（绿 = 合法 / 红 = 非法）<b>和围栏的影响区预览</b> ⇒ 左键放下、右键或 Esc 取消。<br>
+        落点合不合法用<b>本来就有的两条规则</b>判：<b>不跟已有建筑重叠</b>（§13.7）+ <b>落在村子的地盘里</b>（与摆摊同一把尺子）⇒
+        <b>不新造任何机制</b>，只是把「落点由谁定」从常量改成了玩家的选择。<br>
+        ⚠️ 如实说清边界：<b>画面上画的是「标记」不是「房子」</b> —— 村庄的房子是手绘装饰、不跟格位走，
+        若把落点画成房子，玩家会以为看到的房子位置就是真实格位 ⇒ 那是个谎。
+        落点真正影响的是<b>规则</b>（围栏的影响区 = 摊位能摆到哪儿、占位冲突）。</p>
+        <div class="tags"><span class="tag">D-093</span><span class="tag">真机自检 --build</span><span class="tag">不需要新规则</span></div>
+      </li>
     </ol>
   </section>
 
@@ -527,7 +539,8 @@
     <div class="card">
       <ul class="open">
         <li><b>召唤设施的形态</b>（基线 §10.3）：第一版已定「<b>不设设施</b>」（D-078）⇒ B3 债<b>仍开着</b> —— 以后要改成建筑时，<b>必须先拍板名字</b></li>
-        <li><b>建造流程的下一层</b>：围栏与试炼塔现在是<b>固定落点</b>（还没让玩家选位置），且一次只能盖一样</li>
+        <li><b>围栏的房子仍是手绘装饰</b>：D-093 让玩家自己选落点了，但画面上的房子不跟格位走
+        ⇒ 落点影响的是<b>规则</b>（影响区/占位）而不是画面 —— 要让房子真的跟着走，是一个渲染大改</li>
         <li><b>副本的「参战动机」变弱了</b>：战利品全村共享（D-092）后，参战者只剩每人 X 金；
         另外流通金从「稳态」回到略有收缩（战利品不再进市场 ⇒ 五分税进少）。
         要不要抵消这两条，<strong>需要单独拍杼</strong></li>

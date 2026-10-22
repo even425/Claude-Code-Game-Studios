@@ -594,22 +594,9 @@ public partial class Main : Node2D
             return;
         }
 
-        // 施工队：**没被派去副本的人**去工地（副本里的人还在路上）。
-        // ⚠️ **只分到应得的那一份**（D-082：多栋同时施工）：开工时先按
-        // 「可用人力 ÷ (在建栋数 + 1)」给自己留一份，剩下的下一帧由
-        // `AssignWorkers` 统一分配 ⇒ 不会出现「同一批人同时算给两栋」。
-        int available = _heroes.Count(h => !h.Away && !h.ToSite && IsPresent(h));
-        int workers = available / (_buildingService.ActiveConstructions.Count + 1);
-        if (!_buildingService.TryStart(definition, workers))
-        {
-            GD.Print($"BUILD {definition.Name} 开工失败（资源或落点不满足）。");
-            Refresh();
-            return;
-        }
-
-        GD.Print($"BUILD {definition.Name} 开工：{definition.GoldCost}金 {definition.MaterialCost}材料，"
-                 + $"{workers} 人施工（一个人要 {definition.BaseBuildHours:0.#} 小时）。");
-        Refresh();
+        // ⚠️ **D-093：不再直接开工** ⇒ 改为「进入放置模式」，落点由玩家点地图决定。
+        // 资源与人力都在真正放下那一刻才结算（`PlacePendingAt`）。
+        BeginPlacement(definition);
     }
 
     private void OnBuildFence() => OnBuild(BuildableBuildings.Fence);
@@ -703,6 +690,15 @@ public partial class Main : Node2D
     /// </remarks>
     private void RefreshBuildButton(Button button, BuildableBuilding definition)
     {
+        // ⚠️ **D-093：正在放置时**，按钮改成「取消放置」⇒ 玩家知道怎么退出。
+        if (PendingPlacement is not null
+            && PendingPlacement.Value.Id.Value == definition.Id.Value)
+        {
+            button.Text = $"取消放下{definition.Name}";
+            button.Disabled = false;
+            return;
+        }
+
         if (_buildingService.IsCompleted(definition.Id))
         {
             button.Text = $"{definition.Name}（已建成）";
@@ -1108,16 +1104,6 @@ public partial class Main : Node2D
         3 => "有围墙的村子", 4 => "铁匠铺", _ => "王国第一的城",
     };
 
-    public override void _UnhandledInput(InputEvent @event)
-    {
-        if (@event is not InputEventKey { Pressed: true } k) return;
-        switch (k.Keycode)
-        {
-            case Key.F: OnSummonPaid(); break;
-            case Key.R: OnTask(); break;
-            case Key.Q: OnUpgrade(); break;
-        }
-    }
 
     /// <summary>
     /// MT-04（存档重载后的可见状态）：把**玩家能看到**的界面文字拍成一段文本。

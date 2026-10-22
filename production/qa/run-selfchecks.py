@@ -98,6 +98,14 @@ CHECKS = [
         "forbid": ["FAIL"],
         "zeros": [],
     },
+    {
+        # D-093：玩家自己选落点（接线层，单测验不到）。
+        "name": "build",
+        "args": ["--build"],
+        "require": ["BUILDTEST 落点由玩家定 ⇒ PASS"],
+        "forbid": ["FAIL"],
+        "zeros": [],
+    },
 ]
 
 

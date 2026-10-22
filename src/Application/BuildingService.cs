@@ -123,12 +123,62 @@ public sealed class BuildingService
     }
 
     /// <summary>
+    /// <b>落点合法性</b>（D-093：玩家自选落点时的两条规则）。
+    /// </summary>
+    /// <param name="definition">要建的建筑。</param>
+    /// <param name="gridX">落点的格位 X。</param>
+    /// <param name="gridY">落点的格位 Y。</param>
+    /// <returns>合法为 true。</returns>
+    /// <remarks>
+    /// <para>① <b>不与已有建筑重叠</b>（基线 §13.7「建筑坐标与占地冲突」）。</para>
+    /// <para>② <b>落在村子的地盘里</b>（落在至少一个已建成建筑的「影响区」里）
+    /// ⇒ 与摆摊用的是同一把尺子（摆摊位置守门）。</para>
+    /// <para>⚠️ <b>旧的默认落点也走这条规则</b>（围栏 -3,-3 / 试炼塔 -1,-3 都在市集的影响区里）
+    /// ⇒ 玩家自选不会把建筑建到村子外面。</para>
+    /// </remarks>
+    public bool CanPlaceAt(BuildableBuilding definition, int gridX, int gridY)
+    {
+        for (int dx = 0; dx < definition.FootprintW; dx++)
+        {
+            for (int dy = 0; dy < definition.FootprintH; dy++)
+            {
+                if (_village.IsOccupied(gridX + dx, gridY + dy)) return false;
+            }
+        }
+
+        bool inAnyAffects = false;
+        foreach (var b in _village.Buildings)
+        {
+            if (b.IsCellInAffectsArea(gridX, gridY)) { inAnyAffects = true; break; }
+        }
+
+        return inAnyAffects;
+    }
+
+    /// <summary>
     /// 开工：<b>扣资源 + 放置一个在建实例</b>（两边一起提交，I15）。
     /// </summary>
     /// <param name="definition">要建的建筑。</param>
     /// <param name="workers">参与施工的人数（0 也允许 —— 那就是停工）。</param>
     /// <returns>开工成功为 true；<b>失败时村庄状态完全不变</b>。</returns>
     public bool TryStart(BuildableBuilding definition, int workers)
+        => TryStartAt(definition, definition.GridX, definition.GridY, workers);
+
+    /// <summary>
+    /// 开工（<b>玩家自选落点</b>，D-093）。
+    /// </summary>
+    /// <param name="definition">要建的建筑。</param>
+    /// <param name="gridX">落点的格位 X。</param>
+    /// <param name="gridY">落点的格位 Y。</param>
+    /// <param name="workers">参与施工的人数（0 也允许 —— 那就是停工）。</param>
+    /// <returns>开工成功为 true；<b>失败时村庄状态完全不变</b>。</returns>
+    /// <remarks>
+    /// <para>⚠️ <b>为什么落点要另开一个入口</b>：旧的 <c>TryStart</c> 把落点写死在定义里
+    /// （<code>GridX/GridY</code>，那是一个「占位落点」，D-093 之前因为“不做玩家选位置”）
+    /// ⇒ 玩家一点也改不了。</para>
+    /// <para>⚠️ <b>落点合法性由 <see cref="CanPlaceAt"/>守</b>（不重叠 + 落在村子的地盘里）。</para>
+    /// </remarks>
+    public bool TryStartAt(BuildableBuilding definition, int gridX, int gridY, int workers)
     {
         if (workers < 0)
         {
@@ -136,6 +186,7 @@ public sealed class BuildingService
         }
 
         if (!CanStart(definition)) return false;
+        if (!CanPlaceAt(definition, gridX, gridY)) return false;
 
         // 扣款：**先校验两边，再一起扣**（I15 / I12）。
         //
@@ -160,7 +211,7 @@ public sealed class BuildingService
 
         var instance = new BuildingInstance(
             definition.Id,
-            definition.GridX, definition.GridY,
+            gridX, gridY,
             definition.FootprintW, definition.FootprintH,
             constructionProgress: 0.0,
             affectsAreaW: definition.AffectsAreaW,

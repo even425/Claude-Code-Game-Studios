@@ -787,7 +787,10 @@ public partial class Main : Node2D
             //     钱从村库出（预算 = 村库余额 − 下一级村庄升级所需金币）。
             VillagePurchaseRound();
 
-            // 4c. 自主卖货（D-086）：背包里有可卖的东西就开摊 ⇒
+            // 4c-0. 放置模式的预览跟随鼠标（D-093）。
+        UpdatePlacementPreview();
+
+        // 4c. 自主卖货（D-086）：背包里有可卖的东西就开摊 ⇒
             //     没参与副本的人也有收入（否则他们的钱包永远是空的）。
             //     ⚠️ 与采集器**共用同一份**（`OpenStallsForIdleHeroes`）⇒ 测到的就是玩到的。
             OpenStallsForIdleHeroes();
@@ -846,6 +849,7 @@ public partial class Main : Node2D
             return;
         }
         if (OS.GetCmdlineUserArgs().Contains("--market") && !_marketTestDone) RunMarketSelfTest();
+        if (OS.GetCmdlineUserArgs().Contains("--build") && !_buildTestDone) RunBuildSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--caravan") && !_caravanTestDone) RunCaravanSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--shop") && !_shopTestDone) RunShoppingSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a is "--save" or "--load") && !_saveTestDone)
@@ -955,6 +959,9 @@ public partial class Main : Node2D
     private bool _dungeonTestDone;
     private bool _tradeTestDone;
     private bool _marketTestDone;
+
+    /// <summary><c>--build</c> 自检跑过了没（D-093：玩家自选落点）。</summary>
+    private bool _buildTestDone;
 
     /// <summary><c>--caravan</c> 自检跑过了没（D-088：商队成交在真实游戏里的第一次）。</summary>
     private bool _caravanTestDone;

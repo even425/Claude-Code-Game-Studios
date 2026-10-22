@@ -33,6 +33,13 @@ public class ParallelConstructionTests
         var v = new Village("v1");
         v.Add(Gold, gold);
         v.Add(Material, material);
+        // 「市集」（真实游戏开局就有，影响区 11×11）。
+        // ⚠️ D-093：落点必须在村子的地盘里 ⇒ 夹具里没有市集就没有地盘。
+        v.TryPlace(new ClaudeCodeGameStudios.Domain.Village.BuildingInstance(
+            new ClaudeCodeGameStudios.Domain.Village.BuildingId("village_square"),
+            gridX: -5, gridY: -5, footprintW: 1, footprintH: 1,
+            constructionProgress: 1.0,
+            affectsAreaW: 11, affectsAreaH: 11));
         return v;
     }
 

@@ -75,7 +75,7 @@ public class MainStructureTests
         "SelfTest", "RunEconomySelfTest", "RunClickSelfTest", "RunEventsSelfTest",
         "RunTradeSelfTest", "RunMarketSelfTest", "RunShoppingSelfTest",
         "RunGrantSelfTest", "RunRelationsSelfTest", "RunSaveSelfTest",
-        "RunDungeonSelfTest", "RunCaravanSelfTest",
+        "RunDungeonSelfTest", "RunCaravanSelfTest", "RunBuildSelfTest",
         "SelfTestEnsurePresentAndIdle",   // 自检夹具：把英雄摆成「在场且空闲」
     };
 
@@ -96,6 +96,9 @@ public class MainStructureTests
         "SocialPreferenceWeight",
         "OnRosterItemActivated", "OnSummon", "OnSummonPaid", "SummonHero", "OnTask", "OnUpgrade",
         "OnBuild", "OnBuildFence", "OnBuildTower", "OnTrialTower", "RefreshBuildButton",
+        // D-093：玩家自选落点（放置模式）
+        "BeginPlacement", "CancelPlacement", "PlacePendingAt", "UpdatePlacementPreview",
+        "PendingPlacement",
         "OnStall", "OnStallConfirm", "OnMarket", "OnManualTradeCompleted",
         "OnCaravan", "OnCaravanBought",   // D-081：商队面板（玩家命令入口）
         "OnSave", "OnLoad",

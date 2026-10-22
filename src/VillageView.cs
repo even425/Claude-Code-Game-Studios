@@ -122,6 +122,97 @@ public partial class VillageView : Node2D
     public static Vector2 P(float x, float y, float z = 0f)
         => new Vector2((x - y) * (TW / 2f), (x + y) * (TH / 2f) - z);
 
+    // ---------------------------------------------------------------- 放置预览（D-093）
+
+    /// <summary>放置预览的格位（int.MinValue = 没有预览）。</summary>
+    private int _previewX = int.MinValue;
+    private int _previewY;
+    private bool _previewValid;
+    private int _previewAffectsW;
+    private int _previewAffectsH;
+
+    /// <summary>设置放置预览（格位 + 是否合法 + 影响区半径）。</summary>
+    /// <param name="gridX">格位 X。</param>
+    /// <param name="gridY">格位 Y。</param>
+    /// <param name="valid">这个落点合法吗。</param>
+    /// <param name="affectsW">影响区 X 半径。</param>
+    /// <param name="affectsH">影响区 Y 半径。</param>
+    public void SetPlacementPreview(int gridX, int gridY, bool valid, int affectsW, int affectsH)
+    {
+        _previewX = gridX;
+        _previewY = gridY;
+        _previewValid = valid;
+        _previewAffectsW = affectsW;
+        _previewAffectsH = affectsH;
+        QueueRedraw();
+    }
+
+    /// <summary>清掉放置预览。</summary>
+    public void ClearPlacementPreview()
+    {
+        if (_previewX == int.MinValue) return;
+        _previewX = int.MinValue;
+        QueueRedraw();
+    }
+
+    /// <summary>
+    /// 把本节点的局部坐标换回格位（D-093）。
+    /// </summary>
+    /// <param name="local">本节点局部坐标。</param>
+    /// <param name="gridX">格位 X。</param>
+    /// <param name="gridY">格位 Y。</param>
+    /// <returns>转换成功为 true。</returns>
+    /// <remarks>
+    /// <para>⚠️ <b>逆投影</b>：正投影是 <c>sx = (x - y) * TW/2</c>、<c>sy = (x + y) * TH/2</c>
+    /// ⇒ 反解：<code>x - y = sx / (TW/2)</code>、<code>x + y = sy / (TH/2)</code> ⇒ 两式相加相减再除 2。</para>
+    /// <para>⚠️ <b>只算地面（z = 0）</b>：建筑落在地上、不在空中 ⇒ 高度不影响落点。</para>
+    /// </remarks>
+    public static bool TryGridFromLocal(Vector2 local, out int gridX, out int gridY)
+    {
+        float a = local.X / (TW / 2f);      // x - y
+        float b = local.Y / (TH / 2f);      // x + y
+        float gx = (a + b) / 2f;
+        float gy = (b - a) / 2f;
+        if (!float.IsFinite(gx) || !float.IsFinite(gy))
+        {
+            gridX = 0;
+            gridY = 0;
+            return false;
+        }
+
+        gridX = (int)MathF.Round(gx);
+        gridY = (int)MathF.Round(gy);
+        return true;
+    }
+
+    /// <summary>画放置预览（合法 = 绿，非法 = 红）+ 影响区。</summary>
+    private void DrawPlacementPreview()
+    {
+        if (_previewX == int.MinValue) return;
+
+        // 影响区预览（半透明的大圆——围栏的作用就是「围墙能围到哪儿」）。
+        if (_previewAffectsW > 0 && _previewAffectsH > 0)
+        {
+            int minX = _previewX - (_previewAffectsW - 1);
+            int maxX = _previewX + (_previewAffectsW - 1);
+            int minY = _previewY - (_previewAffectsH - 1);
+            int maxY = _previewY + (_previewAffectsH - 1);
+            var area = new[]
+            {
+                P(minX, minY), P(maxX + 1, minY), P(maxX + 1, maxY + 1), P(minX, maxY + 1),
+            };
+            DrawPolygon(area, new[] { new Color(0.45f, 0.85f, 0.55f, 0.14f) });
+        }
+
+        var cell = new[]
+        {
+            P(_previewX, _previewY), P(_previewX + 1, _previewY),
+            P(_previewX + 1, _previewY + 1), P(_previewX, _previewY + 1),
+        };
+        var color = _previewValid ? new Color(0.45f, 0.9f, 0.55f, 0.5f) : new Color(0.9f, 0.35f, 0.3f, 0.5f);
+        DrawPolygon(cell, new[] { color });
+    }
+
     // ---------------------------------------------------------------- 主绘制
 
     public override void _Draw()
@@ -143,6 +234,9 @@ public partial class VillageView : Node2D
 
         items.Sort((a, b) => a.key.CompareTo(b.key));
         foreach (var it in items) it.draw();
+
+        // 放置预览画在最上层（否则会被地面的楼房遮住）。
+        DrawPlacementPreview();
     }
 
     private sealed class Item { public float X, Y; public Action<VillageView>? Draw; }

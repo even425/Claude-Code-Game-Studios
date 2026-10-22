@@ -163,8 +163,23 @@ public sealed record EconomyRow
     /// <summary>累计<b>发放</b>给英雄的金币（守恒律的「累计新增」）。</summary>
     public long? GoldGranted { get; init; }
 
-    /// <summary>累计<b>销毁</b>掉的金币（升级花掉的那些 → 变成建筑）。</summary>
+    /// <summary>累计<b>销毁</b>掉的金币（D-088：商队货款的 90%）。</summary>
+    /// <remarks>
+    /// ⚠️ **D-090 之前**这一项还包含「升级花掉的钱」—— 现在那部分改记
+    /// <see cref="VillageAsset"/>（钱变成了村庄的资产，仍然在世界上，而且可以再花）。
+    /// </remarks>
     public long? GoldSpent { get; init; }
+
+    /// <summary>
+    /// 快照日的<b>村庄资产余额</b>（金）—— D-090：升级沉淀下来的那部分。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **它是「余额」不是「累计」**：村庄收购站会把它花出去（换成村民的钱 + 村库的材料）⇒
+    /// 守恒律里必须用<b>余额</b>，否则等式对不上。
+    /// <para>⚠️ **旧样本没有这个字段**（`null`）⇒ 那时升级的钱被算作「销毁」⇒
+    /// 旧样本的等式是 <c>Σ英雄 + 村库 + 累计销毁</c>，**不要**给旧样本补这一项。</para>
+    /// </remarks>
+    public long? VillageAsset { get; init; }
 
     /// <summary>
     /// 其中<b>商队销毁</b>掉的那部分（D-088；已含在 <see cref="GoldSpent"/> 里）。
@@ -506,6 +521,7 @@ public sealed class EconomyLog : IDisposable
     /// <param name="heroGoldTopId">最富英雄的标识。</param>
     /// <param name="heroGoldTopName">最富英雄的名字。</param>
     /// <param name="caravanDestroyed">商队货款里<b>记为销毁</b>的那部分（D-088；已含在 <paramref name="goldSpent"/> 里）。</param>
+    /// <param name="villageAsset">快照日的<b>村庄资产余额</b>（D-090：升级沉淀下来的那部分）。</param>
     /// <returns>写入了就 true；文件已关就 false。</returns>
     /// <remarks>
     /// <b>为什么是「直写」而不是事件</b>：快照是<b>读数</b>（某一刻的经济状态），
@@ -530,7 +546,8 @@ public sealed class EconomyLog : IDisposable
         long? heroGoldMax = null,
         string? heroGoldTopId = null,
         string? heroGoldTopName = null,
-        long? caravanDestroyed = null)
+        long? caravanDestroyed = null,
+        long? villageAsset = null)
     {
         if (_writer is null) return false;
 
@@ -561,6 +578,7 @@ public sealed class EconomyLog : IDisposable
             HeroGoldTopId = heroGoldTopId,
             HeroGoldTopName = heroGoldTopName,
             CaravanDestroyed = caravanDestroyed,
+            VillageAsset = villageAsset,
         };
 
         _writer.WriteLine(JsonSerializer.Serialize(row, Options));

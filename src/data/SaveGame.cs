@@ -367,6 +367,32 @@ public sealed class BuildingSave
 /// <summary>整个存档。</summary>
 public sealed class SaveGame
 {
+    /// <summary>
+    /// <b>读档时要补记的「村庄资产」（D-090）</b> —— 多少。
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠️ **老档（0.9 及以前）没有「村庄资产」这一项**：那时升级花掉的钱
+    /// 被算作「<b>销毁</b>」⇒ 新语义下它其实是**村庄的资产**（钱变成了建筑，
+    /// 仍在世界上，而且可以再花）⇒ 读档后若不补记，那笔钱会「凭空消失」
+    /// ⇒ <b>守恒律对不上</b>（左边少了 <c>GoldSpentTotal</c> 那一份）。</para>
+    /// <para>⇒ <b>补记规则</b>：存档里**没有**「村庄资产」这一项 ⇒ 资产 = 累计升级花费；
+    /// **已经有了** ⇒ <b>不补</b>（否则会把「已被收购花掉的部分」又加回来）。</para>
+    /// <para>⚠️ **为什么放在这里（纯函数）**：读档逻辑住在表现层的 <c>Main</c> 里，
+    /// <b>没法单测</b> ⇒ 这条规则必须有一个<b>能被单测</b>的所在地。</para>
+    /// </remarks>
+    /// <param name="save">存档。</param>
+    /// <returns>要补记的金额；不需要补记时返回 0。</returns>
+    public static long VillageAssetToRestore(SaveGame save)
+    {
+        if (save is null) return 0L;
+        if (save.Village is null) return 0L;
+        if (save.Village.Resources is null) return 0L;
+
+        string assetKey = ClaudeCodeGameStudios.Application.VillageUpgradeService.Asset.Value;
+        if (save.Village.Resources.ContainsKey(assetKey)) return 0L;   // 新档：已有 ⇒ 不补
+        return save.GoldSpentTotal > 0 ? save.GoldSpentTotal : 0L;
+    }
+
     /// <summary>格式版本。</summary>
     public SaveVersion Version { get; set; } = SaveVersion.Current;
 

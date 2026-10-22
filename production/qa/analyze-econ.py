@@ -120,12 +120,16 @@ def analyze(path, label, verbose=True):
     snaps = [r for r in rows if r.get("Kind") == "EconomySnapshot"]
     snaps.sort(key=lambda r: r.get("Day") or 0)
 
-    # 货币守恒（流通口径）：Σ英雄金币 + 村库 + 已销毁 = 初始 + 累计发放
+    # 货币守恒（流通口径）：Σ英雄金币 + 村库 + 村庄资产 + 已销毁 = 初始 + 累计发放
     #   ⚠️ **不含「待发零头」** —— 它是「已挣到但还没进钱包」的**应收**，
     #      钱**还没在任何钱包里**，所以它不在这条等式的任何一边。
     #      （把它只加在右边 = 凭空多算那部分钱；2026-10-20 的 37 人探针
     #        正是这样差出了整整一个零头：3810 vs 3820。）
     #   ⚠️ **不含「税额余数」** —— 余数是记账零头，不是钱（钱在买卖双方之间完整转移）。
+    #   ⚠️ **「村庄资产」（D-090）**：升级村庄花掉的钱**没有被烧掉** —— 它变成了
+    #      村庄的建筑（资产），仍在世界上，而且**可以再花**（村庄收购站花的就是它）
+    #      ⇒ 它在等式的**左边**，与「已销毁」是两项不同的科目。
+    #      **旧样本没有这一项**（那时升级的钱被算作「已销毁」）⇒ 用 `or 0` 兼容。
     #   全部换算到「1/100 金」单位做整数比较，避免分数带来的浮点误差。
     conserve_ok = 0
     conserve_skip = 0     # 早期样本没有账本科目（存档 < 0.6），不参与核对
@@ -135,6 +139,7 @@ def analyze(path, label, verbose=True):
             conserve_skip += 1
             continue
         lhs = ((s.get("HeroGoldTotal") or 0) + (s.get("VillageGold") or 0)
+               + (s.get("VillageAsset") or 0)
                + (s.get("GoldSpent") or 0)) * 100
         rhs = ((s.get("HeroCount") or 0) * 100 + (s.get("GoldGranted") or 0)) * 100
         if lhs == rhs:

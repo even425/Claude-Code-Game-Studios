@@ -255,4 +255,41 @@ public class VillagePurchaseServiceTests
         Assertions.AssertThat(bought).IsEqual(4);
         Assertions.AssertThat(village.Get(GoldResource)).IsEqual(50);
     }
+
+    /// <summary>
+    /// 🔴 <b>预算不足时，待售账必须留着</b>（明天还能收）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **这里曾经是个真 bug**：早先的实现「处理完就清掉待售账」
+    /// ⇒ 村库的钱一不够，那批采集品就<b>永远失去被收的机会</b>
+    /// （实测：预算不足的那 200 天里，收购站只开张 23 笔 —— 绝大多数待售品被「扔掉」了）。
+    /// ⇒ 现在只扣**买走的那几份**，没买走的继续等。
+    /// </remarks>
+    [TestCase]
+    public void Purchase_KeepsThePendingWhenTheBudgetIsNotEnough()
+    {
+        // tier 0 ⇒ 保留 50；村库 10 ⇒ 预算 0 ⇒ 一份都买不起。
+        var (village, heroes, service, _) = MakeScene(villageGold: 10, tier: 0, (Alice, 3, 0));
+
+        service.NoteGathered(Alice, 3);
+        var records = service.RunRound(day: 5, heroes.Values);
+
+        Assertions.AssertThat(records.Count).IsEqual(0);
+        // ⚠️ 待售账**还在** ⇒ 等村库有钱了还能收。
+        Assertions.AssertThat(service.PendingFor(Alice)).IsEqual(3);
+        Assertions.AssertThat(heroes[Alice].Bag.Count(Stone)).IsEqual(3);
+    }
+
+    /// <summary>货已经不在背包里（卖掉 / 用掉）⇒ 待售账作废。</summary>
+    [TestCase]
+    public void Purchase_ClearsThePendingWhenTheGoodsAreGone()
+    {
+        var (_, heroes, service, _) = MakeScene(villageGold: 500, tier: 0, (Alice, 0, 0));
+
+        service.NoteGathered(Alice, 3);      // 记了 3 份，但背包里没有货
+        var records = service.RunRound(day: 5, heroes.Values);
+
+        Assertions.AssertThat(records.Count).IsEqual(0);
+        Assertions.AssertThat(service.PendingFor(Alice)).IsEqual(0);
+    }
 }

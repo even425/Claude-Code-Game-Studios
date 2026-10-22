@@ -23,6 +23,20 @@ namespace ClaudeCodeGameStudios.Application;
 /// </remarks>
 public sealed class VillageUpgradeService
 {
+    /// <summary>
+    /// <b>村庄资产</b>的资源种类（D-090）—— 升级村庄花掉的金币<b>不再是「销毁」</b>，
+    /// 而是<b>变成村庄的资产</b>（石板路、旗、房子），记在这个池子里。
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠️ **为什么改**（D-090，开发者拍板）：升级花掉的钱<b>没有被烧掉</b> ——
+    /// 它变成了村庄的一部分 ⇒ 守恒律里它<b>仍然在左边</b>（只是从「村库金币」挪到了「村庄资产」）
+    /// ⇒ 而这笔资产<b>可以再花</b>（村庄收购站花的就是它）
+    /// ⇒ 否则「村庄升级」与「村庄收购」会<b>抢同一笔钱</b>：
+    /// 村库的钱恰好在攒下一级升级 ⇒ 收购预算恒为 0 ⇒ 收购站<b>永远开不了张</b>
+    /// （实测：200 天只开张 2~5 笔）。</para>
+    /// </remarks>
+    public static readonly ResourceId Asset = new("村庄资产");
+
     /// <summary>一次升级的成本。</summary>
     /// <param name="Gold">金币（D-054 裁决 ⑤）。</param>
     /// <param name="Material">材料（既有规则 <c>30 + tier × 25</c>）。</param>
@@ -74,12 +88,13 @@ public sealed class VillageUpgradeService
     }
 
     /// <summary>
-    /// 累计<b>销毁</b>掉的金币（升级花掉的那些）。
+    /// 累计<b>投进村庄资产</b>的金币（升级花掉的那些 → 变成建筑）。
     /// </summary>
     /// <remarks>
     /// 守恒律（<b>流通口径</b>）要用：
-    /// `Σ英雄钱包金币 + 村库金币 + 累计销毁金币 = 初始金币 + 累计发放金币`。
-    /// 金库只进不出时，<b>已销毁金币 = 累计升级花费</b>。
+    /// `Σ英雄钱包金币 + 村库金币 + 村庄资产 + 累计销毁金币 = 初始金币 + 累计发放金币`。
+    /// ⚠️ **D-090 之前**，升级花掉的这些钱被算作「<b>销毁</b>」⇒ 现在改成
+    /// 「<b>村庄资产</b>」—— 它们仍然在世界上（只是变成了建筑），而且<b>可以再花</b>。
     /// <para>
     /// ⚠️ 那条等式<b>不含「税额余数」</b>（记账零头，不是钱），
     /// <b>也不含「待发零头」</b>（还没进钱包的应收）—— 两者都不是钱在的地方。
@@ -144,13 +159,20 @@ public sealed class VillageUpgradeService
 
         var cost = CostFor(tier);
 
-        // 提交：金币先走（它是「销毁」的那一份，要记进累计）
+        // 提交顺序（D-090）：
+        // ① **资产入池先做**（`Village.Add` 是唯一可能抛的一步：checked 溢出）
+        //    ⇒ 抛的时候金币还没扣 ⇒ **没有半笔账**。
+        // ② 金币出账（预检已过 ⇒ 不会失败）。
+        // ③ 材料出账。
+        _village.Add(Asset, cost.Gold);
+
         if (!_village.TrySpend(_gold, cost.Gold)) return false;
 
         if (!_village.TrySpend(_material, cost.Material))
         {
             // 理论不可达（预检已过，且期间没有别的写者）。真到了这里也要把账做平。
             _village.Add(_gold, cost.Gold);
+            _village.TrySpend(Asset, cost.Gold);   // 资产那一份也要退回去
             return false;
         }
 

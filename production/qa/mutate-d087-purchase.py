@@ -133,8 +133,8 @@ def main() -> int:
     results.append(mutate(
         "不扣村库的钱（收购凭空造钱）",
         SERVICE,
-        "        if (!_village.TrySpend(_gold, amount)) return false;",
-        "        // 变异：村库不出钱\n        if (false) return false;",
+        "        if (fromCash > 0 && !_village.TrySpend(_gold, fromCash)) return false;",
+        "        // 变异：现金不出账\n        if (fromCash > 0 && false) return false;",
     ))
 
     # ── ② 不管是不是采集品（副本掉的石料也被收走 ⇒ 市场被挤掉）⇒ 必须红 ─

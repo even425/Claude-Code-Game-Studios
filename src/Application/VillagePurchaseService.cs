@@ -37,9 +37,11 @@ public readonly record struct VillagePurchaseRecord(
 /// ⇒ 只收「采集来的」那一份（<see cref="GatherService.GatheredItemId"/>），
 /// 副本掉落物仍然走市场。</para>
 ///
-/// <para><b>预算规则（D-087 拍板）</b>：<b>村库余额 − 下一级村庄升级所需金币</b>。
-/// ⇒ 村庄发展不被抽空：村库要先攒够升级的钱，余下的才拿去收购。
-/// 已到最高级 ⇒ 没有「下一级」⇒ 保留金为 0。</para>
+/// <para><b>预算规则（D-087 拍板，D-090 补燃料）</b>：<b>村库余额 − 下一级村庄升级所需金币</b>，
+/// <b>再加上村庄资产</b>（D-090：升级花掉的钱不再是「销毁」，而是变成村庄的资产 ⇒ 可以再花）。
+/// ⇒ 村庄发展不被抽空：现金里永远留着下一级升级的钱；
+/// 而<b>升级沉淀下来的资产</b>就是收购站的燃料
+/// （否则两条规则抢同一笔钱 ⇒ 实测 200 天只开张 2~5 笔）。已到最高级 ⇒ 没有「下一级」⇒ 保留金为 0。</para>
 ///
 /// <para><b>不发明数值</b>：本类里<b>没有任何一个经济数值</b> ——
 /// 单价来自价格表（<see cref="PriceBook"/>），保留金来自升级成本表
@@ -104,8 +106,16 @@ public sealed class VillagePurchaseService
         }
     }
 
-    /// <summary>今天最多能花多少钱收购（村库余额 − 保留金；不小于 0）。</summary>
-    public long Budget => Math.Max(0L, _village.Get(_gold) - Reserve);
+    /// <summary>
+    /// 村庄资产（D-090）—— 升级沉淀下来的钱，收购站花的就是它。
+    /// </summary>
+    private static readonly ResourceId Asset = VillageUpgradeService.Asset;
+
+    /// <summary>今天最多能花多少钱收购（资产 + 现金里超出保留金的部分；不小于 0）。</summary>
+    public long Budget => _village.Get(Asset) + CashRoom;
+
+    /// <summary>村库里<b>可以动用的现金</b>（余额 − 保留金；不小于 0）。</summary>
+    public long CashRoom => Math.Max(0L, _village.Get(_gold) - Reserve);
 
     /// <summary>最近一次收购轮次所在的游戏日（0 = 还没跑过）。</summary>
     public int LastRunDay { get; private set; }
@@ -169,21 +179,30 @@ public sealed class VillagePurchaseService
             long pending = PendingFor(hero.Id);
             if (pending <= 0) continue;
 
-            // 处理完（不论成交与否）就<b>清掉待售账</b>：
-            // 没被收走的那些会随背包里的东西去摆摊（市场消化），
-            // 若不清账，明天就会把「副本掉的石料」误当成采集品收走。
-            _pending.Remove(hero.Id);
-
             long inBag = hero.Bag.Count(item);
+            if (inBag <= 0)
+            {
+                // 背包里已经没有采集品了（卖掉 / 用掉）⇒ 待售账作废。
+                _pending.Remove(hero.Id);
+                continue;
+            }
+
             long qty = Math.Min(pending, inBag);
-            if (qty <= 0) continue;
 
             long affordable = budget / price;
             long buyQty = Math.Min(qty, affordable);
-            if (buyQty <= 0) continue;                    // 预算不够 ⇒ 这批不收
+            if (buyQty <= 0) continue;   // 预算不够 ⇒ **保留待售账**，明天再收
 
             long amount = buyQty * price;
             if (!TrySettle(hero, item, buyQty, amount)) continue;
+
+            // 只扣掉**买走的**那几份 ⇒ 没买走的留在待售账里，等预算够了再收。
+            // ⚠️ **不能在这里把待售账清空**：村库的钱常常不够（预算 = 资产 + 现金余量），
+            // 一清空，那些采集品就**永远**没有第二次被收的机会
+            // （实测：预算不足的那 200 天里，收购站只开张 23 笔 —— 绝大多数待售品被「扔掉」了）。
+            long left = pending - buyQty;
+            if (left > 0) _pending[hero.Id] = left;
+            else _pending.Remove(hero.Id);
 
             budget -= amount;
             records.Add(new VillagePurchaseRecord(hero.Id, PurchasedItemId, buyQty, amount));
@@ -203,15 +222,18 @@ public sealed class VillagePurchaseService
     /// <returns>成交了？</returns>
     /// <remarks>
     /// <para><b>四步</b>：① 算新背包（不提交）② 算新钱包（不提交）
-    /// ③ <b>村库先动</b>（材料入池 + 金币出账）④ 写回英雄的背包与钱包。</para>
+    /// ③ <b>村库先动</b>（材料入池 + 资产/现金出账）④ 写回英雄的背包与钱包。</para>
     ///
     /// <para>⚠️ **材料入池放最前面**：<c>Village.Add</c> 用 checked 算术，
-    /// 池子接近上限时会抛 ⇒ 抛的时候<b>金币还没出账、英雄还没拿到钱</b> ⇒ 没有半笔账。
+    /// 池子接近上限时会抛 ⇒ 抛的时候<b>钱还没出账、英雄还没拿到钱</b> ⇒ 没有半笔账。
     /// （反过来先扣钱再加材料，抛出来就是「钱扣了、货没到」。）</para>
     ///
-    /// <para>⚠️ **金币出账在材料入池之后**：它不可能失败（余额已校验过，
-    /// 而材料入池不动金币）⇒ 万一它返回 false（不可达），结果是
-    /// 「村庄白得一份材料、英雄没拿到钱」—— <b>钱没有凭空消失</b>。</para>
+    /// <para>⚠️ **钱从两个池子里出（D-090）**：先出<b>现金</b>里超出保留金的部分
+    /// （那一部分是真正的闲钱），不够再出<b>村庄资产</b>（升级沉淀下来的那部分）。
+    /// ⇒ 现金里<b>永远留着下一级升级的钱</b> ⇒ 村庄发展不会被抽空。</para>
+    ///
+    /// <para>⚠️ **出账不可能失败**（余额都已校验过，而材料入池不动钱）⇒ 万一它返回
+    /// false（不可达），结果是「村庄白得一份材料、英雄没拿到钱」—— <b>钱没有凭空消失</b>。</para>
     /// </remarks>
     private bool TrySettle(HeroAgent hero, ItemId item, long qty, long amount)
     {
@@ -224,8 +246,12 @@ public sealed class VillagePurchaseService
         // ① 材料进村库（唯一可能抛的一步：checked 溢出）
         _village.Add(_material, qty);
 
-        // ② 村库出账（余额已校验 ⇒ 不会失败）
-        if (!_village.TrySpend(_gold, amount)) return false;
+        // ② 钱出账：先现金（超出保留金的部分），再资产
+        long fromCash = Math.Min(amount, CashRoom);
+        long fromAsset = amount - fromCash;
+        if (_village.Get(Asset) < fromAsset) return false;   // 理论不可达（预算已算过）
+        if (fromAsset > 0 && !_village.TrySpend(Asset, fromAsset)) return false;
+        if (fromCash > 0 && !_village.TrySpend(_gold, fromCash)) return false;
 
         // ③ 写回英雄（不可失败的赋值）
         hero.ApplyTradeResult(newWallet, newBag);

@@ -206,6 +206,16 @@ public partial class Main : Node2D
             else if (diff < 0) _villageModel.TrySpend(new ResourceId(id), -diff);
         }
 
+        // ── D-090：老档里「升级花掉的钱」被算作**销毁** ⇒ 新语义下它是**村庄资产** ──
+        // ⚠️ **老档没有「村庄资产」这一项** ⇒ 读档后那笔钱会「凭空消失」
+        // （守恒律对不上：左边少了 GoldSpentTotal 那一份）。
+        // ⇒ 补记规则住在 `SaveGame.VillageAssetToRestore`（**纯函数，可单测**）。
+        long legacyAsset = ClaudeCodeGameStudios.Data.SaveGame.VillageAssetToRestore(save);
+        if (legacyAsset > 0)
+        {
+            _villageModel.Add(ClaudeCodeGameStudios.Application.VillageUpgradeService.Asset, legacyAsset);
+        }
+
         // ── 花名册：整份替换，不追加 ──
         _heroes.Clear();
         _states.Clear();

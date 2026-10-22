@@ -642,6 +642,15 @@ public partial class Main : Node2D
         // ⚠️ **D-086**：采集的材料进**采集者自己的背包**（⇒ 能卖 ⇒ 才是个人收入），
         // 不再直接进村庄材料池（那个池子已经过剩到 7.5 万份了）。
         _gather = new ClaudeCodeGameStudios.Application.GatherService(_stallService, _priceBook);
+        // D-087：村庄收购站 —— 村庄按市价收购在村英雄的采集品，钱从村库回流到人。
+        // 预算规则在服务里（村库余额 − 下一级村庄升级所需金币）⇒ 这里只给依赖。
+        _purchase = new ClaudeCodeGameStudios.Application.VillagePurchaseService(
+            _villageModel,
+            _priceBook,
+            ClaudeCodeGameStudios.Application.Stall.StallService.Gold,
+            MaterialsId,
+            _upgradeService,
+            () => _tier);
         _life = new DailyLife(_rng, DailyLife.DefaultEffects(
             (actorId, n) => GatherFor(actorId, n),
             d => _buildProgress = MathF.Min(1f, _buildProgress + (float)d),
@@ -732,6 +741,11 @@ public partial class Main : Node2D
                 GD.Print($"SOAK 第{_clock.Day}天 {_clock.Clock} 在村{_heroes.Count(h => h.Present)}/{_heroes.Count} " +
                          $"材料{Mat} 层级{_tier} 杂谈{_chronicle.Count}条 | " +
                          string.Join(" ", _chronicle.Recent(3)));
+
+            // 4c-0. 村庄收购（D-087）：**必须在摆摊之前** ——
+            //     否则采集品已经被挪进摊位（背包里没了），村庄就收不到。
+            //     钱从村库出（预算 = 村库余额 − 下一级村庄升级所需金币）。
+            VillagePurchaseRound();
 
             // 4c. 自主卖货（D-086）：背包里有可卖的东西就开摊 ⇒
             //     没参与副本的人也有收入（否则他们的钱包永远是空的）。

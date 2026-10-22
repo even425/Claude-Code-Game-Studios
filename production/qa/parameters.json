@@ -2,6 +2,14 @@
   "_note": "当前实现参数台账的单一真源。Python 脚本 production/qa/param-inventory.py 用它生成文档，C# 守卫 tests/unit/architecture/ParameterLedgerTests.cs 用它校验代码。新增一个数值常量必须在这里登记，否则两个守卫都会红。 表类参数（tables）由 C# 守卫 ParameterLedgerTests 按 extractor 抽取并逐项比对；本文只负责把它们列进文档。",
   "parameters": [
     {
+      "file": "Application/CaravanMarketService.cs",
+      "name": "VillageCutPercent",
+      "kind": "参数",
+      "status": "【已确认】D-088",
+      "note": "D-088 拍板：商队货款里进村库的比例（百分比）；其余部分记为销毁（离开可流通池）",
+      "value": "10"
+    },
+    {
       "file": "Application/DailyLife.cs",
       "name": "PlaceholderActionFractionOfDay",
       "kind": "参数",
@@ -42,6 +50,22 @@
       "value": "3"
     },
     {
+      "file": "Application/GatherService.cs",
+      "name": "GatheredAmountPerDay",
+      "kind": "参数",
+      "status": "【已确认】D-086",
+      "note": "自主采集一次得到的份数（每天 1 份石料）—— D-086 拍板：给没参与副本的人一个收入来源",
+      "value": "1"
+    },
+    {
+      "file": "Application/GatherService.cs",
+      "name": "StallQuantityPerOpen",
+      "kind": "参数",
+      "status": "【已确认】D-086",
+      "note": "自动开摊一次摆多少份（留出多次成交的余地）",
+      "value": "3"
+    },
+    {
       "file": "Application/HeroBehaviorService.cs",
       "name": "BagItemLimit",
       "kind": "参数",
@@ -66,6 +90,30 @@
       "value": "8"
     },
     {
+      "file": "Application/SummonService.cs",
+      "name": "GoldCost",
+      "kind": "参数",
+      "status": "【已确认】D-077",
+      "note": "召唤一次花多少金币（100，从村金库扣）—— D-077 拍板；锚是「一个人一天挣多少」（约 100 金/天）⇒ 不至于招不起，也不至于白招",
+      "value": "100"
+    },
+    {
+      "file": "Application/TrialTowerService.cs",
+      "name": "GuardTierIndex",
+      "kind": "参数",
+      "status": "【已确认】D-074",
+      "note": "试炼塔守卫用哪一档怪物（1 = 精英档）—— 实测：普通档九种英雄原型全部能赢（门槛无效），精英档只有最强的组合能过",
+      "value": "1"
+    },
+    {
+      "file": "Application/TrialTowerService.cs",
+      "name": "HealthBonusPerWin",
+      "kind": "参数",
+      "status": "【建议】D-074",
+      "note": "试炼塔赢一场获得的生命加成（20）—— D-074 拍板的是「只加生命」与「永久」，加多少是本实现的方案值（改它只需改这一个常量）",
+      "value": "20"
+    },
+    {
       "file": "Application/VillageUpgradeService.cs",
       "name": "MaxTier",
       "kind": "参数",
@@ -80,6 +128,46 @@
       "status": "【占位】P-03",
       "note": "时间倍率（1.0）",
       "value": "1.0"
+    },
+    {
+      "file": "Domain/Combat/CombatParameters.cs",
+      "name": "PoisonDamagePerRound",
+      "kind": "参数",
+      "status": "【已确认】D-065",
+      "note": "中毒每回合的伤害（固定值，不走防御）",
+      "value": "2"
+    },
+    {
+      "file": "Domain/Combat/CombatParameters.cs",
+      "name": "PoisonDurationRounds",
+      "kind": "参数",
+      "status": "【已确认】D-065",
+      "note": "中毒持续的回合数（战斗结束即解除）",
+      "value": "5"
+    },
+    {
+      "file": "Domain/Combat/CombatParameters.cs",
+      "name": "RoundLimit",
+      "kind": "参数",
+      "status": "【已确认】D-065",
+      "note": "回合上限：超时判负（与 D-010 Q1「失败不给奖励」一致）",
+      "value": "30"
+    },
+    {
+      "file": "Domain/Combat/CombatParameters.cs",
+      "name": "RoundsPerAction",
+      "kind": "参数",
+      "status": "【已确认】D-065",
+      "note": "出手间隔（回合）：每 2 回合出手一次（冷却 1 回合）",
+      "value": "2"
+    },
+    {
+      "file": "Domain/Combat/StageDuration.cs",
+      "name": "GameHoursPerRound",
+      "kind": "参数",
+      "status": "【已确认】D-073",
+      "note": "一个战斗回合占多少游戏内小时（0.25）—— D-073 拍板；三阶段满回合约一天",
+      "value": "0.25"
     },
     {
       "file": "Domain/Relationships/Relationship.cs",
@@ -186,6 +274,94 @@
       "value": "100"
     },
     {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBeastTideGoldLoss",
+      "kind": "参数",
+      "status": "【已确认】D-080",
+      "note": "D-080 拍板：兽潮打输赔的金币（基准值，按村庄层级放大）",
+      "value": "8"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBeastTideGoldReward",
+      "kind": "参数",
+      "status": "【已确认】D-080",
+      "note": "D-080 拍板：兽潮打赢给的金币（基准值，按村庄层级放大）",
+      "value": "20"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBeastTideMaterialLoss",
+      "kind": "参数",
+      "status": "【已确认】D-080",
+      "note": "D-080 拍板：兽潮打输赔的材料（基准值，按村庄层级放大）—— 刻意远小于奖励：实测弱阵容必守不住，代价太重会让弱村子永久失血",
+      "value": "15"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBeastTideMaterialReward",
+      "kind": "参数",
+      "status": "【已确认】D-080",
+      "note": "D-080 拍板：兽潮打赢给的材料（基准值，按村庄层级放大）",
+      "value": "40"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBeastTidePeriodDays",
+      "kind": "参数",
+      "status": "【已确认】D-079",
+      "note": "兽潮的触发周期（7 个游戏日）—— D-079 拍板「按游戏内周期触发」",
+      "value": "7"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBeastTideScalePercentPerTier",
+      "kind": "参数",
+      "status": "【已确认】D-080",
+      "note": "D-080 拍板：兽潮规模随村庄层级递增的幅度（每级 +8 个百分点）—— 实测三档：8% 时常规阵容到五级仍守得住且精英阶段已逼近回合上限，10% 起五级超时判负，15% 四级就守不住",
+      "value": "8"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventCaravanDiscountPercent",
+      "kind": "参数",
+      "status": "【已确认】D-080",
+      "note": "D-080 拍板：商队的折扣（百分比；八十表示付市价的八成 = 低于市价）",
+      "value": "80"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventCaravanPeriodDays",
+      "kind": "参数",
+      "status": "【已确认】D-079",
+      "note": "商队来访的触发周期（11 个游戏日）—— D-079 拍板",
+      "value": "11"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventCaravanStock",
+      "kind": "参数",
+      "status": "【已确认】D-080",
+      "note": "D-080 拍板：商队带多少货（份）—— 限量是「不产生无限套利」的前提（低买高卖无限循环）",
+      "value": "30"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "_worldEventLastDay",
+      "kind": "技术值",
+      "status": "【技术值】D-079",
+      "note": "上次推进大事件阶段时的游戏日（一个游戏日只推一次）",
+      "value": "-1"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "_worldEventSeq",
+      "kind": "技术值",
+      "status": "【技术值】D-079",
+      "note": "大事件实例标识的序号（存档要能重建它 ⇒ 随存档走）",
+      "value": "0"
+    },
+    {
       "file": "Main.cs",
       "name": "DefaultGoldRewardUnits",
       "kind": "参数",
@@ -256,174 +432,6 @@
       "status": "【待定】P-13（D-003）",
       "note": "村庄最高层级（5）—— 已登记在规则层台账的 P-13 项下；与 `VillageUpgradeService.MaxTier` **重复**（两处分叉的隐患：测试盯着，但不是台账）",
       "value": "5"
-    },
-    {
-      "file": "Domain/Combat/CombatParameters.cs",
-      "name": "RoundsPerAction",
-      "kind": "参数",
-      "status": "【已确认】D-065",
-      "note": "出手间隔（回合）：每 2 回合出手一次（冷却 1 回合）",
-      "value": "2"
-    },
-    {
-      "file": "Domain/Combat/CombatParameters.cs",
-      "name": "RoundLimit",
-      "kind": "参数",
-      "status": "【已确认】D-065",
-      "note": "回合上限：超时判负（与 D-010 Q1「失败不给奖励」一致）",
-      "value": "30"
-    },
-    {
-      "file": "Domain/Combat/CombatParameters.cs",
-      "name": "PoisonDamagePerRound",
-      "kind": "参数",
-      "status": "【已确认】D-065",
-      "note": "中毒每回合的伤害（固定值，不走防御）",
-      "value": "2"
-    },
-    {
-      "file": "Domain/Combat/CombatParameters.cs",
-      "name": "PoisonDurationRounds",
-      "kind": "参数",
-      "status": "【已确认】D-065",
-      "note": "中毒持续的回合数（战斗结束即解除）",
-      "value": "5"
-    },
-    {
-      "file": "Domain/Combat/StageDuration.cs",
-      "name": "GameHoursPerRound",
-      "kind": "参数",
-      "status": "【已确认】D-073",
-      "note": "一个战斗回合占多少游戏内小时（0.25）—— D-073 拍板；三阶段满回合约一天",
-      "value": "0.25"
-    },
-    {
-      "file": "Application/TrialTowerService.cs",
-      "name": "HealthBonusPerWin",
-      "kind": "参数",
-      "status": "【建议】D-074",
-      "note": "试炼塔赢一场获得的生命加成（20）—— D-074 拍板的是「只加生命」与「永久」，加多少是本实现的方案值（改它只需改这一个常量）",
-      "value": "20"
-    },
-    {
-      "file": "Application/TrialTowerService.cs",
-      "name": "GuardTierIndex",
-      "kind": "参数",
-      "status": "【已确认】D-074",
-      "note": "试炼塔守卫用哪一档怪物（1 = 精英档）—— 实测：普通档九种英雄原型全部能赢（门槛无效），精英档只有最强的组合能过",
-      "value": "1"
-    },
-    {
-      "file": "Application/SummonService.cs",
-      "name": "GoldCost",
-      "kind": "参数",
-      "status": "【已确认】D-077",
-      "note": "召唤一次花多少金币（100，从村金库扣）—— D-077 拍板；锚是「一个人一天挣多少」（约 100 金/天）⇒ 不至于招不起，也不至于白招",
-      "value": "100"
-    },
-    {
-      "file": "Main.WorldEvents.cs",
-      "name": "WorldEventBeastTidePeriodDays",
-      "kind": "参数",
-      "status": "【已确认】D-079",
-      "note": "兽潮的触发周期（7 个游戏日）—— D-079 拍板「按游戏内周期触发」",
-      "value": "7"
-    },
-    {
-      "file": "Main.WorldEvents.cs",
-      "name": "WorldEventCaravanPeriodDays",
-      "kind": "参数",
-      "status": "【已确认】D-079",
-      "note": "商队来访的触发周期（11 个游戏日）—— D-079 拍板",
-      "value": "11"
-    },
-    {
-      "file": "Main.WorldEvents.cs",
-      "name": "_worldEventSeq",
-      "kind": "技术值",
-      "status": "【技术值】D-079",
-      "note": "大事件实例标识的序号（存档要能重建它 ⇒ 随存档走）",
-      "value": "0"
-    },
-    {
-      "file": "Main.WorldEvents.cs",
-      "name": "_worldEventLastDay",
-      "kind": "技术值",
-      "status": "【技术值】D-079",
-      "note": "上次推进大事件阶段时的游戏日（一个游戏日只推一次）",
-      "value": "-1"
-    },
-    {
-      "file": "Main.WorldEvents.cs",
-      "name": "WorldEventBeastTideScalePercentPerTier",
-      "kind": "参数",
-      "status": "【已确认】D-080",
-      "note": "D-080 拍板：兽潮规模随村庄层级递增的幅度（每级 +8 个百分点）—— 实测三档：8% 时常规阵容到五级仍守得住且精英阶段已逼近回合上限，10% 起五级超时判负，15% 四级就守不住",
-      "value": "8"
-    },
-    {
-      "file": "Main.WorldEvents.cs",
-      "name": "WorldEventBeastTideMaterialReward",
-      "kind": "参数",
-      "status": "【已确认】D-080",
-      "note": "D-080 拍板：兽潮打赢给的材料（基准值，按村庄层级放大）",
-      "value": "40"
-    },
-    {
-      "file": "Main.WorldEvents.cs",
-      "name": "WorldEventBeastTideGoldReward",
-      "kind": "参数",
-      "status": "【已确认】D-080",
-      "note": "D-080 拍板：兽潮打赢给的金币（基准值，按村庄层级放大）",
-      "value": "20"
-    },
-    {
-      "file": "Main.WorldEvents.cs",
-      "name": "WorldEventBeastTideMaterialLoss",
-      "kind": "参数",
-      "status": "【已确认】D-080",
-      "note": "D-080 拍板：兽潮打输赔的材料（基准值，按村庄层级放大）—— 刻意远小于奖励：实测弱阵容必守不住，代价太重会让弱村子永久失血",
-      "value": "15"
-    },
-    {
-      "file": "Main.WorldEvents.cs",
-      "name": "WorldEventBeastTideGoldLoss",
-      "kind": "参数",
-      "status": "【已确认】D-080",
-      "note": "D-080 拍板：兽潮打输赔的金币（基准值，按村庄层级放大）",
-      "value": "8"
-    },
-    {
-      "file": "Main.WorldEvents.cs",
-      "name": "WorldEventCaravanDiscountPercent",
-      "kind": "参数",
-      "status": "【已确认】D-080",
-      "note": "D-080 拍板：商队的折扣（百分比；八十表示付市价的八成 = 低于市价）",
-      "value": "80"
-    },
-    {
-      "file": "Main.WorldEvents.cs",
-      "name": "WorldEventCaravanStock",
-      "kind": "参数",
-      "status": "【已确认】D-080",
-      "note": "D-080 拍板：商队带多少货（份）—— 限量是「不产生无限套利」的前提（低买高卖无限循环）",
-      "value": "30"
-    },
-    {
-      "file": "Application/GatherService.cs",
-      "name": "GatheredAmountPerDay",
-      "kind": "参数",
-      "status": "【已确认】D-086",
-      "note": "自主采集一次得到的份数（每天 1 份石料）—— D-086 拍板：给没参与副本的人一个收入来源",
-      "value": "1"
-    },
-    {
-      "file": "Application/GatherService.cs",
-      "name": "StallQuantityPerOpen",
-      "kind": "参数",
-      "status": "【已确认】D-086",
-      "note": "自动开摊一次摆多少份（留出多次成交的余地）",
-      "value": "3"
     }
   ],
   "nonParameters": [

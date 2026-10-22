@@ -103,6 +103,17 @@ public sealed record EconomyRow
     /// <summary>村金库抽成。</summary>
     public long? VillageCut { get; init; }
 
+    /// <summary>
+    /// <b>记为销毁</b>的金币（D-088：商队货款的 90%）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **它不是「钱消失了」**：守恒律（流通口径）是
+    /// <c>Σ英雄钱包 + 村库 + <b>累计销毁</b> = 初始 + 累计发放</c>
+    /// ⇒ 销毁的那部分必须<b>有账</b>，否则等式对不上。
+    /// （摊位的 5% 村抽<b>不是</b>销毁 —— 那笔钱还在村库里。）
+    /// </remarks>
+    public long? GoldDestroyed { get; init; }
+
     // ── 未成（想买没买成） ───────────────────────────────────────────
 
     /// <summary>
@@ -154,6 +165,15 @@ public sealed record EconomyRow
 
     /// <summary>累计<b>销毁</b>掉的金币（升级花掉的那些 → 变成建筑）。</summary>
     public long? GoldSpent { get; init; }
+
+    /// <summary>
+    /// 其中<b>商队销毁</b>掉的那部分（D-088；已含在 <see cref="GoldSpent"/> 里）。
+    /// </summary>
+    /// <remarks>
+    /// 单列出来是为了<b>可核对</b>：升级花掉的钱与商队销毁的钱是两回事，
+    /// 混在一起就只能看到一个总数 ⇒ 「商队到底带走了多少钱」永远算不出来。
+    /// </remarks>
+    public long? CaravanDestroyed { get; init; }
 
     /// <summary>累计升级次数（= 已建成的级数）。</summary>
     public long? Upgrades { get; init; }
@@ -253,6 +273,27 @@ public sealed class EconomyLog : IDisposable
     /// 才把「材料 7.4 万」和「流通金在缩」归到兽潮头上）。
     /// </remarks>
     public const string WorldEventSettledKind = "WorldEventSettled";
+
+    /// <summary>
+    /// 「<b>村庄收购</b>」行的类别标识（<b>每笔一行</b>；D-087）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **为什么是「直写」而不是事件**（同 <see cref="AppendShoppingMissed"/> 的理由）：
+    /// 收购是<b>每天几十笔的例行公事</b> ⇒ 一次一杂谈会把村庄刷屏 ⇒
+    /// 它进<b>经济流水</b>（可被分析脚本逐笔核对），不进杂谈。
+    /// </remarks>
+    public const string VillagePurchaseKind = "VillagePurchase";
+
+    /// <summary>
+    /// 「<b>商队成交</b>」行的类别标识（D-088）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **它必须单列一类**，不能并进 <see cref="TradeKind"/>：
+    /// 摊位交易是「村抽 5%」，商队是「<b>村库抽成 10% + 90% 记为销毁</b>」
+    /// ⇒ 两者的钱走法完全不同 ⇒ 分析脚本若把它们混在一起算，
+    /// 「村抽 = 成交额 5%」那条等式会被商队那一行<b>弄坏</b>。
+    /// </remarks>
+    public const string CaravanTradeKind = "CaravanTrade";
 
     /// <summary>
     /// 「想买未成」行的类别标识（<b>每英雄每原因一行</b>）。
@@ -367,6 +408,7 @@ public sealed class EconomyLog : IDisposable
             DungeonLootKind => BuildDungeonLootRow(e),
             TradeKind => BuildTradeRow(e),
             WorldEventSettledKind => BuildWorldEventSettledRow(e),
+            CaravanTradeKind => BuildCaravanTradeRow(e),
             _ => null,
         };
 
@@ -462,6 +504,8 @@ public sealed class EconomyLog : IDisposable
     /// <param name="heroGoldP75">钱包余额 p75（金）。</param>
     /// <param name="heroGoldMax">最富英雄的钱包余额（金）。</param>
     /// <param name="heroGoldTopId">最富英雄的标识。</param>
+    /// <param name="heroGoldTopName">最富英雄的名字。</param>
+    /// <param name="caravanDestroyed">商队货款里<b>记为销毁</b>的那部分（D-088；已含在 <paramref name="goldSpent"/> 里）。</param>
     /// <returns>写入了就 true；文件已关就 false。</returns>
     /// <remarks>
     /// <b>为什么是「直写」而不是事件</b>：快照是<b>读数</b>（某一刻的经济状态），
@@ -485,7 +529,8 @@ public sealed class EconomyLog : IDisposable
         long? heroGoldP75 = null,
         long? heroGoldMax = null,
         string? heroGoldTopId = null,
-        string? heroGoldTopName = null)
+        string? heroGoldTopName = null,
+        long? caravanDestroyed = null)
     {
         if (_writer is null) return false;
 
@@ -515,6 +560,7 @@ public sealed class EconomyLog : IDisposable
             HeroGoldMax = heroGoldMax,
             HeroGoldTopId = heroGoldTopId,
             HeroGoldTopName = heroGoldTopName,
+            CaravanDestroyed = caravanDestroyed,
         };
 
         _writer.WriteLine(JsonSerializer.Serialize(row, Options));
@@ -656,8 +702,84 @@ public sealed class EconomyLog : IDisposable
         };
     }
 
-    private long DayOf(double simTime)
-        => (long)(simTime / _simSecondsPerDay) + 1L;
+    /// <summary>由「商队成交」事件构建一行（D-088）。</summary>
+    /// <param name="e">事件。</param>
+    /// <returns>行；载荷不完整时为 null。</returns>
+    /// <remarks>
+    /// ⚠️ <b>金额必须分得清</b>：总额（<c>amount</c>）= 村库抽成（<c>villageCut</c>）
+    /// + 记为销毁（<c>destroyed</c>）⇒ 分析脚本要能直接核对这三者的关系。
+    /// </remarks>
+    private EconomyRow? BuildCaravanTradeRow(DomainEvent e)
+    {
+        if (!e.Payload.TryGetValue("buyer", out var buyer) || string.IsNullOrEmpty(buyer)) return null;
+        if (!e.Payload.TryGetValue("item", out var item) || string.IsNullOrEmpty(item)) return null;
+        if (!e.Payload.TryGetValue("qty", out var qtyText)
+            || !long.TryParse(qtyText, NumberStyles.Integer, CultureInfo.InvariantCulture, out long qty)) return null;
+        if (!e.Payload.TryGetValue("amount", out var amountText)
+            || !long.TryParse(amountText, NumberStyles.Integer, CultureInfo.InvariantCulture, out long amount)) return null;
+
+        return new EconomyRow
+        {
+            Kind = CaravanTradeKind,
+            Id = e.Id.Value,
+            Day = DayOf(e.OccurredAtSimSeconds),
+            SimTime = e.OccurredAtSimSeconds,
+            Actor = buyer,
+            Buyer = buyer,
+            Item = item,
+            Qty = qty,
+            Amount = amount,
+            VillageCut = ReadLong(e.Payload, "villageCut"),
+            GoldDestroyed = ReadLong(e.Payload, "destroyed"),
+        };
+    }
+
+    /// <summary>
+    /// 追加一条「<b>村庄收购</b>」的流水行（<b>每笔一行</b>；D-087）。
+    /// </summary>
+    /// <param name="simTime">发生时间（模拟秒）；游戏日由它换算。</param>
+    /// <param name="hero">被收购的英雄（卖方）。</param>
+    /// <param name="item">被收购的物品。</param>
+    /// <param name="qty">收了几份。</param>
+    /// <param name="amount">付了多少钱。</param>
+    /// <returns>写入了就 true；文件已关或参数不全就 false。</returns>
+    /// <remarks>
+    /// <para>⚠️ **为什么是「直写」**：收购是<b>每天几十笔</b>的例行公事
+    /// ⇒ 一次一杂谈会把村庄刷屏 ⇒ 它只进经济流水。</para>
+    /// <para>⚠️ **钱的方向**：这一行里钱是<b>村库 → 英雄</b>（与摊位交易相反）⇒
+    /// 分析脚本若按「交易行」的口径理解它，会把方向读反。</para>
+    /// </remarks>
+    public bool AppendVillagePurchase(
+        double simTime, string hero, string item, long qty, long amount)
+    {
+        if (_writer is null) return false;
+        if (string.IsNullOrEmpty(hero)) return false;
+        if (string.IsNullOrEmpty(item)) return false;
+        if (qty <= 0) return false;
+
+        long day = DayOf(simTime);
+        _missedSeq++;
+
+        var row = new EconomyRow
+        {
+            Kind = VillagePurchaseKind,
+            Id = $"purchase-{day}-{_missedSeq}",
+            Day = day,
+            SimTime = simTime,
+            Actor = hero,
+            Buyer = "村庄",
+            Seller = hero,
+            Item = item,
+            Qty = qty,
+            Amount = amount,
+        };
+
+        _writer.WriteLine(JsonSerializer.Serialize(row, Options));
+        _rows++;
+        return true;
+    }
+
+    private long DayOf(double simTime)        => (long)(simTime / _simSecondsPerDay) + 1L;
 
     private static long? ReadLong(IReadOnlyDictionary<string, string> payload, string key)
         => payload.TryGetValue(key, out var raw) && long.TryParse(raw, out var value) ? value : null;

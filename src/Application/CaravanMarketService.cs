@@ -58,6 +58,8 @@ public enum CaravanBuyOutcome
 /// <param name="UnitPrice">成交单价。</param>
 /// <param name="TotalAmount">一共花了多少。</param>
 /// <param name="RemainingStock">成交后还剩多少货。</param>
+/// <param name="VillageCut">村库抽成（D-088：10%）。</param>
+/// <param name="Destroyed">记为销毁的那部分（D-088：90%）。</param>
 public readonly record struct CaravanBuyResult(
     CaravanBuyOutcome Outcome,
     HeroId Buyer,
@@ -65,7 +67,9 @@ public readonly record struct CaravanBuyResult(
     long Quantity,
     long UnitPrice,
     long TotalAmount,
-    long RemainingStock)
+    long RemainingStock,
+    long VillageCut = 0,
+    long Destroyed = 0)
 {
     /// <summary>买成了吗。</summary>
     public bool Succeeded => Outcome == CaravanBuyOutcome.Bought;
@@ -79,13 +83,11 @@ public readonly record struct CaravanBuyResult(
 /// 守村的人马是「在村全体英雄」（D-080 拍板），买货的人也是**某个英雄**——
 /// 本项目**没有玩家化身**，钱和货都记在具体某个人名下（R-01）。</para>
 ///
-/// <para>⚠️ <b>钱怎么走（守恒律）</b>：英雄的<b>个人钱包</b>付钱 ⇒ 钱进<b>村金库</b>。
+/// <para>⚠️ <b>钱怎么走（守恒律）</b>：英雄的<b>个人钱包</b>付钱 ⇒ 钱分两路
+/// （<b>D-088 拍板</b>）：<b>10% 进村金库</b>，<b>90% 记为销毁</b>（离开可流通池）。
 /// 守恒律是 <c>Σ英雄钱包 + 村库 + 累计销毁 = 初始 + 累计发放</c>；
-/// 若钱直接付给「商队」，那部分钱就<b>离开了这个世界</b> ⇒ 等式对不上。
-/// ⇒ 让钱进村库 ⇒ 英雄这边减多少、村库这边就加多少 ⇒ <b>等式照样成立</b>。
-/// <para>⚠️ <b>这一版的简化</b>：商队的货款结算（钱最终离开村子）<b>暂不实现</b>，
-/// 钱全额进村库；以后要加「商队抽成」或「记为销毁」再说。
-/// <b>不要</b>自己发明抽成比例——那是开发者的决定。</para>
+/// 销毁的那部分必须<b>记进累计销毁</b>，否则等式对不上（D-088 之前是「钱全额进村库」，
+/// 那时等式成立但「外面的钱」与「村里的钱」混在一起 ⇒ 账目说不清）。</para>
 ///
 /// <para>⚠️ <b>限量是硬约束</b>：不限制库存 ⇒ 玩家八折买进、按市价卖出 ⇒ <b>无限套利</b>
 /// （低买高卖，货无限 ⇒ 金币无限）⇒ 库存必须有限，且<b>随存档走</b>
@@ -110,6 +112,23 @@ public sealed class CaravanMarketService
 
     /// <summary>幂等键前缀（复用实例的「已应用后果键」—— 它本来就随存档走）。</summary>
     private const string BuyKeyPrefix = "caravan/buy/";
+
+    /// <summary>
+    /// <b>村库抽成比例</b>（D-088 拍板）：<b>10%</b>。
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠️ **剩下的 90% 记为「销毁」**（钱离开可流通池），不是凭空消失：
+    /// 守恒律（流通口径）是
+    /// <c>Σ英雄钱包 + 村库 + 累计销毁 = 初始 + 累计发放</c>
+    /// ⇒ 商队这一笔必须把销毁的那部分**记进累计销毁**，否则守恒律会破。</para>
+    /// <para>⚠️ **为什么不是 100% 进村库**（那是 D-081 的做法）：
+    /// 商队是<b>外面来的钱</b>，全进村库等于村庄凭空多出一笔收入；
+    /// 抽成 + 销毁把「外面的钱」与「村里的钱」分开记 ⇒ 账目说得清。</para>
+    /// </remarks>
+    public const int VillageCutPercent = 10;
+
+    /// <summary>累计<b>销毁</b>掉的金币（商队那 90%；守恒律的「累计销毁」要算它）。</summary>
+    public long TotalDestroyedGold { get; private set; }
 
     private readonly Func<string, WorldEventInstance?> _findInstance;
     private readonly Func<IReadOnlyList<WorldEventInstance>> _listInstances;
@@ -259,9 +278,21 @@ public sealed class CaravanMarketService
         var newBag = hero.Bag.TryAdd(new ItemId(view.Value.ItemId), qty);
         if (newBag is null) return Fail(CaravanBuyOutcome.BagRejected, buyer);
 
-        // ── 村库入账：唯一可能抛的一步（接近上限时 checked 溢出）──
+        // ── 村库入账 + 销毁（D-088）：钱分两路 ──
+        //
+        // ⚠️ **村库入账是唯一可能抛的一步**（接近上限时 checked 溢出）——
         // 抛了就说明**什么都没改**（钱包与背包还没换）。
-        _village.Add(Stall.StallService.Gold, totalAmount);
+        //
+        // ⚠️ **抽成必须溢出安全**：`total * 10 / 100` 裸乘会溢出 long。
+        // 这里拆成「整除 + 余数」两段 ⇒ 结果与 `total*10/100` 完全一致，且不会溢出。
+        long villageCut = (totalAmount / 100) * VillageCutPercent
+                        + (totalAmount % 100) * VillageCutPercent / 100;
+        long destroyed = totalAmount - villageCut;
+
+        if (villageCut > 0) _village.Add(Stall.StallService.Gold, villageCut);
+
+        // 销毁的那部分**离开可流通池**：记进累计销毁，守恒律才成立（D-088）。
+        TotalDestroyedGold += destroyed;
 
         // ── 以下都是不可失败的赋值 ──
         hero.ApplyTradeResult(newWallet, newBag);
@@ -271,7 +302,7 @@ public sealed class CaravanMarketService
 
         return new CaravanBuyAttempt(new CaravanBuyResult(
             CaravanBuyOutcome.Bought, buyer, view.Value.ItemId, qty,
-            view.Value.UnitPrice, totalAmount, remaining));
+            view.Value.UnitPrice, totalAmount, remaining, villageCut, destroyed));
     }
 
     /// <summary>读出某个实例的报价（状态不全 ⇒ null = 没开摊）。</summary>

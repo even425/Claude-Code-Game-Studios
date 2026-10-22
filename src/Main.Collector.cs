@@ -268,19 +268,26 @@ public partial class Main : Node2D
             p75 = Percentile(sorted, 0.75);
         }
 
+        // ⚠️ **累计销毁 = 升级花掉的 + 商队销毁的**（D-088）：
+        // 守恒律（流通口径）的左边是「Σ英雄钱包 + 村库 + 累计销毁」，
+        // 商队货款的 90% 离开了可流通池 ⇒ 它**必须**进这一项，
+        // 否则守恒律会破（钱少了但账上没记 ⇒ 看着像凭空消失）。
+        long destroyed = _upgradeService.TotalGoldSpent + _caravanMarket.TotalDestroyedGold;
+
         _economyLog.AppendSnapshot(
             _clock.Now,
             heroGold,
             VillageGold,
             Mat,
             _walletWriter.TotalGranted,
-            _upgradeService.TotalGoldSpent,
+            destroyed,
             _upgradeService.UpgradesStarted,
             _stallService.VillageCutCarry,
             _heroes.Count,
             builders,
             _walletWriter.TotalPending,
-            min, p25, med, p75, max, topId, topName);
+            min, p25, med, p75, max, topId, topName,
+            _caravanMarket.TotalDestroyedGold);
     }
 
     /// <summary>取有序数组的**线性插值**分位数（q ∈ [0,1]）。</summary>

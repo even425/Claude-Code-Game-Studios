@@ -41,7 +41,7 @@ public class MainStructureTests
             "ShouldTrigger", "BeastTideEffectiveTier", "RestoreWorldEvents",
             "RunCollect", "CollectOneDay", "OpenStallsForIdleHeroes", "RunDailyShoppingIfNeeded",
             "DispatchDungeonForCollection", "DispatchOneDungeonForCollection",
-            "UpgradeVillageForCollection",
+            "UpgradeVillageForCollection", "VillagePurchaseRound",
         }),
         ("战斗执行", new[]
         {

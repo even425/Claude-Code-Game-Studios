@@ -133,10 +133,12 @@ public class CaravanMarketTests
     // ── 买 ───────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 买一单：<b>钱从英雄钱包扣</b>、<b>货进背包</b>、<b>村库拿到钱</b>、<b>库存减</b>。
+    /// 买一单：<b>钱从英雄钱包扣</b>、<b>货进背包</b>、<b>钱分两路</b>（D-088）、<b>库存减</b>。
     /// </summary>
     /// <remarks>
-    /// ⚠️ **钱进村库**是守恒律的要求（钱付给商队就离开了这个世界）⇒ 这里断言村库余额。
+    /// ⚠️ <b>钱分两路</b>（D-088 拍板）：<b>10% 进村库</b>、<b>90% 记为销毁</b>。
+    /// ⚠️ **抽成向下取整**：金额很小时（例：4 金）⇒ 10% 不足 1 金 ⇒ 村库拿 0，
+    /// 整笔都算销毁 —— 这是「不发明小数位」的直接后果（钱只有整金）。
     /// </remarks>
     [TestCase]
     public void Buy_TransfersMoneyToVillage_AndReducesStock()
@@ -153,9 +155,56 @@ public class CaravanMarketTests
 
         Assertions.AssertThat(attempt.Succeeded).IsTrue();
         Assertions.AssertThat(f.Hero.Wallet.Amount(Gold)).IsEqual(goldBefore - 4);
-        Assertions.AssertThat(f.Village.Get(Gold)).IsEqual(villageBefore + 4);
+        // 4 金 × 10% = 0.4 ⇒ 向下取整 0 ⇒ 村库没拿到钱。
+        Assertions.AssertThat(f.Village.Get(Gold)).IsEqual(villageBefore);
         Assertions.AssertThat(f.Hero.Bag.Count(new ItemId("石料"))).IsEqual(bagBefore + 1);
         Assertions.AssertThat(f.Instance.State[CaravanMarketService.StateStock]).IsEqual("29");
+    }
+
+    /// <summary>
+    /// D-088：<b>钱分两路</b> —— 村库抽成 10%，其余 90% 记为销毁，
+    /// 而<b>两笔加起来正好是买家付的钱</b>（守恒律：钱没有凭空多也没有凭空少）。
+    /// </summary>
+    [TestCase]
+    public void Buy_SplitsMoneyIntoVillageCutAndDestroyed()
+    {
+        var f = new Fixture();
+        f.Market.OpenStall(f.Instance, new CaravanOffer("石料", 80, 30));
+        f.AdvanceToOngoing();
+
+        long villageBefore = f.Village.Get(Gold);
+        long goldBefore = f.Hero.Wallet.Amount(Gold);
+
+        // 30 份 × 4 金 = 120 金 ⇒ 抽成 12，销毁 108。
+        var attempt = f.Market.TryBuy(f.Instance.Id, f.Hero.Id, qty: 30, simTime: 10.0);
+
+        Assertions.AssertThat(attempt.Succeeded).IsTrue();
+        Assertions.AssertThat(attempt.Result.TotalAmount).IsEqual(120);
+        Assertions.AssertThat(attempt.Result.VillageCut).IsEqual(12);
+        Assertions.AssertThat(attempt.Result.Destroyed).IsEqual(108);
+
+        Assertions.AssertThat(f.Village.Get(Gold)).IsEqual(villageBefore + 12);
+        Assertions.AssertThat(f.Hero.Wallet.Amount(Gold)).IsEqual(goldBefore - 120);
+        Assertions.AssertThat(f.Market.TotalDestroyedGold).IsEqual(108);
+
+        // ⚠️ **总量守恒**：买家少的 = 村库多的 + 销毁的。
+        Assertions.AssertThat(attempt.Result.VillageCut + attempt.Result.Destroyed)
+            .IsEqual(attempt.Result.TotalAmount);
+    }
+
+    /// <summary>D-088：<b>累计销毁</b>要能累加（多笔成交 ⇒ 守恒律那一项要对得上）。</summary>
+    [TestCase]
+    public void Buy_AccumulatesDestroyedGold()
+    {
+        var f = new Fixture();
+        f.Market.OpenStall(f.Instance, new CaravanOffer("石料", 80, 30));
+        f.AdvanceToOngoing();
+
+        f.Market.TryBuy(f.Instance.Id, f.Hero.Id, qty: 15, simTime: 10.0);
+        f.Market.TryBuy(f.Instance.Id, f.Hero.Id, qty: 10, simTime: 20.0);
+
+        // 60 的 90% = 54；40 的 90% = 36。
+        Assertions.AssertThat(f.Market.TotalDestroyedGold).IsEqual(90);
     }
 
     /// <summary>买超量 ⇒ 失败，且<b>状态完全不变</b>（I15）。</summary>

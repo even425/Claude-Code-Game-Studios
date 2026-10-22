@@ -61,6 +61,9 @@ public partial class Main : Node2D
             ["unitPrice"] = result.UnitPrice.ToString(),
             ["amount"] = result.TotalAmount.ToString(),
             ["remaining"] = result.RemainingStock.ToString(),
+            // D-088：钱分两路（村库抽成 10% / 记为销毁 90%）⇒ 流水要能核对这两笔。
+            ["villageCut"] = result.VillageCut.ToString(),
+            ["destroyed"] = result.Destroyed.ToString(),
         };
 
         Emit(EvCaravanTrade, buyerName, changed, payload,

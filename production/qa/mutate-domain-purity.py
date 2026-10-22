@@ -29,6 +29,7 @@ except ImportError:
     pass
 
 import hashlib
+import os
 import re
 import subprocess
 import sys
@@ -47,7 +48,8 @@ def build_and_run() -> tuple[bool, str]:
     """编译**并运行**那个「不引用 Godot」的工程。返回 (成功?, 输出)。"""
     r = subprocess.run(
         ["dotnet", "run", "--project", str(PROJECT), "--nologo", "-v", "q"],
-        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env={**os.environ, "MSBUILDDISABLENODEREUSE": "1"})
     out = (r.stdout or "") + (r.stderr or "")
     ok = r.returncode == 0 and "error CS" not in out
     return ok, out
@@ -57,7 +59,8 @@ def build_only() -> tuple[bool, str]:
     """只编译（更快；用于「编译必须失败」那几档）。"""
     r = subprocess.run(
         ["dotnet", "build", str(PROJECT), "--nologo", "-v", "q"],
-        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env={**os.environ, "MSBUILDDISABLENODEREUSE": "1"})
     out = (r.stdout or "") + (r.stderr or "")
     return r.returncode == 0 and "error CS" not in out, out
 

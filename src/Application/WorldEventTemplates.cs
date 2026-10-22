@@ -142,25 +142,19 @@ public static class WorldEventTemplates
 
                 if (defended)
                 {
-                    // 真打一场：用战斗系统解算（战斗是确定性的 ⇒ 同结果）。
-                    // ⚠️ **用英雄自己的属性**（D-080）：写死的属性会让「谁去守村」毫无意义。
-                    var party = new CombatPartySnapshot(participants
-                        .Select(id => CombatantSnapshot.Create(id, id, stats: heroStats(id)))
-                        .ToArray());
-
-                    var flow = DungeonFlow.Begin(
-                        new DungeonRunId($"beasttide:{instance.Id}"),
-                        "兽潮", participants, resolver, outcomeReader, party: party);
-                    var outcome = flow.RunToCompletion();
-                    bool won = outcome.Succeeded;
+                    // ⚠️ **走共享的那份判定**（`BeastTideBattle.Resolve`）——
+                    // 触发前问「守得住吗」用的也是它 ⇒ 预演与实战**不可能不一致**。
+                    var battle = BeastTideBattle.Resolve(
+                        participants, heroStats, resolver, outcomeReader,
+                        runId: $"beasttide:{instance.Id}");
 
                     consequences["beast_tide/defended"] = new WorldEventEffect(
-                        WorldEventEffect.KindNone, 0L, won ? "守住了" : "没守住");
+                        WorldEventEffect.KindNone, 0L, battle.Won ? "守住了" : "没守住");
                     consequences["beast_tide/participants"] = WorldEventEffect.None(
                         string.Join("、", participants));
 
                     // ── 后果落到村庄的资源上（D-080 拍板）──
-                    if (won)
+                    if (battle.Won)
                     {
                         consequences["beast_tide/material"] = new WorldEventEffect(
                             WorldEventEffect.KindMaterial, values.MaterialReward,
@@ -180,7 +174,7 @@ public static class WorldEventTemplates
                             $"兽潮没守住：金币 -{values.GoldLoss}");
                     }
 
-                    return new WorldEventOutcome(won, consequences);
+                    return new WorldEventOutcome(battle.Won, consequences);
                 }
 
                 // 没人守 ⇒ 必然没守住 ⇒ 照样赔（村库那部分照扣）。

@@ -16,6 +16,7 @@ except ImportError:
 
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -37,7 +38,8 @@ def run_tests():
     r = subprocess.run(
         ["dotnet", "test", str(TESTS), "-c", "Release", "--nologo", "-v", "q",
          "--filter", FILTER],
-        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env={**os.environ, "MSBUILDDISABLENODEREUSE": "1"})
     out = r.stdout + r.stderr
     for pat in (r"失败:\s*(\d+)", r"Failed:\s*(\d+)"):
         m = re.search(pat, out)
@@ -50,7 +52,8 @@ def run_python_check():
     """跑 `param-inventory.py --check`，返回它是不是说「不一致」。"""
     r = subprocess.run(
         [sys.executable, str(ROOT / "production" / "qa" / "param-inventory.py"), "--check"],
-        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env={**os.environ, "MSBUILDDISABLENODEREUSE": "1"})
     out = (r.stdout or "") + (r.stderr or "")
     return "不一致" in out, out
 

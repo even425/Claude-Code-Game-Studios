@@ -38,7 +38,7 @@ public class MainStructureTests
         {
             "_Process", "TickBuild", "TickIndependentBuilds", "OnIndependentBuildingCompleted",
             "TickWorldEvents", "InitWorldEvents", "ScaleBeastTideMonster", "BeastTideHeroStats",
-            "RestoreWorldEvents",
+            "ShouldTrigger", "RestoreWorldEvents",
             "RunCollect", "CollectOneDay", "RunDailyShoppingIfNeeded",
             "DispatchDungeonForCollection", "DispatchOneDungeonForCollection",
             "OpenStallsForCollection", "UpgradeVillageForCollection",
@@ -100,6 +100,7 @@ public class MainStructureTests
         "OnCaravan", "OnCaravanBought",   // D-081：商队面板（玩家命令入口）
         "OnSave", "OnLoad",
         "Refresh", "RefreshRoster", "RosterLine", "ShoppingNoteFor",
+        "ActiveSitesText",   // D-082：顶栏显示在施工的几栋（表现层）
         "RefreshRelationSummary", "TierName",
         "_UnhandledInput", "ProcessShot",
         "VisibleTextSnapshot",        // MT-04：玩家可见的界面文字快照（表现层）

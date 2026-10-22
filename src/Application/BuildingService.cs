@@ -187,6 +187,48 @@ public sealed class BuildingService
         return completed;
     }
 
+    /// <summary>
+    /// <b>把可用人力分给各在建建筑</b>（D-082：多栋同时施工）。
+    /// </summary>
+    /// <param name="availableWorkers">村里可用的总人数（<b>只算一次</b>）。</param>
+    /// <returns>分完之后每栋各有多少人（按开工顺序）。</returns>
+    /// <exception cref="ArgumentOutOfRangeException">人数为负。</exception>
+    /// <remarks>
+    /// <para>⚠️ <b>为什么必须有这一步</b>：原来每栋在建建筑都拿到<b>全村</b>的人力
+    /// ⇒ 围栏与试炼塔同时施工时，<b>同一批人被算了两遍</b>
+    /// ⇒ 两栋一起盖比一栋快<b>一倍</b>（人力凭空翻倍）。
+    /// ⇒ 现在人力<b>只算一次</b>，按「均分 + 余数给最早开工的」分下去。</para>
+    /// <para>⚠️ <b>为什么是「均分」而不是「先到先得」</b>：先到先得 ⇒ 后开工的那栋
+    /// 永远拿不到人 ⇒ 变成「排队」⇒ 那就不是「同时施工」了。
+    /// 均分 ⇒ 每栋都在推进（人少时可能有人分到 0 ⇒ 那栋停工，合理）。</para>
+    /// <para>⚠️ <b>余数给最早开工的</b>：这样「谁先开工」是可观察的差异，
+    /// 且分配是<b>确定的</b>（同样的输入 ⇒ 同样的分配 ⇒ 可复现、可离线验算）。</para>
+    /// </remarks>
+    public IReadOnlyList<(BuildingId Id, int Workers)> AssignWorkers(int availableWorkers)
+    {
+        if (availableWorkers < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(availableWorkers), availableWorkers, "可用人数不能为负。");
+        }
+
+        var ids = _constructions.Keys.ToArray();
+        if (ids.Length == 0) return Array.Empty<(BuildingId, int)>();
+
+        int each = availableWorkers / ids.Length;
+        int rest = availableWorkers % ids.Length;
+
+        var result = new List<(BuildingId, int)>(ids.Length);
+        for (int i = 0; i < ids.Length; i++)
+        {
+            int workers = each + (i < rest ? 1 : 0);
+            _constructions[ids[i]] = _constructions[ids[i]] with { Workers = workers };
+            result.Add((new BuildingId(ids[i]), workers));
+        }
+
+        return result;
+    }
+
     /// <summary>更新某栋在施工建筑的<b>人数</b>（人手变了要跟着变）。</summary>
     /// <param name="id">建筑标识。</param>
     /// <param name="workers">新的施工人数。</param>

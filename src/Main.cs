@@ -861,10 +861,10 @@ public partial class Main : Node2D
         // 人力 = 没在路上、也不在村庄升级工地的人。
         int workers = _heroes.Count(h => !h.Away && !h.ToSite && IsPresent(h));
 
-        foreach (var c in _buildingService.ActiveConstructions)
-        {
-            _buildingService.SetWorkers(c.Definition.Id, workers);
-        }
+        // ⚠️ **人力只算一次**（D-082）：原来每栋在建建筑都拿到**全村**人力
+        // ⇒ 围栏与试炼塔同时施工时同一批人被算了两遍 ⇒ 人力凭空翻倍。
+        // ⇒ 现在由 `AssignWorkers` **分**下去（均分 + 余数给最早开工的）。
+        _buildingService.AssignWorkers(workers);
 
         _buildingCoordinator.Advance(gameHours, OnIndependentBuildingCompleted);
     }
@@ -955,6 +955,8 @@ public partial class Main : Node2D
         new("WorldEventSettled");             // §7.2「大事件的发生与结算」—— D-079：大事件结算
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvCaravanTrade =
         new("CaravanTrade");                  // §7.2「村庄日常（采集、摆摊、社交等）」—— D-081：商队成交
+    private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvWorldEventSkipped =
+        new("WorldEventSkipped");            // §7.2「大事件的发生与结算」—— D-082：兽潮守不住 ⇒ 这次没来
 
     /// <summary>
     /// 副本战利品结算（运行闭环验证与经济数据采集准备）。

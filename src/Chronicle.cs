@@ -243,6 +243,28 @@ public static class Chronicle
         return new Entry(day, tpl, who);
     }
 
+    /// <summary>
+    /// 大事件<b>这次没来</b>（基线 §7.2「大事件的发生与结算」；D-082）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **必须让玩家知道**：兽潮「守不住就不触发」是**好事**（弱村子不再被罚），
+    /// 但如果什么都不说，玩家会以为游戏出问题了 ⇒ 杂谈里给一句。
+    /// </remarks>
+    /// <param name="day">游戏日。</param>
+    /// <param name="what">哪个事件。</param>
+    /// <param name="reason">为什么没来（如「守不住」）。</param>
+    public static Entry WorldEventSkipped(int day, string what, string reason)
+    {
+        string tpl = reason == "守不住"
+            ? Pick(new[]
+            {
+                $"{what}的动静在远处散了。村里守不住它，它没有进村。",
+                $"这一回{what}没有来——村里的阵势挡不住它。",
+            })
+            : $"{what}这次没有来（{reason}）。";
+        return new Entry(day, tpl, null);
+    }
+
     public static Entry SiteOpened(int day, string what, int workers)
     {
         string tpl = workers switch

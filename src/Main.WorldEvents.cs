@@ -15,6 +15,43 @@ public partial class Main : Node2D
     /// <summary>上次推进大事件阶段时的游戏日（一个游戏日只推一次）。</summary>
     private int _worldEventLastDay = -1;
 
+    /// <summary>今天这次兽潮**被过滤掉了**（守不住 ⇒ 不触发，D-082）⇒ 要给玩家一句话。</summary>
+    private bool _worldEventSkippedToday = false;
+
+    /// <summary>
+    /// 这个模板<b>这次要不要来</b>（D-082：守不住就别触发兽潮）。
+    /// </summary>
+    /// <param name="template">候选模板。</param>
+    /// <returns>true = 来；false = 这次不来。</returns>
+    /// <remarks>
+    /// ⚠️ **只有兽潮有这道闸**：商队不打仗，没有「守不守得住」这回事。
+    /// <para>⚠️ **预演是纯计算**（战斗没有随机数，D-062）⇒ 不产生任何副作用，
+    /// 且与真正结算走**同一段代码**（`BeastTideBattle`）⇒ 预演与实战不可能不一致。</para>
+    /// </remarks>
+    private bool ShouldTrigger(WorldEventTemplate template)
+    {
+        if (template.Id != ClaudeCodeGameStudios.Application.WorldEventTemplates.BeastTideId)
+        {
+            return true;
+        }
+
+        var participants = _states.Select(s => s.Id.Value).ToArray();
+        bool canHold = ClaudeCodeGameStudios.Application.BeastTideBattle.CanHold(
+            participants,
+            BeastTideHeroStats,
+            _beastTideCombat,
+            _beastTideCombat);
+
+        if (!canHold)
+        {
+            // ⚠️ **弱村子不再被罚**（D-082）：守不住 ⇒ 这次兽潮不来。
+            _worldEventSkippedToday = true;
+            GD.Print("WORLDEVENT 兽潮这次没来 —— 村里守不住它。");
+        }
+
+        return canHold;
+    }
+
     /// <summary>大事件簿（D-079）。</summary>
     private void InitWorldEvents()
     {
@@ -29,6 +66,7 @@ public partial class Main : Node2D
         var beastTideCombat = new ClaudeCodeGameStudios.Application.FormulaCombat(
             monsterStats: stage => ScaleBeastTideMonster(
                 ClaudeCodeGameStudios.Domain.Combat.CombatParameters.MonsterFor(stage), _tier));
+        _beastTideCombat = beastTideCombat;
 
         _worldEvents.Register(ClaudeCodeGameStudios.Application.WorldEventTemplates.BeastTide(
             periodDays: WorldEventBeastTidePeriodDays, beastTideCombat, beastTideCombat,
@@ -53,6 +91,15 @@ public partial class Main : Node2D
 
     /// <summary>商队市场（D-081）。</summary>
     private ClaudeCodeGameStudios.Application.CaravanMarketService _caravanMarket = null!;
+
+    /// <summary>
+    /// 兽潮专用的战斗解算器（D-080：敌方规模随村庄层级递增）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **留成字段**（不 locals）：触发前的「守得住吗」预演（D-082）也要用**同一份**解算器
+    /// ⇒ 预演与实战必须完全一致（否则「预演说守得住、实战却输了」就很难解释）。
+    /// </remarks>
+    private ClaudeCodeGameStudios.Application.FormulaCombat _beastTideCombat = null!;
 
     /// <summary>兽潮的触发周期（游戏内天数）。</summary>
     private const int WorldEventBeastTidePeriodDays = 7;
@@ -167,6 +214,8 @@ public partial class Main : Node2D
         _worldEventLastDay = today;
 
         // ① 触发：周期到了就建一个实例。
+        // ⚠️ **过滤器**：D-082 拍板「守不住就别触发兽潮」⇒
+        // 触发前**先打一遍**（纯计算、无副作用）问「守得住吗」⇒ 守不住就不建实例。
         var instance = _worldEvents.TriggerByPeriod(
             today, _clock.Now,
             participants: _states.Select(s => s.Id.Value).ToArray(),
@@ -174,7 +223,26 @@ public partial class Main : Node2D
             {
                 _worldEventSeq++;
                 return $"{template.Id}@{day}.{_worldEventSeq}";
-            });
+            },
+            shouldTrigger: ShouldTrigger);
+
+        if (instance is null)
+        {
+            // ⚠️ **被过滤掉的那一次也要给玩家一句话**（否则玩家会以为游戏坏了）：
+            // 「兽潮没来」是**好事**（弱村子不再被惩罚），但得说出来。
+            if (_worldEventSkippedToday)
+            {
+                Emit(EvWorldEventSkipped, "兽潮", new[] { StWorldEvent },
+                    new Dictionary<string, string>
+                    {
+                        ["event"] = "兽潮",
+                        ["template"] = ClaudeCodeGameStudios.Application.WorldEventTemplates.BeastTideId,
+                        ["reason"] = "守不住",
+                    },
+                    ev => Chronicle.WorldEventSkipped((int)_clock.Day, ev.Payload["event"], ev.Payload["reason"]).Text);
+                _worldEventSkippedToday = false;
+            }
+        }
 
         if (instance is not null)
         {

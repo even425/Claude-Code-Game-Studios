@@ -88,16 +88,25 @@ public sealed class WorldEventBook
     /// 生成实例标识的委托（<b>由调用方给</b> ⇒ 本类不引入随机源
     /// ⇒ 可复现、可离线验算）。
     /// </param>
+    /// <param name="shouldTrigger">
+    /// <b>触发过滤器</b>（可空 = 全部触发）：返回 false ⇒ 这个模板<b>这次不来</b>。
+    /// </param>
     /// <returns>这次新建的实例；没到周期则返回 null。</returns>
     /// <remarks>
     /// ⚠️ <b>「同一个周期不重复触发」</b>：按 <c>simDay % PeriodDays == 0</c> 判定
     /// ⇒ 同一天多次调用只会创建一次（实例簿里有活跃实例时不再建）。
+    /// <para>⚠️ <b>过滤器是「这次不来」的正规入口</b>（D-082）：
+    /// 兽潮「守不住就不触发」用的就是它 ⇒ 框架不需要知道「守不守得住」这种业务规则
+    /// ⇒ 规则留在调用方（应用层），框架只管「该不该来」。
+    /// ⚠️ **过滤掉的那一次不算触发失败**：调用方要自己给玩家一条说明
+    /// （否则玩家会以为游戏出问题了）。</para>
     /// </remarks>
     public WorldEventInstance? TriggerByPeriod(
         long simDay,
         double now,
         IReadOnlyList<string> participants,
-        Func<WorldEventTemplate, long, string> instanceIdFactory)
+        Func<WorldEventTemplate, long, string> instanceIdFactory,
+        Func<WorldEventTemplate, bool>? shouldTrigger = null)
     {
         if (instanceIdFactory is null) throw new ArgumentNullException(nameof(instanceIdFactory));
         participants ??= Array.Empty<string>();
@@ -110,6 +119,9 @@ public sealed class WorldEventBook
             bool alreadyActive = ActiveInstances
                 .Any(i => i.TemplateId == template.Id);
             if (alreadyActive) continue;
+
+            // ⚠️ 调用方说「这次不来」⇒ 不建实例（D-082：守不住就别触发兽潮）。
+            if (shouldTrigger is not null && !shouldTrigger(template)) continue;
 
             var instance = new WorldEventInstance
             {

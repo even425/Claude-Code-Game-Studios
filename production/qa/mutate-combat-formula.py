@@ -23,6 +23,7 @@ except ImportError:
     pass
 
 import hashlib
+import os
 import re
 import subprocess
 import sys
@@ -43,7 +44,8 @@ def run_tests():
     r = subprocess.run(
         ["dotnet", "test", str(TESTS), "-c", "Release", "--nologo", "-v", "q",
          "--filter", FILTER],
-        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env={**os.environ, "MSBUILDDISABLENODEREUSE": "1"})
     out = r.stdout + r.stderr
     counts = re.findall(r"(?:失败|Failed):\s*(\d+)", out)
     if counts:
@@ -78,10 +80,39 @@ def mutate(label, target: Path, old, new):
                     print("      " + line.strip()[:160])
         return ok
     finally:
-        target.write_bytes(backup)
-        if sha(target) != before:
-            print(f"!! 复原失败 [{label}]")
+        if not _restore(target, backup, before):
+            print(f"!! 复原失败 [{label}]（变异可能留在源码里！）")
 
+
+
+def _restore(target, backup: bytes, expected_sha: str) -> bool:
+    """把源文件复原回去（**带重试与校验**）。
+
+    ⚠️ **为什么需要重试**：Windows 上 `dotnet test` 的 MSBuild 节点会**复用**
+    （node reuse）⇒ 编译服务器在子进程退出后**仍持有源文件的句柄**
+    ⇒ 直接写会报 `OSError: [Errno 22]` ⇒ **变异就留在源码里了**
+    （实测：D-079 那一档就这样残留过，把幂等机制改成了摆设）。
+
+    ⚠️ **为什么必须校验**：复原失败还接着往下跑 ⇒ 下一个脚本的**基线是红的**
+    ⇒ 矩阵「失败」但不是真失败 ⇒ 比没有守卫更糟。
+    ⇒ 复原不成功就**大声报错**，让这一轮明确失败。
+    """
+    import hashlib
+    import time
+
+    for attempt in range(3):
+        try:
+            target.write_bytes(backup)
+        except OSError:
+            time.sleep(0.4)
+            continue
+
+        if hashlib.sha256(target.read_bytes()).hexdigest() == expected_sha:
+            return True
+        time.sleep(0.4)
+
+    print(f"!! 复原失败（文件被占用？）：{target}")
+    return False
 
 def main() -> int:
     results = []

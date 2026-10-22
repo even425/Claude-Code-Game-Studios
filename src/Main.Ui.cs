@@ -593,7 +593,11 @@ public partial class Main : Node2D
         }
 
         // 施工队：**没被派去副本的人**去工地（副本里的人还在路上）。
-        int workers = _heroes.Count(h => !h.Away && !h.ToSite && IsPresent(h));
+        // ⚠️ **只分到应得的那一份**（D-082：多栋同时施工）：开工时先按
+        // 「可用人力 ÷ (在建栋数 + 1)」给自己留一份，剩下的下一帧由
+        // `AssignWorkers` 统一分配 ⇒ 不会出现「同一批人同时算给两栋」。
+        int available = _heroes.Count(h => !h.Away && !h.ToSite && IsPresent(h));
+        int workers = available / (_buildingService.ActiveConstructions.Count + 1);
         if (!_buildingService.TryStart(definition, workers))
         {
             GD.Print($"BUILD {definition.Name} 开工失败（资源或落点不满足）。");
@@ -668,6 +672,22 @@ public partial class Main : Node2D
         }
 
         Refresh();
+    }
+
+    /// <summary>
+    /// 在施工的几栋建筑 + 各自进度（顶栏那行用；没有在建时返回空串）。
+    /// </summary>
+    /// <returns>例如「围栏 40% · 试炼塔 20%」。</returns>
+    private string ActiveSitesText()
+    {
+        var parts = new List<string>();
+        foreach (var c in _buildingService.ActiveConstructions)
+        {
+            int pct = (int)(c.Instance.ConstructionProgress * 100);
+            parts.Add($"{c.Definition.Name} {pct}%");
+        }
+
+        return string.Join(" · ", parts);
     }
 
     /// <summary>
@@ -898,9 +918,14 @@ public partial class Main : Node2D
         int on = _heroes.Count(h => h.Present);
         int away = _squad.Count(h => h.Away);
 
+        // ⚠️ **多栋同时施工时要能一眼看出**（D-082）：顶栏那行只放得下一个名字，
+        // 所以把在施工的几栋连同进度**合成一句**（「围栏 40% · 试炼塔 20%」）。
+        string sites = ActiveSitesText();
         _stats.Text = _buildTarget >= 0
             ? $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    村金 {VillageGold}    在村 {on}/{_heroes.Count}    工地：{_village.BuildName}"
-            : $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    村金 {VillageGold}    在村 {on}/{_heroes.Count}";
+            : sites.Length > 0
+                ? $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    村金 {VillageGold}    在村 {on}/{_heroes.Count}    工地：{sites}"
+                : $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    村金 {VillageGold}    在村 {on}/{_heroes.Count}";
 
         RefreshRoster();
         RefreshRelationSummary();

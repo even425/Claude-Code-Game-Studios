@@ -24,6 +24,7 @@ except ImportError:
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -51,7 +52,8 @@ def run_tests(filter: str = FILTER) -> int:
     r = subprocess.run(
         ["dotnet", "test", str(TESTS), "-c", "Release", "--nologo", "-v", "q",
          "--filter", filter],
-        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env={**os.environ, "MSBUILDDISABLENODEREUSE": "1"})
     out = r.stdout + r.stderr
     LAST_OUTPUT = out
     for pat in (r"失败:\s*(\d+)", r"Failed:\s*(\d+)"):

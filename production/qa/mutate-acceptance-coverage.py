@@ -29,6 +29,7 @@ README 还写着「**14** | 2（I9 受阻…）」。
 用法：python production/qa/mutate-acceptance-coverage.py
 """
 import hashlib
+import os
 import re
 import subprocess
 import sys
@@ -68,7 +69,8 @@ def run_tests():
     r = subprocess.run(
         ["dotnet", "test", str(TESTS), "-c", "Release", "--nologo", "-v", "q",
          "--filter", FILTER],
-        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env={**os.environ, "MSBUILDDISABLENODEREUSE": "1"})
     out = r.stdout + r.stderr
     for pat in (r"失败:\s*(\d+)", r"Failed:\s*(\d+)"):
         m = re.search(pat, out)

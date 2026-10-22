@@ -400,35 +400,44 @@ public partial class Main : Node2D
         return baseStats with { Health = baseStats.Health + bonus };
     }
 
-    private ClaudeCodeGameStudios.Application.DungeonFlowOutcome ResolveDungeon(
-        Job job, List<HeroAgent> crew)
-    {
-        // 参与者标识取自**任务自己的成员名单** —— 那是领域层的记录，
-        // 不必在这里靠 _states/_heroes 的下标对齐反推。
-        //
-        // 【R-01 修掉的坑】回退分支原来取的是 h.**Name**（显示名），
-        // 而主分支取的是 m.Id.**Value**（英雄标识）。奖励资格要按**标识**判定
-        // （背包查找、关系幂等键都用标识），显示名会与其它地方对不上 ——
-        // 同一个英雄在两条路径上是两个不同的「人」。
-        var ids = _mission is not null
-            ? _mission.Members.Select(m => m.Id.Value).ToArray()
-            : crew.Select(h => h.Id.Value).ToArray();
+    /// <summary>
+    /// 一次副本的<b>解算结果</b> —— 出发时算好，归来时用来结算（D-075）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么要「出发时算、归来时结算」</b>：副本在日历上占的时间
+    /// = <b>行程 + 战斗</b>，而战斗要多久<b>只有打完才知道</b>。
+    /// ⇒ 若等到归来时才解算，那时战斗已经「不花时间」了（默认 0）⇒ 时间轴是假的。</para>
+    /// <para>⇒ 战斗<b>完全确定</b>（D-062 不设命中 ⇒ 没有随机数）
+    /// ⇒ <b>出发时解算与归来时解算的结果必然相同</b>
+    /// ⇒ 可以提前算好，把战斗耗时并进行程，再在归来时用**同一份结果**结算
+    /// （<b>不是重算一遍</b>）。</para>
+    /// </remarks>
+    private sealed record PreparedDungeon(
+        ClaudeCodeGameStudios.Application.DungeonFlow Flow,
+        ClaudeCodeGameStudios.Application.DungeonFlowOutcome Outcome,
+        double GameHours);
 
+    /// <summary>
+    /// 解算一场副本（**只算不结算**）—— 出发时用。
+    /// </summary>
+    /// <param name="ids">参战者标识（与任务成员一致）。</param>
+    /// <returns>解算结果与它占用的游戏内小时数。</returns>
+    private PreparedDungeon PrepareDungeon(IReadOnlyList<string> ids)
+    {
         // 参战队伍的**状态快照** —— 战斗解算能看到「谁在场、当时什么情况」。
         // ⚠️ 它与上面的标识名单**必须来自同一份名单**（任务成员 / 随队者），
         // 否则战斗看到的队伍与结算认定的队伍就不是同一批人。
         var party = new ClaudeCodeGameStudios.Domain.Combat.CombatPartySnapshot(
             (_mission is not null
                 ? _mission.Members.Select(m => m.Id.Value)
-                : crew.Select(h => h.Id.Value))
+                : ids)
             .Select(id =>
             {
                 var st = _states.FirstOrDefault(s => s.Definition.Id.Value == id);
                 // 战斗属性：按**性格 × 投入度**换算（D-060 / D-065）。
                 // ⚠️ 它在**英雄个体**上（`HeroAgent`），不在静态定义里 ⇒ 要按标识找那个人；
                 // 找不到 ⇒ 属性「不明」⇒ 战斗会**大声失败**（而不是让一个没有战斗属性的人参战）。
-                var agent = crew.FirstOrDefault(h => h.Id.Value == id)
-                         ?? _heroes.FirstOrDefault(h => h.Id.Value == id);
+                var agent = _heroes.FirstOrDefault(h => h.Id.Value == id);
                 var stats = agent is null
                     ? ClaudeCodeGameStudios.Domain.Combat.CombatStats.Unknown
                     : CombatStatsFor(agent);
@@ -446,7 +455,31 @@ public partial class Main : Node2D
             DungeonName, ids, _combat, _combat, party: party);
 
         var outcome = flow.RunToCompletion();
-        flow.Settle();          // I4：整场只结算一次
+
+        return new PreparedDungeon(flow, outcome, outcome.TotalGameHours);
+    }
+
+    private ClaudeCodeGameStudios.Application.DungeonFlowOutcome ResolveDungeon(
+        Job job, List<HeroAgent> crew)
+    {
+        // 参与者标识取自**任务自己的成员名单** —— 那是领域层的记录，
+        // 不必在这里靠 _states/_heroes 的下标对齐反推。
+        //
+        // 【R-01 修掉的坑】回退分支原来取的是 h.**Name**（显示名），
+        // 而主分支取的是 m.Id.**Value**（英雄标识）。奖励资格要按**标识**判定
+        // （背包查找、关系幂等键都用标识），显示名会与其它地方对不上 ——
+        // 同一个英雄在两条路径上是两个不同的「人」。
+        var ids = _mission is not null
+            ? _mission.Members.Select(m => m.Id.Value).ToArray()
+            : crew.Select(h => h.Id.Value).ToArray();
+
+        // ⚠️ **解算与结算分开**（D-075）：出发时已经解算过一次（为了知道战斗要多久），
+        // 这里**用那一份结果**，**不重算**。
+        // ⇒ 重算会产生**新的副本标识** ⇒ 结算幂等键会变 ⇒ 同一场副本可能被发两次奖。
+        var prepared = _preparedDungeon ?? PrepareDungeon(ids);
+        _preparedDungeon = null;
+        var outcome = prepared.Outcome;
+        prepared.Flow.Settle();      // I4：整场只结算一次
 
         if (_mission is not null)
         {

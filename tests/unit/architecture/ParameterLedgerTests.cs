@@ -238,6 +238,10 @@ public class ParameterLedgerTests
                 .Select(m => $"{m.Groups[1].Value}:{m.Groups[2].Value}:{m.Groups[3].Value}:{m.Groups[4].Value}")
                 .ToList(),
 
+            // draws: 3 → "3"（抽取次数 —— 此前**没进台账** ⇒ 改了没人知道）
+            ["loot-draws"] = text => Regex.Matches(text, @"draws:\s*(\d+)")
+                .Select(m => m.Groups[1].Value).ToList(),
+
             // "莽" => 1.2  → "莽=1.2"（只取带引号的分支，跳过 `_` 默认臂）
             ["switch-arms"] = text => Regex.Matches(text, @"""([^""]+)""\s*=>\s*([\d.]+)")
                 .Select(m => $"{m.Groups[1].Value}={m.Groups[2].Value}").ToList(),

@@ -44,7 +44,7 @@ public class MainStructureTests
         ("战斗执行", new[]
         {
             "ResolveDungeon", "ComputeLoot", "ResolveExpedition", "NextDungeonRunId",
-            "CombatStatsFor",
+            "CombatStatsFor", "PrepareDungeon",
         }),
         ("结算入账", new[]
         {

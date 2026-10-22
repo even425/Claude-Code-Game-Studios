@@ -483,6 +483,16 @@ public partial class Main : Node2D
 
     /// <summary>出征中：结束时刻（绝对小时）。0 = 没出征。</summary>
     private double _pendingEnd = 0.0;
+
+    /// <summary>
+    /// 出发时<b>预解算</b>好的副本（D-075）—— 归来时用它结算，<b>不重算</b>。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么要有它</b>：副本在日历上占的时间 = <b>行程 + 战斗</b>，
+    /// 而战斗要多久<b>只有打完才知道</b> ⇒ 出发时就得先把战斗算一遍
+    /// （战斗完全确定 ⇒ 结果与归来时算的<b>必然相同</b>）。
+    /// </remarks>
+    private PreparedDungeon? _preparedDungeon = null;
     private Job _pendingJob;
 
     private bool _selfTestDone;

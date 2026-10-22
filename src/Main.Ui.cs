@@ -491,7 +491,6 @@ public partial class Main : Node2D
         if (ready.Count == 0) return;
 
         _pendingJob = Jobs[NextInt(Jobs.Length)];
-        _pendingEnd = _clock.AbsoluteHour + _pendingJob.Hours;
 
         // 建任务并出发：合法性、占用与幂等都由领域层负责，
         // 表现层不手动改 Away —— 那是英雄状态自己的事（基线 §13.5）。
@@ -508,6 +507,7 @@ public partial class Main : Node2D
         catch (ArgumentException)
         {
             // 无效队伍不能启动任务（02 F-01）—— 静默拒绝，不打断玩家
+            _mission = null;
             return;
         }
         catch (InvalidOperationException)
@@ -518,6 +518,27 @@ public partial class Main : Node2D
         }
 
         var squadNames = ready.Select(h => h.Name).ToArray();
+
+        // ── D-075：副本的行程时长 = 路程 + 战斗 ──────────────────────
+        //
+        // 战斗要多久**只有打完才知道** ⇒ 出发时先**预解算**一遍
+        // （战斗完全确定 ⇒ 结果与归来时算的必然相同）。
+        // ⚠️ 采集任务（非副本）**没有战斗** ⇒ 行程就是任务表里的小时数。
+        double battleHours = 0.0;
+        if (_pendingJob.Glory)
+        {
+            var prepared = PrepareDungeon(_mission.Members.Select(m => m.Id.Value).ToArray());
+            _preparedDungeon = prepared;
+            battleHours = prepared.GameHours;
+        }
+
+        // ⚠️ **总时长的算法只有这一处**（`ExpeditionTiming.TotalHours`）——
+        // 守卫盯着它，忘了加战斗那半边会立刻红。
+        double tripHours = ClaudeCodeGameStudios.Application.ExpeditionTiming.TotalHours(
+            _pendingJob.Hours, battleHours);
+
+        _pendingEnd = _clock.AbsoluteHour + tripHours;
+
         Emit(EvDispatched, string.Join("、", squadNames),
             new[] { StHeroActivity, StDungeonRun },
             new Dictionary<string, string>
@@ -525,6 +546,8 @@ public partial class Main : Node2D
                 ["job"] = _pendingJob.Name,
                 ["names"] = string.Join("、", squadNames),
                 ["glory"] = _pendingJob.Glory ? "1" : "0",
+                // D-075：这一趟占多久（路程 + 战斗），让玩家看得见。
+                ["hours"] = tripHours.ToString("0.##"),
             },
             _ => Chronicle.SquadLeft((int)_clock.Day, squadNames).Text);
         foreach (var h in ready) h.Away = true;      // 领域层已把 HeroState 置为随队；这里同步表现层的 HeroAgent

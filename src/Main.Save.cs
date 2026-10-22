@@ -124,6 +124,19 @@ public partial class Main : Node2D
             }).ToList(),
         AppliedRelationKeys = _relationship.AppliedKeys
             .OrderBy(k => k, StringComparer.Ordinal).ToList(),
+        // D-079：大事件实例 + **已应用的后果键**（幂等依据）。
+        // 不存它 ⇒ 读档后重放结算会把后果**再应用一次**（基线 §11.6 V2）。
+        WorldEvents = _worldEvents.Snapshot().Select(e => new ClaudeCodeGameStudios.Data.WorldEventSave
+        {
+            Id = e.Id,
+            TemplateId = e.TemplateId,
+            Phase = (int)e.Phase,
+            StartedAt = e.StartedAt,
+            Progress = e.Progress,
+            Participants = e.Participants.ToList(),
+            AppliedConsequences = e.AppliedConsequences.OrderBy(k => k, StringComparer.Ordinal).ToList(),
+            Succeeded = e.Outcome?.Succeeded,
+        }).ToList(),
         // 第四阶段 M4：摊位（库存是从英雄背包挪走的货）、购买幂等键、每日购物闸门。
         // 三者缺一，读档都会造出「存档前没发生过的世界」。
         Stalls = _stallService.Snapshot().Select(s => new ClaudeCodeGameStudios.Data.StallSave
@@ -303,6 +316,11 @@ public partial class Main : Node2D
 
         // 每日购物闸门：读档回到存档那天，同一天不应再跑一遍尝试。
         _dailyShopping.RestoreLastRunDay(save.DailyShoppingLastRunDay);
+
+        // D-079：大事件实例（跨日进行中的 + 已应用的后果键）。
+        // ⚠️ **必须在事件簿已建好之后**（`InitWorldEvents` 在 `_Ready` 里跑）
+        // ⇒ 读档入口要在 `_Ready` 之后 ⇒ 这里是安全的。
+        RestoreWorldEvents(save.WorldEvents);
 
         // ── 事件管道重置（M0 审计 R-04）──
         // 读档是换一个世界：旧事件/旧杂谈继续参与去重，会让跨档复用的事件 ID

@@ -37,6 +37,8 @@ public class MainStructureTests
         ("模拟推进", new[]
         {
             "_Process", "TickBuild", "TickIndependentBuilds", "OnIndependentBuildingCompleted",
+            "TickWorldEvents", "InitWorldEvents", "ApplyWorldEventConsequence",
+            "RestoreWorldEvents",
             "RunCollect", "CollectOneDay", "RunDailyShoppingIfNeeded",
             "DispatchDungeonForCollection", "DispatchOneDungeonForCollection",
             "OpenStallsForCollection", "UpgradeVillageForCollection",

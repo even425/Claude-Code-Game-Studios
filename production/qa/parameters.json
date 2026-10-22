@@ -320,6 +320,38 @@
       "status": "【已确认】D-077",
       "note": "召唤一次花多少金币（100，从村金库扣）—— D-077 拍板；锚是「一个人一天挣多少」（约 100 金/天）⇒ 不至于招不起，也不至于白招",
       "value": "100"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBeastTidePeriodDays",
+      "kind": "参数",
+      "status": "【已确认】D-079",
+      "note": "兽潮的触发周期（7 个游戏日）—— D-079 拍板「按游戏内周期触发」",
+      "value": "7"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventCaravanPeriodDays",
+      "kind": "参数",
+      "status": "【已确认】D-079",
+      "note": "商队来访的触发周期（11 个游戏日）—— D-079 拍板",
+      "value": "11"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "_worldEventSeq",
+      "kind": "技术值",
+      "status": "【技术值】D-079",
+      "note": "大事件实例标识的序号（存档要能重建它 ⇒ 随存档走）",
+      "value": "0"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "_worldEventLastDay",
+      "kind": "技术值",
+      "status": "【技术值】D-079",
+      "note": "上次推进大事件阶段时的游戏日（一个游戏日只推一次）",
+      "value": "-1"
     }
   ],
   "nonParameters": [

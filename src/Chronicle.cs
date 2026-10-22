@@ -184,6 +184,41 @@ public static class Chronicle
         return new Entry(day, tpl, null);
     }
 
+    /// <summary>
+    /// 大事件的<b>预兆</b>（基线 §7.2「大事件的发生与结算」；D-079）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ 玩家**要能读到**「要来了」（基线 §11.6 V3）⇒ 这条必须进杂谈，
+    /// 不能只躺在事件日志里。
+    /// </remarks>
+    public static Entry WorldEventOmen(int day, string what)
+    {
+        string tpl = Pick(new[]
+        {
+            $"远处的动静比往常大。村里有人说，{what}要来了。",
+            $"{what}的消息传到了村口。有人开始往家搬东西。",
+            $"天色不对。{what}大概快了。",
+        });
+        return new Entry(day, tpl, null);
+    }
+
+    /// <summary>大事件的<b>结算</b>（基线 §7.2「大事件的发生与结算」；D-079）。</summary>
+    public static Entry WorldEventSettled(int day, string what, bool succeeded)
+    {
+        string tpl = succeeded
+            ? Pick(new[]
+            {
+                $"{what}过去了。这一回，村里守住了。",
+                $"{what}闹了一阵，最后还是被挡在了村外。",
+            })
+            : Pick(new[]
+            {
+                $"{what}过去了。这一回没能挡住。",
+                $"{what}退去的时候，村里少了些东西。",
+            });
+        return new Entry(day, tpl, null);
+    }
+
     public static Entry SiteOpened(int day, string what, int workers)
     {
         string tpl = workers switch

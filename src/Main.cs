@@ -634,6 +634,9 @@ public partial class Main : Node2D
         _summonService = new ClaudeCodeGameStudios.Application.SummonService(
             _villageModel, ClaudeCodeGameStudios.Application.Stall.StallService.Gold);
 
+        // D-079：大事件框架（模板注册表 + 实例簿）。
+        InitWorldEvents();
+
         // 日常循环的初始化必须早于 OnSummon —— 它要往 _states 里加条目
         // 第三阶段 M2：随机源改为 Main._rng（可存档），社交目标与关系权重在此注入。
         _life = new DailyLife(_rng, DailyLife.DefaultEffects(
@@ -752,6 +755,9 @@ public partial class Main : Node2D
         // 4. 每日自主购物（第四阶段 3B）：按游戏日触发一次。
         //    每帧只判一个整数（LastRunDay == today 就直接返回），不会每帧执行购物逻辑。
         RunDailyShoppingIfNeeded();
+
+        // 4b. 大事件（D-079）：按游戏日推进一次（触发 → 阶段 → 结算）。
+        TickWorldEvents();
 
         // 5. 出征回来了没有
         if (Expending && _clock.AbsoluteHour >= _pendingEnd) ResolveExpedition();
@@ -943,6 +949,10 @@ public partial class Main : Node2D
         new("BuildingConstructed");            // §7.2「建筑建成 / 升级」—— D-074：独立建筑建成
     private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvTrialTowerCleared =
         new("TrialTowerCleared");              // §7.2「英雄受伤 / 康复」—— D-074：试炼塔打赢 ⇒ 永久加生命
+    private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvWorldEventStarted =
+        new("WorldEventStarted");              // §7.2「大事件的发生与结算」—— D-079：大事件预兆
+    private static readonly ClaudeCodeGameStudios.Domain.Events.EventTypeId EvWorldEventSettled =
+        new("WorldEventSettled");             // §7.2「大事件的发生与结算」—— D-079：大事件结算
 
     /// <summary>
     /// 副本战利品结算（运行闭环验证与经济数据采集准备）。
@@ -983,6 +993,8 @@ public partial class Main : Node2D
         new("settlement.applied");
     private static readonly ClaudeCodeGameStudios.Domain.Events.StateKey StRelationship =
         new("relationship.value");             // 第三阶段 M5：关系变化
+    private static readonly ClaudeCodeGameStudios.Domain.Events.StateKey StWorldEvent =
+        new("worldEvent.instance");            // D-079：大事件实例（阶段 / 结算）
     private static readonly ClaudeCodeGameStudios.Domain.Events.StateKey StHeroWallet =
         new("hero.wallet");                    // 第四阶段 3B：英雄货币变化
     private static readonly ClaudeCodeGameStudios.Domain.Events.StateKey StHeroBag =

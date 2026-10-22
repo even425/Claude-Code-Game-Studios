@@ -2,14 +2,29 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ClaudeCodeGameStudios.Domain.Relationships;
+using ClaudeCodeGameStudios.Domain.WorldEvents;
 
 namespace ClaudeCodeGameStudios.Data;
 
 /// <summary>存档格式版本。基线 §13.7 要求存档带版本号并有迁移入口。</summary>
 public readonly record struct SaveVersion(int Major, int Minor)
 {
-    /// <summary>当前版本。<b>【已确认】</b>(0,6) —— R-05 第四轮 / D-054 阶段 4 升。</summary>
+    /// <summary>当前版本。<b>【已确认】</b>(0,7) —— R-05 第五轮 / D-079 升。</summary>
     /// <remarks>
+    /// <b>0,6 → 0,7</b>（`07` **D-079** 拍板）：存档里增
+    /// <list type="bullet">
+    /// <item><see cref="SaveGame.WorldEvents"/>（进行中的大事件实例）</item>
+    /// <item>每个实例的<b>已应用后果键</b>（<see cref="WorldEventSave.AppliedConsequences"/>）</item>
+    /// </list>
+    /// <para>
+    /// <b>为什么必须存</b>：① 事件**跨日进行中**（预兆→准备→进行中→结算），
+    /// 不存它读档后事件会凭空消失；② <b>已应用的后果</b>不存 ⇒
+    /// 读档后重放结算会把后果**再应用一次**（基线 §11.6 V2 明令禁止）。
+    /// </para>
+    /// <para>
+    /// 旧档<b>整份拒绝</b>（I11 + D-021/D-029/D-036 先例），<b>不</b>写迁移器。
+    /// </para>
+    /// <para>
     /// <b>0,5 → 0,6</b>（`07` **D-054** 阶段 4 拍板）：存档里增
     /// <list type="bullet">
     /// <item><see cref="HeroSave.GoldCarry"/>（每英雄的<b>待发零头</b>，单位 1/100 金）</item>
@@ -17,9 +32,6 @@ public readonly record struct SaveVersion(int Major, int Minor)
     /// <item><see cref="SaveGame.GoldSpentTotal"/>（累计销毁的金币 —— 升级花掉的）</item>
     /// <item><see cref="SaveGame.VillageTier"/>（村庄层级 —— <b>顺带修既有缺陷</b>）</item>
     /// </list>
-    /// <para>
-    /// 旧档<b>整份拒绝</b>（I11 + D-021/D-029/D-036 先例），<b>不</b>写迁移器。
-    /// </para>
     /// <para>
     /// <b>为什么必须存</b>：待发零头是<b>已经挣到、只是还没发出去</b>的钱，
     /// 读档后丢掉它等于让那部分钱凭空消失 —— 与 D-052 存税额余数是**同一条理由**。
@@ -30,7 +42,7 @@ public readonly record struct SaveVersion(int Major, int Minor)
     /// 而升级花掉的金币已经记下了 → <b>账实不符</b>。这次一并补上。
     /// </para>
     /// </remarks>
-    public static SaveVersion Current => new(0, 6);
+    public static SaveVersion Current => new(0, 7);
 
     /// <inheritdoc />
     public override string ToString() => $"{Major}.{Minor}";
@@ -465,6 +477,44 @@ public sealed class SaveGame
     /// </para>
     /// </remarks>
     public List<string> SquadMemberIds { get; set; } = new();
+
+    /// <summary>
+    /// 大事件的实例（0,7 新增，D-079）。
+    /// </summary>
+    /// <remarks>
+    /// <b>必须落盘</b>：① 事件跨日进行中（预兆→准备→进行中→结算），
+    /// 不存它读档后事件会消失；② <b>已应用的后果</b>跟着实例一起存
+    /// ⇒ 读档后重放结算**不会**把后果应用第二次（基线 §11.6 V2）。
+    /// </remarks>
+    public List<WorldEventSave> WorldEvents { get; set; } = new();
+}
+
+/// <summary>一个大事件实例的存档记录（0,7 新增，D-079）。</summary>
+public sealed class WorldEventSave
+{
+    /// <summary>实例标识。</summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>用的哪个模板。</summary>
+    public string TemplateId { get; set; } = "";
+
+    /// <summary>当前阶段的序号（对应 <c>WorldEventPhase</c>）。</summary>
+    public int Phase { get; set; }
+
+    /// <summary>开始时间（模拟秒）。</summary>
+    public double StartedAt { get; set; }
+
+    /// <summary>进度（0..1）。</summary>
+    public double Progress { get; set; }
+
+    /// <summary>参与者（英雄 Id）。</summary>
+    public List<string> Participants { get; set; } = new();
+
+    /// <summary>已应用的后果键（<b>幂等依据</b>）。</summary>
+    public List<string> AppliedConsequences { get; set; } = new();
+
+    /// <summary>结算结果（成功与否；未结算时为 null）。</summary>
+    public bool? Succeeded { get; set; }
 }
 
 /// <summary>
@@ -499,17 +549,89 @@ public static class SaveValidator
                 $"存档版本 {save.Version} 与当前版本 {SaveVersion.Current} 不符，且没有对应的迁移入口。"));
         }
 
-        if (string.IsNullOrEmpty(save.Village?.Id))
-        {
-            errors.Add(new SaveError("village.id", "村庄标识为空。"));
-        }
-
         // 先收集全部英雄 ID：目标/引用校验是「前向引用」，不能边遍历边建集合
         // （否则 TargetId 指向列表里排在自己后面的人会被误判为断引用）。
+        // ⚠️ 放在**大事件校验之前**：大事件的参与者也要查这张表。
         var allHeroIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var hero in save.Heroes)
         {
             if (!string.IsNullOrEmpty(hero.Id)) allHeroIds.Add(hero.Id);
+        }
+
+        // ── 大事件实例（0,7 新增，D-079）──────────────────────────────────
+        // 不校验它们的后果键，**后果就可能被重发**（基线 §11.6 V2）⇒ 必须校验。
+        if (save.WorldEvents is null)
+        {
+            errors.Add(new SaveError("worldEvents", "大事件列表为 null —— 存档结构坏了。"));
+        }
+        else
+        {
+            var eventIds = new HashSet<string>(StringComparer.Ordinal);
+            for (var i = 0; i < save.WorldEvents.Count; i++)
+            {
+                var ev = save.WorldEvents[i];
+                var path = $"worldEvents[{i}]";
+
+                if (string.IsNullOrEmpty(ev.Id))
+                {
+                    errors.Add(new SaveError($"{path}.id", "大事件实例标识为空。"));
+                }
+                else if (!eventIds.Add(ev.Id))
+                {
+                    errors.Add(new SaveError($"{path}.id", $"大事件实例标识重复：{ev.Id}。"));
+                }
+
+                if (string.IsNullOrEmpty(ev.TemplateId))
+                {
+                    errors.Add(new SaveError($"{path}.templateId", "大事件模板标识为空。"));
+                }
+
+                // 阶段必须是七个合法阶段之一（0..6）—— 越界说明存档被改坏了。
+                if (ev.Phase < (int)WorldEventPhase.Pending || ev.Phase > (int)WorldEventPhase.Finished)
+                {
+                    errors.Add(new SaveError(
+                        $"{path}.phase", $"大事件阶段 {ev.Phase} 无法识别（只允许 0..6）。"));
+                }
+
+                // 幂等依据：键不能为空（空键会让所有空键后果被当成同一个）。
+                if (ev.AppliedConsequences is null)
+                {
+                    errors.Add(new SaveError($"{path}.appliedConsequences", "已应用后果键列表为 null。"));
+                }
+                else
+                {
+                    foreach (var key in ev.AppliedConsequences)
+                    {
+                        if (string.IsNullOrEmpty(key))
+                        {
+                            errors.Add(new SaveError($"{path}.appliedConsequences", "存在空的后果键。"));
+                            break;
+                        }
+                    }
+                }
+
+                // 参与者必须是在册英雄（引用断了 ⇒ 后果不知道该落到谁身上）。
+                if (ev.Participants is null)
+                {
+                    errors.Add(new SaveError($"{path}.participants", "参与者列表为 null。"));
+                }
+                else
+                {
+                    foreach (var pid in ev.Participants)
+                    {
+                        if (!allHeroIds.Contains(pid))
+                        {
+                            errors.Add(new SaveError(
+                                $"{path}.participants", $"参与者「{pid}」在英雄列表中不存在 —— 引用断了。"));
+                        }
+                    }
+                }
+            }
+        }
+
+        if (string.IsNullOrEmpty(save.Village?.Id))
+        {
+            errors.Add(new SaveError("village.id", "村庄标识为空。"));
         }
 
         var heroIds = new HashSet<string>(StringComparer.Ordinal);

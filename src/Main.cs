@@ -816,6 +816,22 @@ public partial class Main : Node2D
                 {
                     GD.Print($"COLLECT 完成：{_collectDays} 天 · 事件 {_events.Count} 条 · " +
                              $"流水 {_economyLog?.RowCount ?? 0} 行 · 跳过副本 {_collectSkippedDungeons} 次");
+
+                    // ⚠️ **D-103：采集结束时写一次存档** ——
+                    // 原因：**有些机制不进经济流水**（关系变化、村庄升级次数…）
+                    // ⇒ 机制覆盖探测器需要**第二路**（读存档）才能查它们
+                    // ⇒ 而采集模式原先**从不写盘** ⇒ 那一路永远是空的。
+                    // ⚠️ **写的是自检专用端口**（`--savepath=`）⇒ 不会碰玩家存档。
+                    try
+                    {
+                        _saves.Write(BuildSave());
+                        GD.Print($"COLLECT 已写存档：{_saves.FilePath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        GD.Print($"COLLECT 写存档失败（不影响采集结果）：{ex.GetType().Name} {ex.Message}");
+                    }
+
                     _economyLog?.Close();
                     GetTree().Quit();
                     return;

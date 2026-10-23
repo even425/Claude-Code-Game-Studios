@@ -60,6 +60,9 @@ def main() -> int:
     out = Path(tempfile.gettempdir()) / f"ccgs-cov-{os.getpid()}.jsonl"
     if out.exists():
         out.unlink()
+    save_path = Path(tempfile.gettempdir()) / f"ccgs-cov-save-{os.getpid()}.json"
+    if save_path.exists():
+        save_path.unlink()
 
     cmd = [
         GODOT, "--headless", "--path", str(ROOT), "--quit-after", "8000000", "--",
@@ -70,6 +73,7 @@ def main() -> int:
         f"--econlog={out}",
         f"--goldreward={args.x}",
         f"--seed={args.seed}",
+        f"--savepath={save_path}",
     ]
     print(f">> 跑一次真实游戏：{args.days} 天 · X={args.x} · seed={args.seed}")
     proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
@@ -90,6 +94,39 @@ def main() -> int:
 
     out.unlink(missing_ok=True)
 
+    # ── 第二路：存档里能查到的机制 ────────────────────────────────
+    # ⚠️ **为什么要有第二路**：经济流水**只记经济** ⇒ 关系变化、杂谈这类
+    # **不进经济流水**的机制在第一路里**永远查不到** ⇒ 只能看存档。
+    save_checks = []
+    if save_path.exists():
+        try:
+            save = json.loads(save_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            save = {}
+            print(f"!! 存档读不出来：{exc}")
+        save_path.unlink(missing_ok=True)
+
+        rels = save.get("Relationships") or []
+        nonzero_rels = [r for r in rels if (r.get("Value") or 0) != 0]
+        save_checks.append((
+            "英雄关系变化", "存档 Relationships",
+            f"非零关系 {len(nonzero_rels)} 条（关系值 ≠ 0 ⇒ 真的变过）",
+            len(nonzero_rels) > 0))
+
+        applied = save.get("AppliedRelationKeys") or []
+        save_checks.append((
+            "关系变化幂等键", "存档 AppliedRelationKeys",
+            f"{len(applied)} 条（每次变化一条 ⇒ 说明真的发生过变化）",
+            len(applied) > 0))
+
+        upgrades = save.get("VillageUpgrades") or 0
+        save_checks.append((
+            "村庄升级", "存档 VillageUpgrades",
+            f"升级 {upgrades} 次（村库的钱真的花出去了）",
+            upgrades > 0))
+    else:
+        print("!! 没找到存档文件（采集模式结束时才写）⇒ 存档那一路跳过。")
+
     print(f"\n机制覆盖（{args.days} 天真实游戏）：")
     missing = []
     expected_zero = []
@@ -104,6 +141,14 @@ def main() -> int:
             flag = "!! "
             missing.append((name, kind, note))
         print(f"  {flag}{name:16} {kind:20} × {n:<6} {note}")
+
+    if save_checks:
+        print("\n存档里能查到的机制（不进经济流水的那几条）：")
+        for name, kind, note, ok in save_checks:
+            flag = "OK " if ok else "!! "
+            print(f"  {flag}{name:16} {kind:28} {note}")
+            if not ok:
+                missing.append((name, kind, note))
 
     print("\n流水里出现过的行类别：")
     for k, v in sorted(kinds.items()):

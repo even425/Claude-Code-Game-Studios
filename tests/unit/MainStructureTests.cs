@@ -95,9 +95,10 @@ public class MainStructureTests
         "SocialTargetCandidates", "OnSocialCompleted", "SocialStageLine",
         "SocialPreferenceWeight",
         "OnRosterItemActivated", "OnSummon", "OnSummonPaid", "SummonHero", "OnTask", "OnUpgrade",
-        "OnBuild", "OnBuildFence", "OnBuildTower", "OnTrialTower", "RefreshBuildButton",
+        "OnBuild", "OnBuildFence", "OnBuildTower", "OnBuildShield", "OnTrialTower", "RefreshBuildButton",
         // D-093：玩家自选落点（放置模式）
         "BeginPlacement", "CancelPlacement", "PlacePendingAt", "UpdatePlacementPreview",
+        "UpdateBuildingMarks",
         "PendingPlacement",
         "OnStall", "OnStallConfirm", "OnMarket", "OnManualTradeCompleted",
         "OnCaravan", "OnCaravanBought",   // D-081：商队面板（玩家命令入口）

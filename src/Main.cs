@@ -168,6 +168,9 @@ public partial class Main : Node2D
     // D-074：独立建筑（围栏 / 试炼塔）—— 与村庄整体升级**并存**的两条路。
     private Button _btnBuildFence = null!;
     private Button _btnBuildTower = null!;
+
+    /// <summary>「建防护罩」按钮（D-095）。</summary>
+    private Button _btnBuildShield = null!;
     private Button _btnTrialTower = null!;
     private Button _btnSummon = null!;
     private Button _btnStall = null!;   // M7：摆摊按钮

@@ -185,7 +185,9 @@ public partial class Main : Node2D
     private int BeastTideEffectiveTier()
         => ClaudeCodeGameStudios.Application.BeastTideScale.TierWithDefenses(
             _tier,
-            ClaudeCodeGameStudios.Application.BeastTideScale.CompletedFenceCount(_villageModel));
+            ClaudeCodeGameStudios.Application.BeastTideScale.CompletedFenceCount(_villageModel),
+            // D-095：防护罩（专职防御建筑）也降一级 ⇒ 与围栏可叠加。
+            ClaudeCodeGameStudios.Application.BeastTideScale.CompletedShieldCount(_villageModel));
 
     /// <summary>
     /// 守村英雄的战斗属性 —— <b>用他自己的</b>（D-080）。

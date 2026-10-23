@@ -31,10 +31,52 @@ public static class BeastTideScale
     /// 有一座围栏也只是**保持 0 级**，不是「更弱的兽潮」。</para>
     /// </remarks>
     public static int TierWithDefenses(int villageTier, int completedFences)
+        => TierWithDefenses(villageTier, completedFences, completedShields: 0);
+
+    /// <summary>
+    /// 兽潮的<b>实际规模等级</b>：村庄层级 − 围栏数 − 防护罩数（D-085 + D-095）。
+    /// </summary>
+    /// <param name="villageTier">村庄层级（0 起）。</param>
+    /// <param name="completedFences">已建成的围栏数。</param>
+    /// <param name="completedShields">已建成的防护罩数（D-095：防护罩 = 专职防御建筑）。</param>
+    /// <returns>实际规模等级（<b>最低 0</b> —— 防御设施再多也不会让兽潮变成「负级」）。</returns>
+    /// <remarks>
+    /// ⚠️ **为什么两种防御可以叠加**：围栏是<b>范围</b>建筑（决定摊位能摆到哪儿），
+    /// 防护罩是<b>专职防御</b>建筑（削弱来扰）⇒ 职责不同 ⇒ 各降一级、各降各的。
+    /// ⇒ 围栏 1 + 防护罩 1 ⇒ 兽潮规模 −2。
+    /// </remarks>
+    public static int TierWithDefenses(int villageTier, int completedFences, int completedShields)
     {
         if (completedFences < 0) throw new ArgumentOutOfRangeException(nameof(completedFences));
-        int tier = villageTier - completedFences;
+        if (completedShields < 0) throw new ArgumentOutOfRangeException(nameof(completedShields));
+        int tier = villageTier - completedFences - completedShields;
         return tier < 0 ? 0 : tier;
+    }
+
+    /// <summary>
+    /// 村里有几座<b>已建成</b>的防护罩（在建的不算 —— 罩子没搭好挡不住）。
+    /// </summary>
+    /// <param name="village">村庄。</param>
+    /// <returns>防护罩数。</returns>
+    /// <remarks>
+    /// ⚠️ **为什么单独数、不复用围栏的计数</b>：两者的<b>作用不同</b>
+    /// （围栏 = 范围，防护罩 = 防御）⇒ 混在一起算就看不出「是哪种防御起了作用」。
+    /// </remarks>
+    public static int CompletedShieldCount(
+        ClaudeCodeGameStudios.Domain.Village.Village village)
+    {
+        if (village is null) throw new ArgumentNullException(nameof(village));
+
+        string shieldId = ClaudeCodeGameStudios.Domain.Village.BuildableBuildings.Shield.Id.Value;
+        int count = 0;
+        foreach (var b in village.Buildings)
+        {
+            if (b.Id.Value != shieldId) continue;
+            // 建造进度到 1 才算建成（D-074：建成后才生效）。
+            if (b.ConstructionProgress >= 1.0) count++;
+        }
+
+        return count;
     }
 
     /// <summary>

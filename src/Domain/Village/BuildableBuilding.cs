@@ -74,6 +74,18 @@ public enum BuildingEffect
     /// 而加攻防会直接改战斗胜率（首领档 86.7% 得重测）⇒ 先只动生命。
     /// </remarks>
     TrialTower = 2,
+
+    /// <summary>
+    /// <b>防护罩</b>：削弱来扰的实际攻击（D-095）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>基线原话</b>：「还有防护罩，作用是保护村庄不被外面攻击」（§12.1）。
+    /// ⚠️ <b>为什么不是「大屏防护」</b>：当前游戏里没有「被攻击的东西」可以被罩住
+    /// （兽潮输赢损的是资源，人畜无损）⇒ <b>第一版采用「最小可测版」</b>：
+    /// 建成后 <b>兽潮规模降一级</b>（与围栏可叠加）。
+    /// ⇒ 「罩住谁」留到下一版（当村庄有了更多可被攻击的东西再定）。
+    /// </remarks>
+    Shield = 3,
 }
 
 /// <summary>
@@ -124,9 +136,29 @@ public static class BuildableBuildings
         GridY = -3,
     };
 
+    /// <summary>
+    /// 防护罩：削弱来扰的实际攻击（D-095）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>数值是「建议值」</b>（开发者已拍板「最小可测版」，数值允许调）：
+    /// 120 金 / 60 材料 / 10 工时。
+    /// ⚠️ 影响区 9×9：与围栏同档 ⇒ 地图上能看懂「它罩到哪儿」（D-093 的标记机制）。
+    /// </remarks>
+    public static readonly BuildableBuilding Shield = new(
+        new BuildingId("shield"),
+        "防护罩",
+        GoldCost: 120L,
+        MaterialCost: 60L,
+        BaseBuildHours: 10.0,
+        FootprintW: 1,
+        FootprintH: 1,
+        AffectsAreaW: 9,
+        AffectsAreaH: 9,
+        Effect: BuildingEffect.Shield);
+
     /// <summary>全部可建建筑。</summary>
     public static IReadOnlyList<BuildableBuilding> All { get; } =
-        new[] { Fence, TrialTower };
+        new[] { Fence, TrialTower, Shield };
 
     /// <summary>按标识查一栋可建建筑。</summary>
     /// <param name="id">建筑标识。</param>

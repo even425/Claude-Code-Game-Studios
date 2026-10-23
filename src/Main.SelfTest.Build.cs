@@ -63,8 +63,20 @@ public partial class Main : Node2D
 
         GD.Print($"BUILDTEST 放到 (-5, -5)（市集自己那格）：非法={illegal}，什么都没发生={nothingHappened}");
 
+        // ④ 防护罩（D-095）：也能建，且**落点同样由玩家定**。
+        var shield = ClaudeCodeGameStudios.Domain.Village.BuildableBuildings.Shield;
+        OnBuildShield();
+        bool shieldPlacing = PendingPlacement is not null
+            && PendingPlacement.Value.Id.Value == shield.Id.Value;
+        PlacePendingAt(3, 3);
+        var placedShield = _villageModel.Buildings
+            .FirstOrDefault(b => b.Id.Value == shield.Id.Value);
+        bool shieldAtChosenCell = placedShield is not null
+            && placedShield.GridX == 3 && placedShield.GridY == 3;
+        GD.Print($"BUILDTEST 防护罩：进入放置模式={shieldPlacing}，建在 (3, 3)={shieldAtChosenCell}");
+
         bool ok = inPlacement && nothingStarted && legal && atChosenCell && nowBuilding
-                  && illegal && nothingHappened;
+                  && illegal && nothingHappened && shieldPlacing && shieldAtChosenCell;
         GD.Print($"BUILDTEST 落点由玩家定 ⇒ {(ok ? "PASS" : "FAIL")}");
     }
 }

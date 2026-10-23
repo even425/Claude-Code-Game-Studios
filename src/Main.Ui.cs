@@ -105,6 +105,8 @@ public partial class Main : Node2D
         // 后者是既有的 5 级阶梯，前者是各自独立的建筑。
         _btnBuildFence = MakeButton("建围栏", left, OnBuildFence);
         _btnBuildTower = MakeButton("建试炼塔", left, OnBuildTower);
+    // D-095：防护罩（专职防御建筑 ⇒ 兽潮规模 −1 级，与围栏可叠加）。
+    _btnBuildShield = MakeButton("建防护罩", left, OnBuildShield);
         _btnTrialTower = MakeButton("进试炼塔", left, OnTrialTower);
         _btnSummon = MakeButton("招募一个人", left, OnSummonPaid);
         _btnStall = MakeButton("摆摊", left, OnStall);
@@ -603,6 +605,9 @@ public partial class Main : Node2D
 
     private void OnBuildTower() => OnBuild(BuildableBuildings.TrialTower);
 
+    /// <summary>建防护罩（D-095）。</summary>
+    private void OnBuildShield() => OnBuild(BuildableBuildings.Shield);
+
     /// <summary>
     /// D-074：进试炼塔打一场（<b>第 1 个在场且空闲的英雄</b>）。
     /// </summary>
@@ -969,6 +974,7 @@ public partial class Main : Node2D
         // ---- D-074：独立建筑的三个按钮 ----
         RefreshBuildButton(_btnBuildFence, BuildableBuildings.Fence);
         RefreshBuildButton(_btnBuildTower, BuildableBuildings.TrialTower);
+        RefreshBuildButton(_btnBuildShield, BuildableBuildings.Shield);
 
         _btnTrialTower.Text = _buildingService.IsCompleted(BuildableBuildings.TrialTower.Id)
             ? "进试炼塔（打赢 +20 生命）"

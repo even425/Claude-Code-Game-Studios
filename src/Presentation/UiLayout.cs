@@ -97,7 +97,7 @@ public static class UiLayout
     /// 长出更多行（升级选项、建哪些建筑）⇒ 固定高度必然把底部的按钮挤出屏幕 ⇒
     /// 左栏改成<b>可滚动</b>（见 <see cref="LeftColumnScrolls"/>）。</para>
     /// </remarks>
-    public const int ButtonCount = 11;
+    public const int ButtonCount = 12;
 
     /// <summary>
     /// 左栏<b>是否可滚动</b>：<b>是</b>（D-081 修的界面缺陷）。

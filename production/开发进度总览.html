@@ -129,18 +129,18 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 973</div>
-      <div class="d">全绿 · 新增 171 条</div>
+      <div class="v">802 <em>→</em> 978</div>
+      <div class="d">全绿 · 新增 176 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">92 <em>档</em></div>
+      <div class="v">96 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">35 <em>条</em></div>
-      <div class="d">D-057 … D-093</div>
+      <div class="v">36 <em>条</em></div>
+      <div class="d">D-057 … D-095</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -508,6 +508,16 @@
         若把落点画成房子，玩家会以为看到的房子位置就是真实格位 ⇒ 那是个谎。
         落点真正影响的是<b>规则</b>（围栏的影响区 = 摊位能摆到哪儿、占位冲突）。</p>
         <div class="tags"><span class="tag">D-093</span><span class="tag">真机自检 --build</span><span class="tag">不需要新规则</span></div>
+      </li>
+      <li>
+        <div class="when">10:40</div>
+        <h3>防护罩：基线里那栋「保护村庄」的建筑终于能建了</h3>
+        <p>基线 §12.1 里开发者自己提过的建筑还剩六栋没做（井 / 铁匠铺 / 烟囱 / 土屋 / 武器店 / 服装店）⇒ 这一轮先做<b>防护罩</b>（唯一带明确功能的那栋），
+        且按「<b>最小可测版」</b>：<b>建成后兽潮规模降一级</b>（与围栏可叠加 ⇒ 最多 −2）。<br>
+        ⚠️ 为什么不是「屏住村庄」：当前游戏里<b>没有被攻击的东西</b>可被罩住（兽潮输亏的是资源，人牲无损）⇒ 先取一条<b>真的能写进验收</b>的规则；「罩住谁」留到下一版。<br>
+        职责也顺手分开：<b>围栏 = 范围</b>（决定摆摊能摆到哪儿）· <b>防护罩 = 专职防御</b>（削弱来扰）⇒ 各降一级、各降各的。
+        落点同样由玩家自己点（D-093）⇒ 地图上看得见它罩到哪儿。</p>
+        <div class="tags"><span class="tag">D-095</span><span class="tag">变异 4/4</span><span class="tag">基线 §12.1</span></div>
       </li>
       <li>
         <div class="when">07:40</div>

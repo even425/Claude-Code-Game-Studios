@@ -135,6 +135,23 @@ public sealed class VillageUpgradeService
     }
 
     /// <summary>
+    /// <b>升级完成</b> ⇒ 这一级<b>该有的层级附带建筑自动出现</b>（D-099）。
+    /// </summary>
+    /// <param name="tier">刚升到的层级（0 起）。</param>
+    /// <returns>这次新放下的建筑（已存在的不会重复报）。</returns>
+    /// <remarks>
+    /// ⚠️ <b>为什么要有这个入口</b>：升级完成那一刻，村里该多出哪些建筑
+    /// ⇒ 是<b>规则</b>，而 <c>Main</c> 是表现层 ⇒ 若规则只写在 <c>Main</c> 里，
+    /// 单测就<b>碰不到</b>它 ⇒ 改坏接线时守卫照样绿（实测：两档变异全绿）。
+    /// ⇒ 规则搬到这里（<b>领域层之外、可离线单测</b>），
+    /// <c>Main</c> 只负责<b>调用</b>它 ⇒ 变异看红才抓得住。
+    /// <para>⚠️ <b>与「读档」走同一个入口</b>（两条路都要「让村庄与层级相符」），
+    /// ⇒ 规则只有一份。</para>
+    /// </remarks>
+    public IReadOnlyList<BuildingInstance> CompleteUpgrade(int tier)
+        => TierBuildingService.EnsureForTier(_village, tier);
+
+    /// <summary>
     /// 升到第 <paramref name="tier"/> + 1 级需要的成本。
     /// </summary>
     /// <param name="tier">当前层级（0 起）。</param>

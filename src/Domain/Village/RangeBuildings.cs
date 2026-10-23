@@ -58,6 +58,10 @@ public static class RangeBuildings
     /// </remarks>
     public static bool IsRangeBuilding(BuildingId id)
     {
+        // ⚠️ **层级附带建筑**（D-099：井等）**不是范围类**：
+        // 它们是「升级送的地标」，不圈摆摊范围。
+        if (TierBuildings.Find(id) is not null) return false;
+
         var definition = BuildableBuildings.Find(id);
         if (definition is null) return true;   // 目录外 ⇒ 范围类（市集 / 历史建筑）
         return definition.Value.Effect == BuildingEffect.Range;

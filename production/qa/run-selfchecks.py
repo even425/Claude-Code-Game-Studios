@@ -108,6 +108,15 @@ CHECKS = [
         "zeros": [],
     },
     {
+        # D-099：层级附带建筑（井）在**真实游戏**里读档一次
+        # （老档补记 / 入档 / 不重复 —— 接线层，单测验不到）。
+        "name": "tier",
+        "args": ["--tier"],
+        "require": ["TIERTEST 层级附带建筑 ⇒ PASS"],
+        "forbid": ["FAIL"],
+        "zeros": [],
+    },
+    {
         # D-093：玩家自己选落点（接线层，单测验不到）。
         "name": "build",
         "args": ["--build"],

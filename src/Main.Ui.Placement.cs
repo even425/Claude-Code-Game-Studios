@@ -133,9 +133,9 @@ public partial class Main : Node2D
             // 没建完的画成脚手架。
             // ⚠️ 画法由**纯 C# 的映射表**给出（`BuildingVisual`）
             // ⇒ 「每一栋可建建筑都必须有画法」能被离线单测守住。
-            string shape = definition is null
-                ? ClaudeCodeGameStudios.Presentation.BuildingVisual.Generic
-                : ClaudeCodeGameStudios.Presentation.BuildingVisual.ShapeFor(definition.Value);
+            // ⚠️ **两类建筑共用一张画法表**（D-099）：可建建筑（围栏/试炼塔/防护罩）
+            // 与层级附带建筑（井）⇒ 按**标识**查 ⇒ 新增建筑只改一处。
+            string shape = ClaudeCodeGameStudios.Presentation.BuildingVisual.ShapeForId(b.Id);
             // ⚠️ **范围类？**（D-098）：影响区的**颜色**靠它区分
             // （绿 = 摊子能摆在这儿 / 蓝 = 罩住了但摆摊不算）。
             bool isRange = ClaudeCodeGameStudios.Domain.Village.RangeBuildings.IsRangeBuilding(b.Id);

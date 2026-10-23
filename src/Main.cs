@@ -861,6 +861,7 @@ public partial class Main : Node2D
         if (OS.GetCmdlineUserArgs().Contains("--build") && !_buildTestDone) RunBuildSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--caravan") && !_caravanTestDone) RunCaravanSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--bandit") && !_banditTestDone) RunBanditSelfTest();
+        if (OS.GetCmdlineUserArgs().Contains("--tier") && !_tierTestDone) RunTierSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--shop") && !_shopTestDone) RunShoppingSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a is "--save" or "--load") && !_saveTestDone)
         {
@@ -902,6 +903,17 @@ public partial class Main : Node2D
             _village.BuildProgress = -1f;
             _village.SetTier(_tier);
             foreach (var h in _heroes) h.ToSite = false;   // 队伍不动，任务照发
+
+            // D-099：这一级**该有的建筑自动出现**（层级附带建筑）。
+            // ⚠️ 之前那口井只是地图上的**手绘装饰** ⇒ 村里其实没有这栋建筑
+            // ⇒ 现在它是**真的建筑实例**（存在、入档、看得见）。
+            // ⚠️ 规则住在 `VillageUpgradeService.CompleteUpgrade`（可离线单测）
+            // ⇒ 这里只负责**调用**它。
+            foreach (var b in _upgradeService.CompleteUpgrade(_tier))
+            {
+                GD.Print($"TIER 第 {_tier} 级 ⇒ 村里多了一栋「{b.Id.Value}」。");
+            }
+
             // 建成 / 升级 —— 基线 §7.2 明列的一类
             string what = done == 5
                 ? "石板路铺到了村口，旗立起来了"
@@ -975,6 +987,9 @@ public partial class Main : Node2D
 
     /// <summary><c>--caravan</c> 自检跑过了没（D-088：商队成交在真实游戏里的第一次）。</summary>
     private bool _caravanTestDone;
+
+    /// <summary><c>--tier</c> 自检跑过了没（D-099：层级附带建筑在真实游戏里的第一次）。</summary>
+    private bool _tierTestDone;
 
     /// <summary><c>--bandit</c> 自检跑过了没（D-096：盗匪来袭在真实游戏里的第一次）。</summary>
     private bool _banditTestDone;

@@ -129,18 +129,18 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 994</div>
-      <div class="d">全绿 · 新增 192 条</div>
+      <div class="v">802 <em>→</em> 1008</div>
+      <div class="d">全绿 · 新增 206 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">110 <em>档</em></div>
+      <div class="v">116 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">39 <em>条</em></div>
-      <div class="d">D-057 … D-098</div>
+      <div class="v">40 <em>条</em></div>
+      <div class="d">D-057 … D-099</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -523,6 +523,30 @@
         职责也顺手分开：<b>围栏 = 范围</b>（决定摆摊能摆到哪儿）· <b>防护罩 = 专职防御</b>（削弱来扰）⇒ 各降一级、各降各的。
         落点同样由玩家自己点（D-093）⇒ 地图上看得见它罩到哪儿。</p>
         <div class="tags"><span class="tag">D-095</span><span class="tag">变异 4/4</span><span class="tag">基线 §12.1</span></div>
+      </li>
+      <li>
+        <div class="when">13:10</div>
+        <h3>那口井，之前是画出来的</h3>
+        <p>地图上确实画着一口井（升到第 2 级就出现），但查下去发现：<b>村里根本没有这栋建筑</b>
+        —— 它是<b>手绘装饰</b>，不跟格位走 ⇒ 「<b>有井的村子</b>」这句话<b>当时是假的</b>。
+        （与 D-097「三种建筑长得一模一样」是同一族问题：<b>画面上有的东西，规则里未必有</b>。）</p>
+        <p>现在井是<b>真的建筑</b>了，而且走的是「<b>层级附带建筑</b>」这条路
+        ——<b>不要钱、不要工期、落点固定</b>，与「玩家花钱自己建」的可建建筑<b>分成两个目录</b>
+        （混了就会出现「盖井要钱、升级又送井」这种自相矛盾）。<br>
+        <b>它在第 2 级出现</b>：层级阶梯里那一级本来就叫「<b>有井的村子</b>」，
+        升到第 2 级那次施工的名字就叫「<b>挖井</b>」⇒ <b>不是实现者发明的</b>。<br>
+        顺带把「手绘装饰的那口井」<b>删了</b>——不然地图上有两口井，玩家会以为装饰那口也是能用的建筑。
+        老档（没有井的存档）读回来会<b>按层级补记</b>，不升存档版本、不写迁移器。</p>
+        <p>⚠️ <b>如实说清边界</b>：基线 §12.3 说「<b>不能仅凭建筑名称自行指定功能</b>」
+        ⇒ 井<b>该有什么玩法效果</b>还得你拍板 ⇒ 这一版只把它变成真的建筑，<b>不加任何数值效果</b>。</p>
+        <div class="tags"><span class="tag">D-099</span><span class="tag">变异 6/6</span><span class="tag">真机自检 --tier</span><span class="tag">基线 §12.1</span></div>
+        <div class="shot" style="margin-top:12px">
+          <img src="qa/evidence/d099-well.png" alt="实机画面：地图右上角那口带辘轳和顶棚的石井" />
+          <div class="cap">
+            实机截图（D-099）：右上角那口<b>带辘轳和顶棚的石井</b>就是它 —— 现在它是村里<b>真的</b>一栋建筑
+            （存在、入档、占格位），而不是画出来骗人的。
+          </div>
+        </div>
       </li>
       <li>
         <div class="when">12:30</div>

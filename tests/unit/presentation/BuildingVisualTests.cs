@@ -85,4 +85,46 @@ public class BuildingVisualTests
         Assertions.AssertThat(BuildingVisual.IsKnown(BuildingVisual.Fence)).IsTrue();
         Assertions.AssertThat(BuildingVisual.IsKnown("")).IsFalse();
     }
+
+    /// <summary>
+    /// <b>D-099</b>：<b>层级附带建筑</b>（井）也有专属画法
+    /// ⇒ 地图上不会又出现一个「不认识 ⇒ 石台」的井。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ 这条守的是「<b>两类建筑共用一张画法表</b>」：
+    /// 可建建筑按效果查、层级附带建筑按标识查 ⇒ 两边都不能掉进兜底。
+    /// </remarks>
+    [TestCase]
+    public void TierBuildings_AlsoHaveTheirOwnShape()
+    {
+        string shape = BuildingVisual.ShapeForId(TierBuildings.Well.Id);
+
+        Assertions.AssertThat(shape).IsEqual(BuildingVisual.Well);
+        Assertions.AssertThat(BuildingVisual.IsKnown(shape)).IsTrue();
+    }
+
+    /// <summary>
+    /// <b>D-099</b>：<b>按标识查</b>与<b>按定义查</b>对同一栋建筑必须一致
+    /// ⇒ 两处不许分叉（分叉了就有一处画错）。
+    /// </summary>
+    [TestCase]
+    public void LookupById_MatchesLookupByDefinition()
+    {
+        foreach (var b in BuildableBuildings.All)
+        {
+            Assertions.AssertThat(BuildingVisual.ShapeForId(b.Id)).IsEqual(BuildingVisual.ShapeFor(b));
+        }
+    }
+
+    /// <summary>
+    /// <b>D-099</b>：<b>不认识</b>的标识 ⇒ 兜底（且<b>守卫会红</b>，因为兜底不算「认识」）。
+    /// </summary>
+    [TestCase]
+    public void AnUnknownBuilding_FallsBackToTheGenericShape()
+    {
+        string shape = BuildingVisual.ShapeForId(new BuildingId("根本没这栋建筑"));
+
+        Assertions.AssertThat(shape).IsEqual(BuildingVisual.Generic);
+        Assertions.AssertThat(BuildingVisual.IsKnown(shape)).IsFalse();
+    }
 }

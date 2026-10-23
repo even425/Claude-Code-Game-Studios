@@ -372,6 +372,16 @@ public partial class Main : Node2D
         _buildingService.RestoreConstructions(
             restoredBuildings.Where(i => i.ConstructionProgress < 1.0));
 
+        // ── D-099：补齐层级附带建筑（**老档兼容**）──
+        // ⚠️ 旧存档里**没有**井（它是 D-099 才加的）⇒ 读档后那个层级就缺了它。
+        // ⇒ 读档时按当前层级补记（**不升存档版本**、不写迁移器）——
+        // 与 D-090「村庄资产」的老档补记同一手法。
+        // ⚠️ **与升级走同一个入口** ⇒ 「让村庄与层级相符」这条规则只有一份。
+        foreach (var b in _upgradeService.CompleteUpgrade(_tier))
+        {
+            GD.Print($"LOAD 补记层级附带建筑「{b.Id.Value}」（第 {_tier} 级该有）。");
+        }
+
         // 编成按**存档**恢复，不是「取前 N 个在场者」——
         // 后者是猜测，玩家挑好的搭配会被悄悄换掉，而且不报错。
         for (int i = 0; i < _states.Count; i++)

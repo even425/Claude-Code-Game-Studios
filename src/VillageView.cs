@@ -331,6 +331,9 @@ public partial class VillageView : Node2D
             case ClaudeCodeGameStudios.Presentation.BuildingVisual.Shield:
                 DrawShieldBuilding(x, y);
                 break;
+            case ClaudeCodeGameStudios.Presentation.BuildingVisual.Well:
+                DrawWellBuilding(x, y);
+                break;
             default:
                 DrawGenericBuilding(x, y);
                 break;
@@ -420,6 +423,32 @@ public partial class VillageView : Node2D
     private void DrawGenericBuilding(float x, float y)
     {
         Box(x + 0.15f, y + 0.15f, 0.7f, 0.7f, 30f, Stone);
+    }
+
+    /// <summary>井（D-099）：一口带辘轳的石井 —— <b>层级 2 就有它</b>。</summary>
+    /// <remarks>
+    /// ⚠️ 之前村里有这口井**只是手绘装饰**（<c>WellProp</c>，不跟格位走）
+    /// ⇒ 现在它是<b>真的建筑实例</b> ⇒ 画在它自己的格位上。
+    /// </remarks>
+    private void DrawWellBuilding(float x, float y)
+    {
+        // 井台
+        Box(x + 0.15f, y + 0.15f, 0.7f, 0.7f, 22f, Stone);
+        // 井口（水面）
+        var w = P(x + 0.5f, y + 0.5f, 23f);
+        DrawPolygon(new[] { w + new Vector2(-13, -6), w + new Vector2(13, -6),
+                            w + new Vector2(13, 6), w + new Vector2(-13, 6) },
+                    new[] { Water_, Water_, Water_, Water_ });
+        // 辘轳（两根柱 + 一根轴）
+        DrawLine(P(x + 0.2f, y + 0.2f, 22f), P(x + 0.2f, y + 0.2f, 56f), Wood, 4);
+        DrawLine(P(x + 0.8f, y + 0.8f, 22f), P(x + 0.8f, y + 0.8f, 56f), Wood, 4);
+        DrawLine(P(x + 0.2f, y + 0.2f, 52f), P(x + 0.8f, y + 0.8f, 52f), WoodDark, 4);
+        // 顶棚
+        var apex = P(x + 0.5f, y + 0.5f, 70f);
+        DrawPolygon(new[] { P(x - 0.05f, y - 0.05f, 56f), P(x + 1.05f, y + 1.05f, 56f), apex },
+                    new[] { Roof, Roof, Roof });
+        DrawPolygon(new[] { P(x + 1.05f, y - 0.05f, 56f), P(x - 0.05f, y + 1.05f, 56f), apex },
+                    new[] { Darken(Roof, 0.2f), Darken(Roof, 0.2f), Darken(Roof, 0.1f) });
     }
 
     /// <summary>施工中的建筑：脚手架（进度越高墙越完整）。</summary>
@@ -847,7 +876,9 @@ public partial class VillageView : Node2D
         if (HasPeople || Tier >= 1) Add(8.6f, 3.6f, v => v.Chimney(8.6f, 3.6f));
 
         if (Tier >= 1) Add(0.5f, 4.5f, v => v.TavernProp(0.5f, 4.5f));
-        if (Tier >= 2) Add(6, 0.5f, v => v.WellProp(6, 0.5f));
+        // ⚠️ **不再画装饰的井**（D-099）：现在井是**真的建筑实例**（层级 2 自动出现）
+        // ⇒ 再画一个装饰的 ⇒ 地图上有两口井 ⇒ 玩家会以为那口装饰的也是能用的建筑。
+        // ⇒ 真井由 `_buildingMarks` 那条路画（按格位、带自己的形状）。
         if (Tier >= 3)
         {
             for (int i = 0; i < 15; i++) Add(0.3f + i, 9.0f, v => v.FenceProp(0.3f + i, 9.0f));

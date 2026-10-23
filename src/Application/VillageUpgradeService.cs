@@ -35,7 +35,12 @@ public sealed class VillageUpgradeService
     /// 村库的钱恰好在攒下一级升级 ⇒ 收购预算恒为 0 ⇒ 收购站<b>永远开不了张</b>
     /// （实测：200 天只开张 2~5 笔）。</para>
     /// </remarks>
-    public static readonly ResourceId Asset = new("村庄资产");
+    /// <remarks>
+    /// ⚠️ <b>D-108：这里是别名</b> —— 「村庄资产」这个科目现在**不只升级用**
+    /// （盖房子花掉的钱也要记进来，见 <see cref="VillageAsset"/>）
+    /// ⇒ 真正的定义在 <see cref="VillageAsset.Asset"/>，这里保留原名以免改动既有调用点。
+    /// </remarks>
+    public static readonly ResourceId Asset = VillageAsset.Asset;
 
     /// <summary>一次升级的成本。</summary>
     /// <param name="Gold">金币（D-054 裁决 ⑤）。</param>

@@ -91,7 +91,105 @@ public partial class Main : Node2D
         // 不再是采集器自己的一套 ⇒ 「测到的」就是「玩到的」。
         OpenStallsForIdleHeroes();
         UpgradeVillageForCollection();
+        // ⚠️ **D-108**：采集器也要**盖房子**（钱得有出口）⇒ 真实玩家每天都在做这件事。
+        BuildForCollection();
         RecordEconomySnapshot();
+    }
+
+    /// <summary>
+    /// 采集用盖房：<b>村库有余钱就盖一栋</b>（D-108）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么必须有它</b>：采集器此前**只升级村庄、从不盖房子**
+    /// ⇒ 村库的钱<b>只进不出</b> ⇒ 标定出来的「钱在涨」<b>有很大一部分是采集器的失真</b>
+    /// （真实游戏里玩家盖房子 ⇒ 钱花出去 ⇒ 见 <c>07</c> 的 D-106）。</para>
+    ///
+    /// <para>⚠️ <b>规则住在应用层</b>（<c>CollectorBuildingPlan</c>，可离线单测）⇒
+    /// 这里只负责把「村庄现状」喂给它、把结果执行掉。</para>
+    ///
+    /// <para>⚠️ <b>落点用的是玩家那把尺子</b>（<c>CanPlaceAt</c>）⇒
+    /// 「测到的」就是「玩到的」。</para>
+    /// </remarks>
+    private void BuildForCollection()
+    {
+        // ⚠️ **一次只盖一样**（D-074）：村庄升级在施工时，独立建筑拿不到人（停工）。
+        if (_buildTarget >= 0) return;
+        if (_buildingService.ActiveConstructions.Count > 0) return;
+
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var b in _villageModel.Buildings)
+        {
+            counts[b.Id.Value] = counts.TryGetValue(b.Id.Value, out int n) ? n + 1 : 1;
+        }
+
+        var candidates = new List<ClaudeCodeGameStudios.Domain.Village.BuildableBuilding>
+        {
+            ClaudeCodeGameStudios.Domain.Village.BuildableBuildings.Fence,
+            ClaudeCodeGameStudios.Domain.Village.BuildableBuildings.TrialTower,
+        };
+
+        // 下一级升级要多少钱（已满级 ⇒ 0 ⇒ 不用留钱）。
+        long nextUpgrade = _upgradeService.CostFor(_tier).Gold;
+
+        var plan = CollectorBuildingPlan.Plan(
+            VillageGold, nextUpgrade, candidates, counts,
+            definition => _buildingService.CanStart(definition),
+            definition => TryFindBuildSpotFor(definition, out int sx, out int sy)
+                ? (sx, sy)
+                : ((int, int)?)null);
+
+        if (plan is null) return;
+
+        // 施工队：**没在路上的人**（与村庄升级互斥 —— 那条路把人都派去工地了）。
+        int workers = _heroes.Count(h => !h.Away && !h.ToSite && IsPresent(h));
+
+        if (!_buildingService.TryStartAt(
+                plan.Value.Definition, plan.Value.GridX, plan.Value.GridY, workers))
+        {
+            GD.Print($"COLLECT 盖房失败（{plan.Value.Definition.Name} @ "
+                     + $"({plan.Value.GridX},{plan.Value.GridY})：资源或落点不满足）。");
+            return;
+        }
+
+        GD.Print($"COLLECT 盖房：{plan.Value.Definition.Name} @ "
+                 + $"({plan.Value.GridX},{plan.Value.GridY}) · {plan.Value.Definition.GoldCost}金 "
+                 + $"{plan.Value.Definition.MaterialCost}材料 · {workers} 人施工"
+                 + $"（一个人要 {plan.Value.Definition.BaseBuildHours:0.#} 小时）");
+    }
+
+    /// <summary>
+    /// 在<b>可见地图</b>上找一个能放下这栋建筑的格位（D-093 的规矩）。
+    /// </summary>
+    /// <param name="definition">要建的建筑。</param>
+    /// <param name="gridX">找到的格位 X。</param>
+    /// <param name="gridY">找到的格位 Y。</param>
+    /// <returns>找得到为 true。</returns>
+    /// <remarks>
+    /// ⚠️ 可见地图 = 0..14 × 0..9（与玩家选落点时同一片）⇒
+    /// 采集器**不会**把房子盖到玩家看不见的地方。
+    /// <br>⚠️ **为什么用 out 而不是返回元组**：结构守卫（<c>MainStructureTests</c>）
+    /// 用正则扫方法名 ⇒ 返回类型里带括号的方法<b>扫不到</b> ⇒ 会被判成「职责清单腐化」。
+    /// </remarks>
+    private bool TryFindBuildSpotFor(
+        ClaudeCodeGameStudios.Domain.Village.BuildableBuilding definition,
+        out int gridX, out int gridY)
+    {
+        for (int y = 0; y < 10; y++)
+        {
+            for (int x = 0; x < 15; x++)
+            {
+                if (_buildingService.CanPlaceAt(definition, x, y))
+                {
+                    gridX = x;
+                    gridY = y;
+                    return true;
+                }
+            }
+        }
+
+        gridX = 0;
+        gridY = 0;
+        return false;
     }
 
     /// <summary>

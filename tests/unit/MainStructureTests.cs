@@ -42,6 +42,8 @@ public class MainStructureTests
             "RunCollect", "CollectOneDay", "OpenStallsForIdleHeroes", "RunDailyShoppingIfNeeded",
             "DispatchDungeonForCollection", "DispatchOneDungeonForCollection",
             "UpgradeVillageForCollection", "VillagePurchaseRound",
+            // D-108：采集器也要盖房子（钱得有出口）⇒ 规则在应用层，这里只接线。
+            "BuildForCollection", "TryFindBuildSpotFor",
         }),
         ("战斗执行", new[]
         {

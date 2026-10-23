@@ -212,8 +212,34 @@ public sealed class BuildingService
         if (_procurement is not null && !_procurement.Commit(plan)) return false;
 
         // ② 再扣建造自己的成本
-        _village.TrySpend(_gold, definition.GoldCost);
-        if (fromPool > 0) _village.TrySpend(_material, fromPool);
+        //
+        // ⚠️ **D-108：扣款要「要么都扣、要么都不扣」**（I15）——
+        // ⚠️ 原来的写法**忽略扣款结果** ⇒ 扣失败也照样往下走 ⇒ 建筑建成了、钱没扣
+        // ⇒ **凭空多出 80 金**（实测：守恒律 200 天里 143 天对不上，差额正好一座围栏的造价）。
+        //
+        // ⚠️ **为什么这里只有这一处权威判定**：采购（向村民买建材）会**先花掉村库的现金**
+        // ⇒ 采购提交之后，钱可能已经不够付建造费了。
+        // ⇒ **要么**在提交采购之前就把两笔现金一起预检（那样扣款永远不会失败 ⇒ 但这一层
+        // **遮住了**下面那层的失败 ⇒ 变异「忽略扣款结果」照样绿 ⇒ 守卫抓不到）
+        // **要么**把扣款失败当作**权威判定**（扣款失败 ⇒ 整体回滚）⇒ 只有一处说了算。
+        // ⇒ 取后者（**权威判定只有一处**，与 D-077 的召唤扣费同款理由）。
+        bool goldSpent = _village.TrySpend(_gold, definition.GoldCost);
+        bool materialSpent = fromPool <= 0 || _village.TrySpend(_material, fromPool);
+        if (!goldSpent || !materialSpent)
+        {
+            // ⚠️ **只退真正扣掉的那部分**（退没扣的会**造钱**）。
+            if (goldSpent) _village.Add(_gold, definition.GoldCost);
+            if (materialSpent) _village.Add(_material, fromPool);
+            // ⚠️ 采购的部分也要退回去（D-091）：货还在村民手里没变成建材。
+            _procurement?.Rollback(plan);
+            return false;
+        }
+
+        // ⚠️ **D-108：扣掉的钱要有账** —— 它没有烧掉，而是**变成了建筑**
+        // （与村庄升级同一语义，D-090）⇒ 记进「村庄资产」。
+        // ⇒ 不记的话，玩家一盖房子，**守恒律就破**（左边凭空少一笔）
+        // —— 而钱去哪了没有任何地方能查（实测：采集器从不盖房子 ⇒ 这个缺陷一直没被看见）。
+        _village.Add(VillageAsset.Asset, definition.GoldCost);
 
         var instance = new BuildingInstance(
             definition.Id,
@@ -228,6 +254,8 @@ public sealed class BuildingService
             // 落点被占（CanStart 已查过，但建造与放置之间状态可能变了）⇒ 退款。
             _village.Add(_gold, definition.GoldCost);
             _village.Add(_material, fromPool);
+            // ⚠️ **D-108**：资产那一笔也要一起退（它记的是「钱变成了建筑」，建筑没盖成）。
+            _village.TrySpend(VillageAsset.Asset, definition.GoldCost);
             // ⚠️ **采购的部分也要退回去**（D-091）：货还在村民手里没变成建材
             // ⇒ 不能白拿人家的货（他们的钱要退回去，货要还回去）。
             _procurement?.Rollback(plan);

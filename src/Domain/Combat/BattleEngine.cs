@@ -91,6 +91,12 @@ public sealed class BattleEngine
         int seq = 0;
         int roundsCompleted = 0;
 
+        // ⚠️ **D-100**：这场战斗**走过的回合数**（决定性条目里写它、也报出去）。
+        // ⚠️ **为什么不能直接用 `roundsCompleted`**：那是「**已经走完**的回合数」，
+        // 而分胜负常常发生在**某个回合进行中** ⇒ 两者差 1
+        // ⇒ 第 1 回合就秒杀时写成 0 ⇒ 读回器按契约抛「回合数必须 ≥ 1」。
+        int roundsUsed = 0;
+
         log.Add(Entry(ref seq, input.EncounterName, $"{input.EncounterName}：{Describe(heroes)} 对 {Describe(enemies)}。", false));
 
         BattleOutcome outcome = BattleOutcome.InProgress;
@@ -117,7 +123,9 @@ public sealed class BattleEngine
             outcome = _rules.Outcome.Decide(Snapshot(heroes, enemies, roundsCompleted));
             if (outcome != BattleOutcome.InProgress)
             {
-                log.Add(Entry(ref seq, input.EncounterName, DecisiveSummary(input.EncounterName, outcome, roundsCompleted, null), true));
+                // ⚠️ **D-100：同样算上当前这一回合**（理由同上）。
+                roundsUsed = roundsCompleted + 1;
+                log.Add(Entry(ref seq, input.EncounterName, DecisiveSummary(input.EncounterName, outcome, roundsUsed, null), true));
                 break;
             }
 
@@ -155,8 +163,14 @@ public sealed class BattleEngine
                             if (after != BattleOutcome.InProgress)
                             {
                                 outcome = after;
+                                // ⚠️ **D-100：这一回合也在内**。
+                                // `roundsCompleted` 是「**已经走完**的回合数」，
+                                // 而分胜负发生在**当前这一回合进行中** ⇒
+                                // 直接写它会**少记 1 个回合**
+                                // （第 1 回合就秒杀 ⇒ 写成 0 ⇒ 读回器按契约抛异常）。
+                                roundsUsed = roundsCompleted + 1;
                                 log.Add(Entry(ref seq, input.EncounterName,
-                                    DecisiveSummary(input.EncounterName, outcome, roundsCompleted, actor),
+                                    DecisiveSummary(input.EncounterName, outcome, roundsUsed, actor),
                                     true));
                                 break;
                             }
@@ -176,12 +190,17 @@ public sealed class BattleEngine
             outcome = _rules.Outcome.Decide(Snapshot(heroes, enemies, roundsCompleted));
             if (outcome != BattleOutcome.InProgress)
             {
-                log.Add(Entry(ref seq, input.EncounterName, DecisiveSummary(input.EncounterName, outcome, roundsCompleted, null), true));
+                // ⚠️ **D-100：这条路上「走完的回合数」就是「走过的回合数」**
+                // （这一回合真的走完了）⇒ 不必 +1。
+                roundsUsed = roundsCompleted;
+                log.Add(Entry(ref seq, input.EncounterName, DecisiveSummary(input.EncounterName, outcome, roundsUsed, null), true));
                 break;
             }
         }
 
-        return new BattleRun(outcome, log, roundsCompleted);
+        // ⚠️ **D-100**：报出的回合数必须与决定性条目里写的一致
+        // （同一个事实的两个出口 ⇒ 不许分叉）。
+        return new BattleRun(outcome, log, roundsUsed);
     }
 
     private static BattleSnapshot Snapshot(

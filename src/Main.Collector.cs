@@ -286,7 +286,11 @@ public partial class Main : Node2D
             _walletWriter.TotalPending,
             min, p25, med, p75, max, topId, topName,
             _caravanMarket.TotalDestroyedGold,
-            _villageModel.Get(ClaudeCodeGameStudios.Application.VillageUpgradeService.Asset));
+            _villageModel.Get(ClaudeCodeGameStudios.Application.VillageUpgradeService.Asset),
+            // ⚠️ **D-101**：大事件的「外部收入 / 外部支出」两项
+            // （大事件发的钱是从外面进来的 ⇒ 守恒律右边必须加上它）。
+            ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldIn,
+            ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldOut);
 
         // ⚠️ **逐日守恒律自检**（D-091 引入的记账多了一条路 ⇒ 必须自己盯住）：
         // 「Σ英雄钱包 + 村库金币 + 村庄资产 + 累计销毁 = 初始金币 + 累计发放」
@@ -294,15 +298,21 @@ public partial class Main : Node2D
         // ⇒ 这一行是「账实不符」的唯一现场证据。
         long lhs = heroGold + VillageGold
                  + _villageModel.Get(ClaudeCodeGameStudios.Application.VillageUpgradeService.Asset)
-                 + destroyed;
-        long rhs = (long)_heroes.Count * 100 + _walletWriter.TotalGranted;
+                 + destroyed
+                 // ⚠️ **D-101**：被大事件带走的金币（流出系统的）⇒ 算在左边。
+                 + ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldOut;
+        long rhs = (long)_heroes.Count * 100 + _walletWriter.TotalGranted
+                 // ⚠️ **D-101**：大事件带来的金币（从外面进来的）⇒ 算在右边。
+                 + ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldIn;
         if (lhs != rhs)
         {
             GD.Print($"CONSERVATION 第{(int)_clock.Day}天 对不上：左边 {lhs} / 右边 {rhs}"
                      + $"（差 {lhs - rhs}）· 英雄 {heroGold} · 村库 {VillageGold}"
                      + $" · 资产 {_villageModel.Get(ClaudeCodeGameStudios.Application.VillageUpgradeService.Asset)}"
                      + $" · 销毁 {destroyed} · 发放 {_walletWriter.TotalGranted}"
-                     + $" · 升级 {_upgradeService.UpgradesStarted}");
+                     + $" · 升级 {_upgradeService.UpgradesStarted}"
+                     + $" · 事件收入 {ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldIn}"
+                     + $" · 事件支出 {ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldOut}");
         }
     }
 

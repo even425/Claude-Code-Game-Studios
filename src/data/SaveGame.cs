@@ -408,6 +408,22 @@ public sealed class SaveGame
     public long GoldGrantedTotal { get; set; }
 
     /// <summary>
+    /// 大事件带来的<b>外部金币</b>累计（进来的）—— D-101 守恒律的新科目。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **必须落盘**：不存它，读档后守恒律的等式右边就少这一项
+    /// ⇒ 读档后第一天的逐日自检就会误报「账实不符」。
+    /// <para>⚠️ **它不是「累计发放」**：那一项只记「结算发给英雄的钱」；
+    /// 这一项记「<b>从外面进来</b>的钱」（打完怪捡到的战利品）。</para>
+    /// </remarks>
+    public long EventGoldIn { get; set; }
+
+    /// <summary>
+    /// 大事件带走的<b>金币</b>累计（出去的）—— D-101 守恒律的新科目。
+    /// </summary>
+    public long EventGoldOut { get; set; }
+
+    /// <summary>
     /// 累计<b>销毁</b>掉的金币（升级花掉的那些）。<b>0,6 新增</b>（D-054 阶段 4）。
     /// </summary>
     /// <remarks>

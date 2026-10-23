@@ -862,6 +862,7 @@ public partial class Main : Node2D
         if (OS.GetCmdlineUserArgs().Contains("--caravan") && !_caravanTestDone) RunCaravanSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--bandit") && !_banditTestDone) RunBanditSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--tier") && !_tierTestDone) RunTierSelfTest();
+        if (OS.GetCmdlineUserArgs().Contains("--event") && !_eventTestDone) RunEventSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--shop") && !_shopTestDone) RunShoppingSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a is "--save" or "--load") && !_saveTestDone)
         {
@@ -990,6 +991,9 @@ public partial class Main : Node2D
 
     /// <summary><c>--tier</c> 自检跑过了没（D-099：层级附带建筑在真实游戏里的第一次）。</summary>
     private bool _tierTestDone;
+
+    /// <summary><c>--event</c> 自检跑过了没（D-101：大事件在真实游戏里真的结算了吗）。</summary>
+    private bool _eventTestDone;
 
     /// <summary><c>--bandit</c> 自检跑过了没（D-096：盗匪来袭在真实游戏里的第一次）。</summary>
     private bool _banditTestDone;

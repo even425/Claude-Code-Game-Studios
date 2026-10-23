@@ -138,10 +138,17 @@ def analyze(path, label, verbose=True):
         if "GoldGranted" not in s:
             conserve_skip += 1
             continue
+        #   ⚠️ **D-101：大事件的「外部收入 / 外部支出」** ——
+        #   大事件发的钱是**从外面进来的**（打完怪捡到的战利品）⇒ 它不在英雄钱包里、
+        #   也不在「累计发放」里（那一项只记「结算发给英雄的钱」）⇒ 等式两边要各加一项。
+        #   ⚠️ **旧样本没有这两个字段**（`None`）⇒ 那时大事件**从未真的结算过**
+        #   （阶段机死锁）⇒ 用 0 兼容是对的。
         lhs = ((s.get("HeroGoldTotal") or 0) + (s.get("VillageGold") or 0)
                + (s.get("VillageAsset") or 0)
-               + (s.get("GoldSpent") or 0)) * 100
-        rhs = ((s.get("HeroCount") or 0) * 100 + (s.get("GoldGranted") or 0)) * 100
+               + (s.get("GoldSpent") or 0)
+               + (s.get("EventGoldOut") or 0)) * 100
+        rhs = ((s.get("HeroCount") or 0) * 100 + (s.get("GoldGranted") or 0)
+               + (s.get("EventGoldIn") or 0)) * 100
         if lhs == rhs:
             conserve_ok += 1
         else:

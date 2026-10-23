@@ -117,6 +117,15 @@ CHECKS = [
         "zeros": [],
     },
     {
+        # D-101：大事件**真的走到结算**了吗（走真实日循环路径 ——
+        # 单测与旧自检都是手工推进 ⇒ 绕开了那道闸门 ⇒ 真实游戏里一直是死的）。
+        "name": "event",
+        "args": ["--event"],
+        "require": ["EVENTTEST 大事件真的会结算 ⇒ PASS"],
+        "forbid": ["FAIL"],
+        "zeros": [],
+    },
+    {
         # D-093：玩家自己选落点（接线层，单测验不到）。
         "name": "build",
         "args": ["--build"],

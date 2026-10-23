@@ -129,18 +129,18 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 1018</div>
-      <div class="d">全绿 · 新增 216 条</div>
+      <div class="v">802 <em>→</em> 1031</div>
+      <div class="d">全绿 · 新增 229 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">120 <em>档</em></div>
+      <div class="v">130 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">41 <em>条</em></div>
-      <div class="d">D-057 … D-100</div>
+      <div class="v">42 <em>条</em></div>
+      <div class="d">D-057 … D-101</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -523,6 +523,29 @@
         职责也顺手分开：<b>围栏 = 范围</b>（决定摆摊能摆到哪儿）· <b>防护罩 = 专职防御</b>（削弱来扰）⇒ 各降一级、各降各的。
         落点同样由玩家自己点（D-093）⇒ 地图上看得见它罩到哪儿。</p>
         <div class="tags"><span class="tag">D-095</span><span class="tag">变异 4/4</span><span class="tag">基线 §12.1</span></div>
+      </li>
+      <li>
+        <div class="when">15:10</div>
+        <h3>大事件从来没结算过 —— 一整轮工作在真实游戏里是空转</h3>
+        <p>查标定数据时顺手看了一眼真实游戏日志里的大事件行 ⇒ <b>200 天、两个种子、五个样本，0 次结算</b>。
+        而「兽潮一次都没来」这件事<b>早就被记录过</b>，当时归因为 D-082 的过滤器（「守不住就别触发」，
+        因为标定用的村子守不住）⇒ <b>看起来很合理</b> ⇒ 于是没人再往下查。</p>
+        <p>🔴 <b>但商队（11 天）和盗匪来袭（9 天）没有那道闸门</b> ⇒ 它们本该发生
+        ⇒ 一次都没发生就说不通了 ⇒ 这才把「过滤器」的归因推翻。</p>
+        <p>🔴 <b>根因是一个互相锁死</b>：判定「刚创建、这次不动」用的是
+        <code>Progress == 0</code>，而 <code>Progress</code> <b>只有 <code>Advance()</code> 才会改</b>
+        ⇒ 「刚创建 ⇒ 不推进」<b>阻断了 Advance</b> ⇒ 实例<b>永远停在「预兆」</b>
+        ⇒ 兽潮 / 商队 / 盗匪来袭<b>全部从未结算</b> ⇒ <b>D-079…D-096 一整轮的大事件工作，在真实游戏里全是空转</b>。</p>
+        <p>⚠️ <b>三道防线为什么都没抓到</b>：单测是<b>直接调 <code>Advance</code></b> 的 ⇒ 绕开了那道闸门；
+        真机自检（<code>--caravan</code> / <code>--bandit</code>）也是<b>手工推进</b>的 ⇒ 同样绕开；
+        标定里「没事件」被归因为<b>合理</b>的过滤器 ⇒ 没人去查。
+        ⇒ 三条都是同一个毛病：<b>测的都是「我直接驱动的那一段」，不是「游戏自己跑的那一段」</b>。</p>
+        <p>⇒ 修法：判据改成建立在<b>时间</b>上（「实例创建满一天」），规则搬进<b>领域层</b>（<code>WorldEventBook.AdvanceDaily</code>）⇒ 可离线单测。
+        ⇒ 新增真机自检 <code>--event</code>：<b>逐日推进</b>走真实日循环路径 ⇒ 阶段一路走到结算 ⇒ <b>村库材料 40→60</b>。</p>
+        <p>⚠️ <b>修完立刻撞上第二层</b>：守恒律破了（200 天只有 8 天成立）⇒ 因为<b>大事件发的钱是「从外面进来的」</b>
+        ⇒ 补了两个科目（<b>事件外部收入</b>进等式右边 / <b>事件外部支出</b>进等式左边）⇒ 守恒律恢复 <b>200/200</b>。
+        ⇒ ⚠️ <b>一条从未被触发的规则，看起来是「通过」的</b> —— 这是这次最该记住的一句。</p>
+        <div class="tags"><span class="tag">D-101</span><span class="tag">变异 10/10</span><span class="tag">真机自检 --event</span><span class="tag">守恒律 200/200</span></div>
       </li>
       <li>
         <div class="when">14:00</div>

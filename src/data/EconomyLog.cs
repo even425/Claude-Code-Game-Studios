@@ -182,6 +182,30 @@ public sealed record EconomyRow
     public long? VillageAsset { get; init; }
 
     /// <summary>
+    /// <b>大事件带来的外部金币</b>（D-101）—— 兽潮打赢给的、盗匪缴获的。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **为什么必须有这一项**：大事件发的钱是<b>从外面进来的</b>
+    /// （打完怪捡到的战利品）⇒ 它<b>不在</b>英雄钱包里、也<b>不是</b>「累计发放」
+    /// （那一项只记「结算发给英雄的钱」）⇒ 守恒律的等式<b>右边必须加上它</b>，
+    /// 否则每结算一次大事件，等式就破一次。
+    /// <para>⚠️ **D-101 之前这一项一直是 0**：大事件<b>从未真的结算过</b>
+    /// （阶段机死锁）⇒ 这条规则<b>从来没被触发过</b> ⇒ 现在才补上。</para>
+    /// <para>⚠️ <b>是「累计」不是「余额」</b>：它只进不出（大事件不回收钱）
+    /// ⇒ 与 <see cref="VillageAsset"/>（余额，会被花掉）不同。</para>
+    /// </remarks>
+    public long? EventGoldIn { get; init; }
+
+    /// <summary>
+    /// <b>大事件带走的金币</b>（D-101）—— 兽潮打输被抢的、盗匪被抢走的。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **为什么它是「累计」而不是负数**：它与 <see cref="EventGoldIn"/> 是<b>两件事</b>
+    /// （进来 / 出去）⇒ 分开记，「大事件到底是净收入还是净损失」才看得出来。
+    /// </remarks>
+    public long? EventGoldOut { get; init; }
+
+    /// <summary>
     /// 其中<b>商队销毁</b>掉的那部分（D-088；已含在 <see cref="GoldSpent"/> 里）。
     /// </summary>
     /// <remarks>
@@ -547,7 +571,9 @@ public sealed class EconomyLog : IDisposable
         string? heroGoldTopId = null,
         string? heroGoldTopName = null,
         long? caravanDestroyed = null,
-        long? villageAsset = null)
+        long? villageAsset = null,
+        long? eventGoldIn = null,
+        long? eventGoldOut = null)
     {
         if (_writer is null) return false;
 
@@ -579,6 +605,8 @@ public sealed class EconomyLog : IDisposable
             HeroGoldTopName = heroGoldTopName,
             CaravanDestroyed = caravanDestroyed,
             VillageAsset = villageAsset,
+            EventGoldIn = eventGoldIn,
+            EventGoldOut = eventGoldOut,
         };
 
         _writer.WriteLine(JsonSerializer.Serialize(row, Options));

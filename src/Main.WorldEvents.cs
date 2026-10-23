@@ -323,17 +323,16 @@ public partial class Main : Node2D
         // ② 推进：每个活跃实例往前一步。
         foreach (var active in _worldEvents.ActiveInstances.ToArray())
         {
-            // 「预兆」要多待几天（玩家要能读到预告），其余阶段一天一步。
-            bool isOmen = active.Phase == WorldEventPhase.Omen;
-            int omenDays = active.Progress switch
-            {
-                0.0 => 0,          // 刚创建：这次不动
-                _ => 1,
-            };
-            if (isOmen && omenDays == 0) continue;
-
-            var moved = _worldEvents.Advance(active.Id, progress: 0.5);
+            // ⚠️ **D-101**：一天一步（规则住在 `WorldEventBook.AdvanceDaily` —— 可离线单测）。
+            // ⚠️ **为什么不能在这里判「刚创建」**：那个判据原先用的是 `Progress == 0`，
+            // 而 `Progress` **只有 Advance 才会改** ⇒ 「刚创建 ⇒ 不推进」阻断了 Advance
+            // ⇒ **死锁** ⇒ 实例永远停在预兆 ⇒ **大事件从来不会结算**
+            // （实测：真实游戏 200 天里 0 次结算 —— 而标定里「兽潮一次都没来」
+            //   被误归因为 D-082 的过滤器，其实是过滤器掩盖了这个死锁）。
+            var phaseBefore = active.Phase;
+            var moved = _worldEvents.AdvanceDaily(active.Id, _clock.Now, _clock.SimSecondsPerDay);
             if (moved is null) continue;
+            if (moved.Phase == phaseBefore) continue;   // 今天还没轮到它推进（如预兆没待够）
 
             // ③ 结算：走到「结算」阶段就结一次。
             if (moved.Phase == WorldEventPhase.Settlement)

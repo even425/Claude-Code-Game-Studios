@@ -78,6 +78,7 @@ public class MainStructureTests
         "RunDungeonSelfTest", "RunCaravanSelfTest", "RunBuildSelfTest",
         "RunBanditSelfTest",   // D-096：盗匪来袭真机自检
         "RunTierSelfTest",   // D-099：层级附带建筑真机自检
+        "RunEventSelfTest",   // D-101：大事件真会结算吗
         "SelfTestEnsurePresentAndIdle",   // 自检夹具：把英雄摆成「在场且空闲」
     };
 

@@ -179,6 +179,71 @@ public sealed class WorldEventBook
     }
 
     /// <summary>
+    /// <b>一天一步</b>地推进一个实例（D-101）。
+    /// </summary>
+    /// <param name="instanceId">实例标识。</param>
+    /// <param name="now">当前模拟时刻（秒）。</param>
+    /// <param name="simSecondsPerDay">一个模拟日的模拟秒数。</param>
+    /// <returns>
+    /// 推进后的实例；<b>本次没有推进</b>时也返回当前实例（阶段没变）
+    /// ⇒ 调用方靠「阶段变没变」判断今天是不是推了一步。
+    /// </returns>
+    /// <remarks>
+    /// ⚠️ <b>为什么这条规则住在领域层</b>（D-101 的教训）：
+    /// 它原先写在 <c>Main</c>（表现层）里 ⇒ <b>单测碰不到</b>
+    /// ⇒ 改坏它时守卫照样绿 ⇒ 而它<b>坏掉时整个大事件系统就废了</b>
+    /// （实例卡在预兆、从不变现）。
+    /// ⇒ 现在它是<b>一条可离线单测的规则</b>（<c>WorldEventTests</c> 盯着它）。
+    ///
+    /// <para>⚠️ <b>「预兆」要多待几天</b>（玩家要能读到预告）：
+    /// 用<b>「实例创建以来过了几天」</b>判断，<b>不用 <c>Progress</c></b>。
+    /// ⇒ 原因：<b><c>Progress</c> 只有 <see cref="Advance"/> 会改</b>
+    /// ⇒ 若用 <c>Progress == 0</c> 当「刚创建」的判据，
+    /// 而「刚创建 ⇒ 不推进」又阻断了 <see cref="Advance"/> ⇒ <b>死锁</b>
+    /// ⇒ 实例永远停在预兆 ⇒ <b>大事件从来不会结算</b>（实测：真实游戏 200 天里 0 次结算）。
+    /// ⇒ 这条判据必须建立在<b>不会被推进动作改变</b>的量上（时间）。</para>
+    /// </remarks>
+    public WorldEventInstance? AdvanceDaily(
+        string instanceId, double now, double simSecondsPerDay)
+    {
+        if (!_instances.TryGetValue(instanceId, out var instance)) return null;
+        if (instance.Phase == WorldEventPhase.Finished) return instance;
+
+        // 「预兆」至少待满一天（创建当天不动）⇒ 玩家能读到预告。
+        if (instance.Phase == WorldEventPhase.Omen && !OmenIsOver(instance, now, simSecondsPerDay))
+        {
+            return instance;
+        }
+
+        return Advance(instanceId, progress: 0.5);
+    }
+
+    /// <summary>
+    /// 「预兆」阶段是否已经待够了（<b>创建满一天</b>）。
+    /// </summary>
+    /// <param name="instance">实例。</param>
+    /// <param name="now">当前模拟时刻（秒）。</param>
+    /// <param name="simSecondsPerDay">一个模拟日的模拟秒数。</param>
+    /// <returns>可以推进了为 true。</returns>
+    /// <remarks>
+    /// ⚠️ **用时间，不用 <c>Progress</c>**（D-101）：
+    /// <c>Progress</c> 只由 <see cref="Advance"/> 改 ⇒ 用它当判据会与推进动作互相锁死。
+    /// </remarks>
+    public static bool OmenIsOver(
+        WorldEventInstance instance, double now, double simSecondsPerDay)
+    {
+        if (instance is null) throw new ArgumentNullException(nameof(instance));
+        if (!(simSecondsPerDay > 0.0))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(simSecondsPerDay), simSecondsPerDay, "一个模拟日的模拟秒数必须为正。");
+        }
+
+        double daysSinceStart = (now - instance.StartedAt) / simSecondsPerDay;
+        return daysSinceStart >= 1.0;
+    }
+
+    /// <summary>
     /// 结算一个实例：算结果，并把后果<b>应用</b>出去（每条后果只应用一次）。
     /// </summary>
     /// <param name="instanceId">实例标识。</param>

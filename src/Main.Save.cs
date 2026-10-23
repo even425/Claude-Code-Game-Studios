@@ -54,6 +54,9 @@ public partial class Main : Node2D
         // 存的是随机源状态，不是种子：只存种子的话，读档后只能回到开局那一刻，
         // 而不是回到存档那一刻。
         RandomState = _rng.State.ToString(),
+        // D-101：大事件的「外部收入 / 外部支出」两项（守恒律的新科目）。
+        EventGoldIn = ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldIn,
+        EventGoldOut = ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldOut,
         Village = new ClaudeCodeGameStudios.Data.VillageSave
         {
             Id = _villageModel.Id,
@@ -354,6 +357,9 @@ public partial class Main : Node2D
         // ── D-054 阶段 4（存档 0.6）：货币侧的三个状态 ──
         // ① 累计发放 / 累计销毁（守恒律的两项；不恢复就读档后账对不上）
         _walletWriter.RestoreTotalGranted(save.GoldGrantedTotal);
+        // D-101：大事件的「外部收入 / 外部支出」两项（守恒律的新科目）。
+        ClaudeCodeGameStudios.Application.WorldEventResourceApplier.RestoreTotals(
+            save.EventGoldIn, save.EventGoldOut);
         _upgradeService.RestoreTotals(save.GoldSpentTotal, save.VillageUpgrades);
         // ② 村庄层级（**顺带修既有缺陷**：本来不入档 → 读档后回到 0 级，而钱已经花了）
         _tier = save.VillageTier;

@@ -9,17 +9,12 @@ public partial class Main : Node2D
     private ClaudeCodeGameStudios.Application.GatherService _gather = null!;
 
     /// <summary>
-    /// **D-111 对照开关**：采集器<b>不盖房子</b>（正常采集一律 false）。
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>只用于归因实验</b>：用来回答「市场在第 100 天停摆，是 D-108 的
-    /// 「盖房」带来的，还是 D-105 / D-107 的「采集加成」带来的」。
-    /// </remarks>
-    private bool _collectBuildOff;
-
-    /// <summary>
     /// **D-111 对照开关**：关掉采集点的加成（正常采集一律 false）。
     /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>只用于归因实验</b>：D-111 用它把「市场在第 100 天停摆」的元凶
+    /// 定位到「采集器盖房子」（而不是采集加成）⇒ **归因实验必须能一键复现**。
+    /// </remarks>
     private bool _gatherBonusOff;
 
     /// <summary>村庄收购站（D-087）。</summary>

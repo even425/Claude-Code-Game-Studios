@@ -1,20 +1,21 @@
 """
-对 D-108「标定器补上花钱的出口 + 建造不许半提交」的守卫做**变异看红**验证。
+对 D-108 / D-112「建造不许半提交 + 盖房的钱要有账」的守卫做**变异看红**验证。
 
-**它守的是六件事**：
+**它守的是四件事**：
   ① 采购把钱吃掉时，建造**整体失败**、**一分钱都不许多出来**（不许半提交）
   ② 建造花掉的钱**记进「村庄资产」**（钱变成了建筑，没被烧掉）
-  ③ 落点放不下（退款那条路）⇒ **资产那一笔也要一起退**
-  ④ 采集器盖房：**盖完还得买得起下一级升级**（否则村庄永远升不上去）
-  ⑤ 采集器盖房：**围栏与试炼塔轮着盖**（谁盖得少盖谁）
-  ⑥ 采集器盖房：钱不够 / 没地方 ⇒ **不盖**
+  ③ 资产记成两倍 ⇒ 守恒律的左边多出一笔
+  ④ 回滚时**采购也要退**（货不能白拿）
 
-⚠️ **为什么 ①②③ 要紧**：修复前，采集器一盖房子，
+⚠️ **为什么 ①② 要紧**：修复前，采集器一盖房子，
    **200 天里 143 天守恒律对不上，差额正好等于一座围栏的造价（80 金）**
-   —— 那是**凭空造钱**（D-108 在这里抓到的真缺陷，与采集器无关：
-   玩家自己盖房子同样会中招）。
+   —— 那是**凭空造钱**（玩家自己盖房子同样会中招）。
 
-用法：python production/qa/mutate-d108-collector-build.py
+⚠️ **D-112：「采集器盖房子」整段已回退**（开发者拍板：它抽干了收购站的预算
+   ⇒ 采集者的背包被占满 ⇒ 市场在第 100 天停摆，见 `07` 的 D-111）。
+   ⇒ 本脚本**只管建造本身的记账与原子性**（那两个是真缺陷，与采集器无关）。
+
+用法：python production/qa/mutate-d108-building-accounting.py
 """
 try:
     import _utf8out  # noqa: F401  — 控制台默认 GBK，印特殊符号会直接崩
@@ -31,11 +32,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "tests" / "Claude-Code-Game-Studios.Tests.csproj"
-FILTER = ("FullyQualifiedName~BuildingPurchaseAtomicityTests"
-          "|FullyQualifiedName~CollectorBuildingPlanTests")
+FILTER = "FullyQualifiedName~BuildingPurchaseAtomicityTests"
 
 BUILDING = ROOT / "src" / "Application" / "BuildingService.cs"
-PLAN = ROOT / "src" / "Application" / "CollectorBuildingPlan.cs"
 
 
 def sha(p: Path) -> str:
@@ -129,7 +128,7 @@ def main() -> int:
             if "失败" in line or "Expecting" in line:
                 print("      " + line.strip()[:160])
         return 1
-    print("OK  基线（未变异）绿 —— D-108 六条当前成立")
+    print("OK  基线（未变异）绿 —— D-108 四条当前成立")
 
     # ── ① 扣款失败被忽略（回到「半提交」的缺陷版）⇒ 必须红 ────────────────
     results.append(mutate(
@@ -167,23 +166,9 @@ def main() -> int:
         "        _village.Add(VillageAsset.Asset, definition.GoldCost * 2);   // 变异：记两倍",
         ))
 
-    # ── ⑤ 采集器盖房：不留升级的钱 ⇒ 必须红 ────────────────────────────────
-    results.append(mutate(
-        "采集器盖房不留下一级升级的钱（村庄永远升不上去）",
-        PLAN,
-        "            if (villageGold - definition.GoldCost < nextUpgradeGoldCost) continue;",
-        "            // 变异：不留升级的钱",
-        ))
-
-    # ── ⑥ 采集器盖房：不再轮着盖（永远第一个）⇒ 必须红 ──────────────────────
-    results.append(mutate(
-        "采集器不再轮着盖（永远先盖第一个候选）",
-        PLAN,
-        "        var ordered = candidates\n"
-        "            .OrderBy(c => existingCounts.TryGetValue(c.Id.Value, out int n) ? n : 0)\n"
-        "            .ToArray();",
-        "        var ordered = candidates.ToArray();   // 变异：不轮着盖",
-        ))
+    # ⚠️ **D-112 已删两档**：采集器盖房子整段回退了
+    #    （它抽干了收购站的预算 ⇒ 采集者的背包占满 ⇒ 市场在第 100 天停摆，
+    #      见 `07` 的 D-111）⇒ 「盖房计划」那两档与 `CollectorBuildingPlan` 一起没了。
 
     print("---")
     bad = results.count(False)

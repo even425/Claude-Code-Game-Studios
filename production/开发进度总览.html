@@ -129,18 +129,18 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 1070</div>
-      <div class="d">全绿 · 新增 268 条</div>
+      <div class="v">802 <em>→</em> 1063</div>
+      <div class="d">全绿 · 新增 261 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">158 <em>档</em></div>
+      <div class="v">155 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">49 <em>条</em></div>
-      <div class="d">D-057 … D-111</div>
+      <div class="v">50 <em>条</em></div>
+      <div class="d">D-057 … D-112</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -806,6 +806,20 @@
         ⇒ <b>装备线（你已拍板的下一轮）正是解药</b>：装备吃材料 ⇒ 材料有去处 ⇒
         采集者的包能清空 ⇒ 市场活着 ⇒ 整个经营循环活了。</p>
         <div class="tags"><span class="tag">D-111</span><span class="tag">四组对照</span><span class="tag">待拍板</span></div>
+      </li>
+      <li>
+        <div class="when">23:50</div>
+        <h3>回退采集器盖房：市场当场复活</h3>
+        <p>你拍板「<b>先回退『采集器盖房』</b>（保留真缺陷修复 + D-110 记账）」⇒ 撤掉了采集器的盖房行为、
+        规则类与它的守卫，以及那个只用于归因的 <code>--collectbuild</code> 开关。</p>
+        <p><b>保留</b>（这两个是<b>真缺陷</b>，与采集器无关、玩家一样会中招）：
+        ① <b>盖房花掉的钱记进「村庄资产」</b>（否则守恒律当场破）
+        ② <b>建造不许半提交</b>（扣款失败 ⇒ 整体回滚 ⇒ 否则凭空造 80 金）。</p>
+        <p>⇒ <b>实测（200 天 / X=0.5）</b>：后半段成交 <b>2705 笔</b>（✅ <b>市场还在转</b>）·
+        守恒律 <b>200/200</b> · 分布 <b>1.66 倍</b>（✅ 健康）·
+        而「钱在囤」被 <b>D-110</b> 那笔账明确显示出来（可花未花 625 金 ≈ 可召唤 6 人）
+        ⇒ <b>缺口不再被假绿掩盖</b>。</p>
+        <div class="tags"><span class="tag">D-112</span><span class="tag">市场复活</span><span class="tag">变异 4/4</span></div>
       </li>
     </ol>
   </section>

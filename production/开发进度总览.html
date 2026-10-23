@@ -129,18 +129,18 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 987</div>
-      <div class="d">全绿 · 新增 185 条</div>
+      <div class="v">802 <em>→</em> 994</div>
+      <div class="d">全绿 · 新增 192 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">105 <em>档</em></div>
+      <div class="v">110 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">38 <em>条</em></div>
-      <div class="d">D-057 … D-097</div>
+      <div class="v">39 <em>条</em></div>
+      <div class="d">D-057 … D-098</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -523,6 +523,24 @@
         职责也顺手分开：<b>围栏 = 范围</b>（决定摆摊能摆到哪儿）· <b>防护罩 = 专职防御</b>（削弱来扰）⇒ 各降一级、各降各的。
         落点同样由玩家自己点（D-093）⇒ 地图上看得见它罩到哪儿。</p>
         <div class="tags"><span class="tag">D-095</span><span class="tag">变异 4/4</span><span class="tag">基线 §12.1</span></div>
+      </li>
+      <li>
+        <div class="when">12:30</div>
+        <h3>一条「已确认」的规则，其实从来没被验过</h3>
+        <p>基线 §12.4（<b>开发者已确认</b>）原话是「有些玩家还会在村庄周边，<b>防护罩内</b>自行摆摊」
+        ⇒「摆摊位置受<b>防护罩</b>范围约束」—— 但<b>防护罩是 D-095 才加的建筑</b>，
+        而摆摊位置守门是 <b>D-033</b> 写的 ⇒ <b>当年写守门时村里根本没有防护罩</b>
+        ⇒ 这条规则<b>至今没有任何守卫覆盖</b>。</p>
+        <p>实测把事实钉出来：摆摊守门<b>不区分建筑种类</b> ⇒ <b>防护罩也在放开摆摊范围</b>
+        ⇒ 这与 D-095 文档写的「围栏 = 范围建筑、防护罩 = 专职防御，<b>各降一级、各降各的</b>」
+        <b>不一致</b>。<br>
+        两条<b>已确认</b>的规则打架 ⇒ 实现者不能自己挑 ⇒ 拍板 <b>B</b>：
+        <b>摆摊只认「范围类」建筑</b>（围栏 + 市集），<b>防护罩不参与</b>。<br>
+        落地时还牵出<b>两处必须一起改</b>：D-093 原话是「落在村子的地盘里 ⇒ <b>与摆摊用的是同一把尺子</b>」
+        ⇒ 只改摆摊那一处的话，玩家能靠防护罩在村外盖楼、却不能在那儿摆摊。
+        另外地图上的影响区<b>按颜色分</b>了：<b>绿 = 摊子能摆这儿</b> / <b>蓝 = 罩住了但摆摊不算</b>
+        —— 两种都画成绿色就是在骗人。</p>
+        <div class="tags"><span class="tag">D-098</span><span class="tag">变异 5/5</span><span class="tag">基线 §12.4</span></div>
       </li>
       <li>
         <div class="when">12:05</div>

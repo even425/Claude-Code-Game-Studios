@@ -160,14 +160,19 @@ public sealed class StallService
 
         // M5 / D-033 位置校验：
         // (1) (gridX, gridY) 不能与建筑占用格重叠
-        // (2) (gridX, gridY) 必须在**至少一个**已建成建筑的影响区内
+        // (2) (gridX, gridY) 必须在**至少一个**已建成**范围类**建筑的影响区内
+        //
+        // ⚠️ **D-098：只认「范围类」建筑**（围栏 + 市集）。
+        // 防护罩是**专职防御**建筑（D-095）⇒ 它**不**放开摆摊范围。
+        // ⇒ 这是「两层检查」的反面：这里**只有一处**判定 ⇒ 权威唯一。
         if (_village.IsOccupied(gridX, gridY)) return null;   // 占建筑 → 拒
         bool inAnyAffects = false;
         foreach (var b in _village.Buildings)
         {
+            if (!RangeBuildings.IsRangeBuilding(b)) continue;   // D-098：非范围类不参与
             if (b.IsCellInAffectsArea(gridX, gridY)) { inAnyAffects = true; break; }
         }
-        if (!inAnyAffects) return null;   // 0 建筑影响 → 拒（v1 简化）
+        if (!inAnyAffects) return null;   // 0 范围建筑影响 → 拒（v1 简化）
 
         long unitPrice = _book.PriceOf(itemId);
         if (unitPrice < 0) return null;   // 不应发生（IsSellable 守过）—— 守门

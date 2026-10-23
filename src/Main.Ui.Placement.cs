@@ -136,9 +136,12 @@ public partial class Main : Node2D
             string shape = definition is null
                 ? ClaudeCodeGameStudios.Presentation.BuildingVisual.Generic
                 : ClaudeCodeGameStudios.Presentation.BuildingVisual.ShapeFor(definition.Value);
+            // ⚠️ **范围类？**（D-098）：影响区的**颜色**靠它区分
+            // （绿 = 摊子能摆在这儿 / 蓝 = 罩住了但摆摊不算）。
+            bool isRange = ClaudeCodeGameStudios.Domain.Village.RangeBuildings.IsRangeBuilding(b.Id);
             marks.Add(new VillageView.VillageBuildingMark(
                 b.GridX, b.GridY, b.AffectsAreaW, b.AffectsAreaH, label, done,
-                shape, b.ConstructionProgress));
+                shape, b.ConstructionProgress, isRange));
         }
 
         _village.SetBuildingMarks(marks);

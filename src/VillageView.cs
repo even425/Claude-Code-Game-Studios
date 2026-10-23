@@ -171,9 +171,13 @@ public partial class VillageView : Node2D
     /// 玩家根本看不出自己盖了什么。
     /// </param>
     /// <param name="Progress">建造进度（0..1）；未建完时按工地画。</param>
+    /// <param name="IsRange">
+    /// 这栋建筑是不是<b>「范围类」</b>（D-098：影响区 = 摊子能摆到哪儿）。
+    /// ⚠️ 用来区分影响区的**颜色**：绿色 = 能摆摊，蓝色 = 罩住了但摆摊不算。
+    /// </param>
     public readonly record struct VillageBuildingMark(
         int GridX, int GridY, int AffectsW, int AffectsH, string Label, bool Done = true,
-        string Kind = "", double Progress = 1.0);
+        string Kind = "", double Progress = 1.0, bool IsRange = true);
 
     /// <summary>设置「地图上已建成的建筑」标记。</summary>
     /// <param name="marks">标记列表。</param>
@@ -287,7 +291,14 @@ public partial class VillageView : Node2D
             {
                 P(minX, minY), P(maxX, minY), P(maxX + 1, maxY + 1), P(minX, maxY + 1),
             };
-            DrawPolygon(area, new[] { new Color(0.45f, 0.85f, 0.55f, 0.10f) });
+            // ⚠️ **颜色按「范围类 / 非范围类」分**（D-098）：
+            // 绿色 = 「**摊子能摆在这儿**」（范围类建筑的影响区）；
+            // 蓝色 = 「这是防护罩罩住的地方，但**摆摊不算**」。
+            // ⇒ 若两种都画成绿色，玩家会以为防护罩里也能摆摊 ⇒ 那是个谎。
+            var color = m.IsRange
+                ? new Color(0.45f, 0.85f, 0.55f, 0.10f)
+                : new Color(0.45f, 0.72f, 0.98f, 0.10f);
+            DrawPolygon(area, new[] { color });
         }
     }
 

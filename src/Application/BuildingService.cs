@@ -131,8 +131,13 @@ public sealed class BuildingService
     /// <returns>合法为 true。</returns>
     /// <remarks>
     /// <para>① <b>不与已有建筑重叠</b>（基线 §13.7「建筑坐标与占地冲突」）。</para>
-    /// <para>② <b>落在村子的地盘里</b>（落在至少一个已建成建筑的「影响区」里）
-    /// ⇒ 与摆摊用的是同一把尺子（摆摊位置守门）。</para>
+    /// <para>② <b>落在村子的地盘里</b>（落在至少一个已建成<b>范围类</b>建筑的「影响区」里）
+/// ⇒ 与摆摊用的是<b>同一把尺子</b>（摆摊位置守门）。</para>
+    /// <para>⚠️ <b>D-098：同样只认「范围类」建筑</b>（围栏 + 市集）——
+    /// 防护罩是<b>专职防御</b>建筑 ⇒ 它<b>不</b>扩大村子的地盘。
+    /// <br>⚠️ <b>为什么不能两处规则不一样</b>：若摆摊只认范围类、而落点认所有建筑
+    /// ⇒ 玩家能靠着防护罩在村子外围盖楼、却不能在那儿摆摊 ⇒ <b>两把尺子</b>
+    /// ⇒ 「同一把尺子」这句话就是假的。</para>
     /// <para>⚠️ <b>旧的默认落点也走这条规则</b>（围栏 -3,-3 / 试炼塔 -1,-3 都在市集的影响区里）
     /// ⇒ 玩家自选不会把建筑建到村子外面。</para>
     /// </remarks>
@@ -149,6 +154,7 @@ public sealed class BuildingService
         bool inAnyAffects = false;
         foreach (var b in _village.Buildings)
         {
+            if (!RangeBuildings.IsRangeBuilding(b)) continue;   // D-098：非范围类不参与
             if (b.IsCellInAffectsArea(gridX, gridY)) { inAnyAffects = true; break; }
         }
 

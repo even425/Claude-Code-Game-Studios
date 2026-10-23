@@ -129,18 +129,18 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 983</div>
-      <div class="d">全绿 · 新增 181 条</div>
+      <div class="v">802 <em>→</em> 987</div>
+      <div class="d">全绿 · 新增 185 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">101 <em>档</em></div>
+      <div class="v">105 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">37 <em>条</em></div>
-      <div class="d">D-057 … D-096</div>
+      <div class="v">38 <em>条</em></div>
+      <div class="d">D-057 … D-097</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -523,6 +523,29 @@
         职责也顺手分开：<b>围栏 = 范围</b>（决定摆摊能摆到哪儿）· <b>防护罩 = 专职防御</b>（削弱来扰）⇒ 各降一级、各降各的。
         落点同样由玩家自己点（D-093）⇒ 地图上看得见它罩到哪儿。</p>
         <div class="tags"><span class="tag">D-095</span><span class="tag">变异 4/4</span><span class="tag">基线 §12.1</span></div>
+      </li>
+      <li>
+        <div class="when">12:05</div>
+        <h3>围栏、试炼塔、防护罩：以前在地图上长得一模一样</h3>
+        <p>自查发现的：<b>D-093 落地时，地图上画的是「一块色块」</b> ⇒ 围栏 / 试炼塔 / 防护罩
+        <b>看起来完全一样</b> ⇒ 玩家在地图上看不出自己盖了什么 ⇒
+        「<b>看得见自己盖了什么</b>」这句话<b>当时是假的</b>。<br>
+        现在改成<b>按种类画各自的形状</b>：<b>围栏 = 木栅栏矮墙</b>（它圈的是地）·
+        <b>试炼塔 = 石塔挂红旗</b> · <b>防护罩 = 发光的蓝罩</b>；
+        <b>施工中画脚手架</b>（没盖好就不是成品）。<br>
+        顺带修了一个真问题：建筑原先<b>永远画在最上层</b> ⇒ 会盖住站在它后面的英雄 ⇒
+        现在<b>并入深度排序</b>。<br>
+        ⚠️ 守卫那边也踩到一次「<b>装饰品</b>」：那条「画法按效果判」的断言，
+        拿现成的三栋去比时，「按名字判」和「按效果判」<b>结果一样</b> ⇒ 改坏实现它照样绿
+        ⇒ 补了一条「<b>改名之后画法不许变</b>」才真正抓住。</p>
+        <div class="tags"><span class="tag">D-097</span><span class="tag">变异 4/4</span><span class="tag">真机自检 --build</span></div>
+        <div class="shot" style="margin-top:12px">
+          <img src="qa/evidence/d097-buildings.png" alt="实机画面：地图上三样不一样的建筑" />
+          <div class="cap">
+            实机截图（D-097）：<b>挂着红旗的白石塔</b>是试炼塔、<b>发着蓝光的罩子</b>是防护罩、
+            <b>一圈木栅栏</b>是围栏 —— 三样<b>一眼就分得清</b>（以前它们是三块一样的色块）。
+          </div>
+        </div>
       </li>
       <li>
         <div class="when">11:20</div>

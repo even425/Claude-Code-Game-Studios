@@ -42,8 +42,8 @@ public partial class Main : Node2D
         // ② 放到**合法**的格位：市集的影响区里、且没被占的地方。
         //    市集在 (-5,-5)、影响区 11×11 ⇒ (2,2) 合法、没被占，
         //    **而且在可见地图上**（0..14 × 0..9）⇒ 标记会画在地图里，看得见。
-        int gx = 2;
-        int gy = 2;
+        int gx = 4;
+        int gy = 1;
         bool legal = _buildingService.CanPlaceAt(fence, gx, gy);
         PlacePendingAt(gx, gy);
 
@@ -68,15 +68,49 @@ public partial class Main : Node2D
         OnBuildShield();
         bool shieldPlacing = PendingPlacement is not null
             && PendingPlacement.Value.Id.Value == shield.Id.Value;
-        PlacePendingAt(3, 3);
+        PlacePendingAt(5, 5);
         var placedShield = _villageModel.Buildings
             .FirstOrDefault(b => b.Id.Value == shield.Id.Value);
         bool shieldAtChosenCell = placedShield is not null
-            && placedShield.GridX == 3 && placedShield.GridY == 3;
-        GD.Print($"BUILDTEST 防护罩：进入放置模式={shieldPlacing}，建在 (3, 3)={shieldAtChosenCell}");
+            && placedShield.GridX == 5 && placedShield.GridY == 5;
+        GD.Print($"BUILDTEST 防护罩：进入放置模式={shieldPlacing}，建在 (5, 5)={shieldAtChosenCell}");
+
+        // ④b 试炼塔：第三栋（三种建筑各盖一栋，地图上才看得出「长得不一样」）。
+        var tower = ClaudeCodeGameStudios.Domain.Village.BuildableBuildings.TrialTower;
+        OnBuildTower();
+        PlacePendingAt(1, 5);
+        var placedTower = _villageModel.Buildings
+            .FirstOrDefault(b => b.Id.Value == tower.Id.Value);
+        bool towerAtChosenCell = placedTower is not null
+            && placedTower.GridX == 1 && placedTower.GridY == 5;
+        GD.Print($"BUILDTEST 试炼塔：建在 (1, 5)={towerAtChosenCell}");
+
+        // ④c **盖完**（D-097：要看的是「建成后的样子」，不是脚手架）。
+        // ⚠️ 直接推进施工（同一个生产代码入口 `AdvanceConstruction`）——
+        // 免得为了截图去跑几十个游戏日。
+        _buildingService.AdvanceConstruction(workedHours: 100.0);
+        int doneCount = _villageModel.Buildings.Count(b => b.Status ==
+            ClaudeCodeGameStudios.Domain.Village.BuildingStatus.Completed);
+        GD.Print($"BUILDTEST 盖完之后：已建成 {doneCount} 栋"
+                 + $"（围栏/防护罩/试炼塔各一栋 ⇒ 地图上三样都得看得见）");
 
         bool ok = inPlacement && nothingStarted && legal && atChosenCell && nowBuilding
-                  && illegal && nothingHappened && shieldPlacing && shieldAtChosenCell;
+                  && illegal && nothingHappened && shieldPlacing && shieldAtChosenCell
+                  && towerAtChosenCell && doneCount >= 3;
         GD.Print($"BUILDTEST 落点由玩家定 ⇒ {(ok ? "PASS" : "FAIL")}");
+
+        // ⑤ D-097：地图上**三种建筑长得不一样**（接线层，单测验不到画法本身）。
+        //    验的是「喂给视图的标记里，每栋建筑的画法都认识，且互不相同」。
+        UpdateBuildingMarks();
+        var shapes = _villageModel.Buildings
+            .Where(b => b.Id.Value != "village_square")
+            .Select(b => ClaudeCodeGameStudios.Presentation.BuildingVisual.ShapeFor(
+                ClaudeCodeGameStudios.Domain.Village.BuildableBuildings.Find(b.Id)
+                    ?? default))
+            .ToArray();
+        bool allKnown = shapes.All(ClaudeCodeGameStudios.Presentation.BuildingVisual.IsKnown);
+        bool allDistinct = shapes.Distinct().Count() == shapes.Length;
+        GD.Print($"BUILDTEST 建筑画法：{string.Join("/", shapes)} ⇒ 都有画法={allKnown} 互不相同={allDistinct}");
+        GD.Print($"BUILDTEST 建筑长得不一样 ⇒ {(allKnown && allDistinct ? "PASS" : "FAIL")}");
     }
 }

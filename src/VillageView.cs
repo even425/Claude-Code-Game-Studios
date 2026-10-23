@@ -165,8 +165,15 @@ public partial class VillageView : Node2D
     /// <param name="AffectsH">影响区 Y 半径。</param>
     /// <param name="Label">名字（画在标记上）。</param>
     /// <param name="Done">已建成（影响区已生效）。</param>
+    /// <param name="Kind">
+    /// 建筑种类（D-097：<b>要画成各自的形状</b>）。
+    /// ⚠️ 之前只有「一块色块」⇒ 围栏 / 试炼塔 / 防护罩在地图上<b>长得一模一样</b>，
+    /// 玩家根本看不出自己盖了什么。
+    /// </param>
+    /// <param name="Progress">建造进度（0..1）；未建完时按工地画。</param>
     public readonly record struct VillageBuildingMark(
-        int GridX, int GridY, int AffectsW, int AffectsH, string Label, bool Done = true);
+        int GridX, int GridY, int AffectsW, int AffectsH, string Label, bool Done = true,
+        string Kind = "", double Progress = 1.0);
 
     /// <summary>设置「地图上已建成的建筑」标记。</summary>
     /// <param name="marks">标记列表。</param>
@@ -257,31 +264,167 @@ public partial class VillageView : Node2D
     /// ⚠️ <b>为什么要画</b>：玩家把围栏放下之后，影响区（摆摊能摆到哪儿）就是这次放置的价值
     /// ⇒ 看不见就等于没放。只画「标记」而不画「房子」：房子是手绘装饰、不跟格位走。
     /// </remarks>
-    private void DrawBuildingMarks()
+/// <summary>画「已建成的建筑」的<b>影响区</b>（半透明，铺在地面上）。</summary>
+    /// <remarks>
+    /// ⚠️ <b>为什么要画</b>：玩家把围栏放下之后，影响区（摆摊能摆到哪儿）就是这次放置的价值
+    /// ⇒ 看不见就等于没放。
+    /// <para>⚠️ <b>只画影响区，不画「村庄那种房子」</b>：村庄的房子是手绘装饰、不跟格位走
+    /// ⇒ 若把落点画成那种房子，玩家会以为看到的房子的位置就是真实格位 ⇒ 那是个谎。
+    /// <b>但建筑本身（围栏 / 试炼塔 / 防护罩）必须画成它自己的形状</b>（D-097）——
+    /// 它们<b>确实</b>在那个格位上 ⇒ 画它们不是撒谎。</para>
+    /// </remarks>
+    private void DrawBuildingAffectsAreas()
     {
         foreach (var m in _buildingMarks)
         {
-            if (m.AffectsW > 0 && m.AffectsH > 0)
-            {
-                int minX = m.GridX - (m.AffectsW - 1);
-                int maxX = m.GridX + (m.AffectsW - 1);
-                int minY = m.GridY - (m.AffectsH - 1);
-                int maxY = m.GridY + (m.AffectsH - 1);
-                var area = new[]
-                {
-                    P(minX, minY), P(maxX + 1, minY), P(maxX + 1, maxY + 1), P(minX, maxY + 1),
-                };
-                DrawPolygon(area, new[] { new Color(0.45f, 0.85f, 0.55f, 0.10f) });
-            }
+            if (m.AffectsW <= 0 || m.AffectsH <= 0) continue;
 
-            var cell = new[]
+            int minX = m.GridX - (m.AffectsW - 1);
+            int maxX = m.GridX + (m.AffectsW - 1);
+            int minY = m.GridY - (m.AffectsH - 1);
+            int maxY = m.GridY + (m.AffectsH - 1);
+            var area = new[]
             {
-                P(m.GridX, m.GridY), P(m.GridX + 1, m.GridY),
-                P(m.GridX + 1, m.GridY + 1), P(m.GridX, m.GridY + 1),
+                P(minX, minY), P(maxX, minY), P(maxX + 1, maxY + 1), P(minX, maxY + 1),
             };
-            // 已建成 = 蓝色；施工中 = 琥现色（「还没能用」）。
-            var mark = m.Done ? new Color(0.55f, 0.8f, 0.95f, 0.45f) : new Color(0.95f, 0.72f, 0.35f, 0.45f);
-            DrawPolygon(cell, new[] { mark });
+            DrawPolygon(area, new[] { new Color(0.45f, 0.85f, 0.55f, 0.10f) });
+        }
+    }
+
+    /// <summary>画一栋建筑本身（按种类画成各自的形状）。</summary>
+    /// <remarks>
+    /// ⚠️ <b>为什么要区分种类</b>（D-097）：之前三种建筑都画成<b>同一块色块</b>
+    /// ⇒ 玩家在地图上看不出自己盖的是围栏还是试炼塔 ⇒ 「看得见自己盖了什么」这件事是假的。
+    /// <para>⚠️ <b>没建完 ⇒ 画脚手架</b>，建成 ⇒ 画成品。</para>
+    /// </remarks>
+    /// <param name="m">建筑标记。</param>
+    private void DrawBuildingProp(VillageBuildingMark m)
+    {
+        float x = m.GridX;
+        float y = m.GridY;
+
+        if (!m.Done)
+        {
+            DrawScaffold(x, y, (float)Math.Clamp(m.Progress, 0.0, 1.0));
+            return;
+        }
+
+        switch (m.Kind)
+        {
+            case ClaudeCodeGameStudios.Presentation.BuildingVisual.Fence:
+                DrawFenceBuilding(x, y);
+                break;
+            case ClaudeCodeGameStudios.Presentation.BuildingVisual.TrialTower:
+                DrawTowerBuilding(x, y);
+                break;
+            case ClaudeCodeGameStudios.Presentation.BuildingVisual.Shield:
+                DrawShieldBuilding(x, y);
+                break;
+            default:
+                DrawGenericBuilding(x, y);
+                break;
+        }
+    }
+
+    /// <summary>围栏：一圈木栅栏（它圈的是地，不是房子）。</summary>
+    /// <remarks>
+    /// ⚠️ **要看得见**：栅栏只有几根细木棍 ⇒ 在等距视角里几乎看不见
+    /// ⇒ 玩家盖了围栏却看不出那儿有东西 ⇒ 画成**带横梁的实心矮墙**。
+    /// </remarks>
+    private void DrawFenceBuilding(float x, float y)
+    {
+        // 四条边：矮墙（上表面 + 两个侧面）。
+        DrawFenceSide(x, y, 1f, 0f);        // 沿 x 方向的那条
+        DrawFenceSide(x, y + 1f, 1f, 0f);
+        DrawFenceSide(x, y, 0f, 1f);        // 沿 y 方向的那条
+        DrawFenceSide(x + 1f, y, 0f, 1f);
+        // 四角立柱（高一点，看得出是围起来的）。
+        Box(x, y, 0.2f, 0.2f, 30f, WoodDark);
+        Box(x + 0.8f, y, 0.2f, 0.2f, 30f, WoodDark);
+        Box(x, y + 0.8f, 0.2f, 0.2f, 30f, WoodDark);
+        Box(x + 0.8f, y + 0.8f, 0.2f, 0.2f, 30f, WoodDark);
+    }
+
+    /// <summary>围栏的一段（沿 dx / dy 方向的矮墙）。</summary>
+    private void DrawFenceSide(float x, float y, float dx, float dy)
+    {
+        const float h = 18f;
+        var col = new Color("8a6a4a");
+        if (dx > 0f)
+        {
+            Box(x + 0.06f, y + 0.74f, 0.88f, 0.2f, h, col);
+        }
+        else
+        {
+            Box(x + 0.06f, y + 0.06f, 0.2f, 0.88f, h, col);
+        }
+    }
+
+    /// <summary>试炼塔：一座石塔，顶部有旗。</summary>
+    private void DrawTowerBuilding(float x, float y)
+    {
+        Box(x + 0.15f, y + 0.15f, 0.7f, 0.7f, 62f, Stone);
+        Box(x + 0.25f, y + 0.25f, 0.5f, 0.5f, 68f, StoneTop);
+        var apex = P(x + 0.5f, y + 0.5f, 92f);
+        DrawPolygon(new[] { P(x, y, 68f), P(x + 1f, y, 68f), apex },
+                    new[] { RoofLux, RoofLux, Darken(RoofLux, 0.1f) });
+        DrawPolygon(new[] { P(x + 1f, y, 68f), P(x + 1f, y + 1f, 68f), apex },
+                    new[] { Darken(RoofLux, 0.2f), Darken(RoofLux, 0.2f), Darken(RoofLux, 0.1f) });
+        DrawPolygon(new[] { P(x + 1f, y + 1f, 68f), P(x, y + 1f, 68f), apex },
+                    new[] { Darken(RoofLux, 0.3f), Darken(RoofLux, 0.3f), Darken(RoofLux, 0.1f) });
+        DrawPolygon(new[] { P(x, y + 1f, 68f), P(x, y, 68f), apex },
+                    new[] { Darken(RoofLux, 0.24f), Darken(RoofLux, 0.24f), Darken(RoofLux, 0.1f) });
+        // 旗
+        DrawLine(P(x + 0.5f, y + 0.5f, 92f), P(x + 0.5f, y + 0.5f, 118f), WoodDark, 3);
+        DrawPolygon(new[] { P(x + 0.5f, y + 0.5f, 118f), P(x + 0.5f, y + 0.9f, 110f),
+                            P(x + 0.5f, y + 0.5f, 104f) },
+                    new[] { Banner, Banner, Banner });
+    }
+
+    /// <summary>防护罩：一层罩在格位上的光罩（它罩的是「外面来的东西」）。</summary>
+    /// <remarks>
+    /// ⚠️ **要看得见**：光罩是半透明的 ⇒ 在草地上几乎看不出来
+    /// ⇒ 加一圈**发光的底座环** + 更亮的罩体 ⇒ 一眼能认出「这儿有个罩子」。
+    /// </remarks>
+    private void DrawShieldBuilding(float x, float y)
+    {
+        // 发光底座（比罩子大 ⇒ 一眼能看见「这儿有东西」）。
+        var baseC = P(x + 0.5f, y + 0.5f, 0f);
+        DrawCircle(baseC + new Vector2(0, -4), 30f, new Color(0.5f, 0.85f, 1.0f, 0.45f));
+        DrawCircle(baseC + new Vector2(0, -4), 22f, new Color(0.75f, 0.95f, 1.0f, 0.55f));
+        // 石台
+        Box(x + 0.15f, y + 0.15f, 0.7f, 0.7f, 18f, Stone);
+        // 罩子：两层半透明球（内层更亮）。
+        var c = P(x + 0.5f, y + 0.5f, 30f);
+        DrawCircle(c, 27f, new Color(0.55f, 0.82f, 0.98f, 0.38f));
+        DrawCircle(c, 18f, new Color(0.7f, 0.92f, 1.0f, 0.40f));
+        // 四角支架
+        DrawLine(P(x + 0.1f, y + 0.1f, 18f), P(x + 0.1f, y + 0.1f, 54f), StoneTop, 3);
+        DrawLine(P(x + 0.9f, y + 0.1f, 18f), P(x + 0.9f, y + 0.1f, 54f), StoneTop, 3);
+        DrawLine(P(x + 0.1f, y + 0.9f, 18f), P(x + 0.1f, y + 0.9f, 54f), StoneTop, 3);
+        DrawLine(P(x + 0.9f, y + 0.9f, 18f), P(x + 0.9f, y + 0.9f, 54f), StoneTop, 3);
+    }
+
+    /// <summary>不认识种类时的兜底：一块矮石台。</summary>
+    private void DrawGenericBuilding(float x, float y)
+    {
+        Box(x + 0.15f, y + 0.15f, 0.7f, 0.7f, 30f, Stone);
+    }
+
+    /// <summary>施工中的建筑：脚手架（进度越高墙越完整）。</summary>
+    private void DrawScaffold(float x, float y, float progress)
+    {
+        float post = 8f + progress * 30f;
+        var postCol = new Color("9c8560");
+        Box(x, y, 0.2f, 0.2f, post, postCol);
+        Box(x + 0.8f, y, 0.2f, 0.2f, post, postCol);
+        Box(x, y + 0.8f, 0.2f, 0.2f, post, postCol);
+        Box(x + 0.8f, y + 0.8f, 0.2f, 0.2f, post, postCol);
+        if (progress > 0.35f)
+        {
+            float wallH = (progress - 0.35f) / 0.65f * 26f;
+            Box(x + 0.2f, y, 0.6f, 0.18f, wallH, new Color("b0a07c"));
+            Box(x + 0.2f, y + 0.82f, 0.6f, 0.18f, wallH, new Color("b0a07c"));
         }
     }
 
@@ -321,12 +464,15 @@ public partial class VillageView : Node2D
         }
         foreach (var b in _village) items.Add((b.X + b.Y, () => b.Draw!(this)));
         foreach (var h in _heroes) if (h.Present) items.Add((h.MapX + h.MapY, () => ClaudeCodeGameStudios.Presentation.HeroRenderer.Draw(this, h)));
+        // ⚠️ **玩家自己盖的建筑也要参与深度排序**（D-097）：
+        // 否则它永远画在最上层 ⇒ 站在它「后面」的英雄会被它盖住。
+        foreach (var m in _buildingMarks) items.Add((m.GridX + m.GridY, () => DrawBuildingProp(m)));
 
         items.Sort((a, b) => a.key.CompareTo(b.key));
         foreach (var it in items) it.draw();
 
-        // 已建成的建筑标记（影响区）先画。
-        DrawBuildingMarks();
+        // 已建成建筑的<b>影响区</b>先画（它是铺在地面上的半透明层）。
+        DrawBuildingAffectsAreas();
 
         // 放置预览画在最上层（否则会被地面的楼房遮住）。
         DrawPlacementPreview();

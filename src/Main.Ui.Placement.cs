@@ -128,8 +128,17 @@ public partial class Main : Node2D
 
             var definition = ClaudeCodeGameStudios.Domain.Village.BuildableBuildings.Find(b.Id);
             string label = definition?.Name ?? b.Id.Value;
+            // ⚠️ **带上画法与进度**（D-097）：地图上要画成它自己的形状
+            // （围栏 / 试炼塔 / 防护罩长一个样 ⇒ 玩家看不出自己盖了什么），
+            // 没建完的画成脚手架。
+            // ⚠️ 画法由**纯 C# 的映射表**给出（`BuildingVisual`）
+            // ⇒ 「每一栋可建建筑都必须有画法」能被离线单测守住。
+            string shape = definition is null
+                ? ClaudeCodeGameStudios.Presentation.BuildingVisual.Generic
+                : ClaudeCodeGameStudios.Presentation.BuildingVisual.ShapeFor(definition.Value);
             marks.Add(new VillageView.VillageBuildingMark(
-                b.GridX, b.GridY, b.AffectsAreaW, b.AffectsAreaH, label, done));
+                b.GridX, b.GridY, b.AffectsAreaW, b.AffectsAreaH, label, done,
+                shape, b.ConstructionProgress));
         }
 
         _village.SetBuildingMarks(marks);

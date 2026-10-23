@@ -275,6 +275,22 @@
     },
     {
       "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBanditFixedTier",
+      "kind": "参数",
+      "status": "【已确认】D-096",
+      "note": "盗匪的固定强度档位 —— **不随村庄层级递增**（这是它与兽潮的形状差异）",
+      "value": "1"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
+      "name": "WorldEventBanditPeriodDays",
+      "kind": "参数",
+      "status": "【已确认】D-096",
+      "note": "盗匪来袭的触发周期（9 个游戏日）—— 与兽潮（7）、商队（11）错开",
+      "value": "9"
+    },
+    {
+      "file": "Main.WorldEvents.cs",
       "name": "WorldEventBeastTideGoldLoss",
       "kind": "参数",
       "status": "【已确认】D-080",

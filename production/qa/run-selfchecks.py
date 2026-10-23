@@ -99,6 +99,15 @@ CHECKS = [
         "zeros": [],
     },
     {
+        # D-096：盗匪来袭（第三个大事件实例）在**真实游戏**里跑一次
+        # （村库材料被抢 / 金币不动 / 幂等 —— 单测验不到接线层）。
+        "name": "bandit",
+        "args": ["--bandit"],
+        "require": ["BANDITTEST 必败=True 材料对=True 金币对=True 扣减不超量=True 幂等=True ⇒ PASS"],
+        "forbid": ["FAIL"],
+        "zeros": [],
+    },
+    {
         # D-093：玩家自己选落点（接线层，单测验不到）。
         "name": "build",
         "args": ["--build"],

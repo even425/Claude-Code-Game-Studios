@@ -76,6 +76,7 @@ public class MainStructureTests
         "RunTradeSelfTest", "RunMarketSelfTest", "RunShoppingSelfTest",
         "RunGrantSelfTest", "RunRelationsSelfTest", "RunSaveSelfTest",
         "RunDungeonSelfTest", "RunCaravanSelfTest", "RunBuildSelfTest",
+        "RunBanditSelfTest",   // D-096：盗匪来袭真机自检
         "SelfTestEnsurePresentAndIdle",   // 自检夹具：把英雄摆成「在场且空闲」
     };
 

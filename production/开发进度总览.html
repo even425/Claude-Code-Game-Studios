@@ -129,18 +129,18 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 978</div>
-      <div class="d">全绿 · 新增 176 条</div>
+      <div class="v">802 <em>→</em> 983</div>
+      <div class="d">全绿 · 新增 181 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">96 <em>档</em></div>
+      <div class="v">101 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">36 <em>条</em></div>
-      <div class="d">D-057 … D-095</div>
+      <div class="v">37 <em>条</em></div>
+      <div class="d">D-057 … D-096</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -213,6 +213,11 @@
             <td class="k">副本占多久</td>
             <td class="before">时长<b>写死 11 小时</b>，战斗花的时间<b>完全没进时间轴</b></td>
             <td class="after"><b>行程 = 路程 + 战斗</b>（战斗耗时由真实回合数算）⇒ 「这趟占几天」算得出了</td>
+          </tr>
+          <tr>
+            <td class="k">大事件</td>
+            <td class="before">框架有了，但<b>只有两个实例</b>（兽潮 / 商队）⇒ 「通用」只是<b>说说</b>（§11.5 要求至少两个实例验证）</td>
+            <td class="after"><b>三个实例</b>：新增盗匪来袭，且<b>形状刻意不同</b>（强度固定 / 阶段少一个 / 不受那道闸）</td>
           </tr>
           <tr>
             <td class="k">掉落权重</td>
@@ -518,6 +523,19 @@
         职责也顺手分开：<b>围栏 = 范围</b>（决定摆摊能摆到哪儿）· <b>防护罩 = 专职防御</b>（削弱来扰）⇒ 各降一级、各降各的。
         落点同样由玩家自己点（D-093）⇒ 地图上看得见它罩到哪儿。</p>
         <div class="tags"><span class="tag">D-095</span><span class="tag">变异 4/4</span><span class="tag">基线 §12.1</span></div>
+      </li>
+      <li>
+        <div class="when">11:20</div>
+        <h3>盗匪来袭：第三个大事件实例（形状刻意不一样）</h3>
+        <p>基线 §11.5 原话：「<b>框架的可扩展性需要至少两个实例来验证</b>」⇒ 之前只有两个（兽潮 / 商队），
+        现在是<b>三个</b> ⇒ 而且第三个<b>形状刻意与前两个不同</b>：<br>
+        ① <b>强度固定</b>，不随村庄层级增长（兽潮会 ⇒ 盗匪不会 —— 村子变大它也不变强）；
+        ② 阶段<b>比兽潮少一个</b>（没有「后续影响」）⇒ 顺手证明了「阶段可以跳过」；
+        ③ <b>不受</b>兽潮那道「守不住就不触发」的闸约束（那道闸是兽潮特有的）。<br>
+        它守的是五件事：打赢 ⇒ <b>缴获</b>（材料 +20、金币 +10）；打输 ⇒ <b>被抢物资</b>（材料 −10，
+        <b>金币一分不动</b> —— 盗匪抢的是货，不是钱）；没人出击 ⇒ 必败。<br>
+        ⚠️ <b>数值是建议值</b>（周期 9 天 / 固定档位 1 / 20+10 / −10），已登记参数台账，等开发者拍板。</p>
+        <div class="tags"><span class="tag">D-096</span><span class="tag">变异 5/5</span><span class="tag">真机自检 --bandit</span><span class="tag">基线 §11.5</span></div>
       </li>
       <li>
         <div class="when">07:40</div>

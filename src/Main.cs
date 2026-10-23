@@ -860,6 +860,7 @@ public partial class Main : Node2D
         if (OS.GetCmdlineUserArgs().Contains("--market") && !_marketTestDone) RunMarketSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--build") && !_buildTestDone) RunBuildSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--caravan") && !_caravanTestDone) RunCaravanSelfTest();
+        if (OS.GetCmdlineUserArgs().Contains("--bandit") && !_banditTestDone) RunBanditSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--shop") && !_shopTestDone) RunShoppingSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a is "--save" or "--load") && !_saveTestDone)
         {
@@ -974,6 +975,10 @@ public partial class Main : Node2D
 
     /// <summary><c>--caravan</c> 自检跑过了没（D-088：商队成交在真实游戏里的第一次）。</summary>
     private bool _caravanTestDone;
+
+    /// <summary><c>--bandit</c> 自检跑过了没（D-096：盗匪来袭在真实游戏里的第一次）。</summary>
+    private bool _banditTestDone;
+
     private bool _collectDone;
 
     /// <summary>采集目标天数（0 = 不采集）。</summary>

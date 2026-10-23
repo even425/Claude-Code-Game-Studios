@@ -77,6 +77,20 @@ public partial class Main : Node2D
         _worldEvents.Register(ClaudeCodeGameStudios.Application.WorldEventTemplates.Caravan(
             periodDays: WorldEventCaravanPeriodDays, CaravanOfferBase));
 
+        // D-096：盗匪来袭（第三个大事件实例）。
+        //
+        // ⚠️ **强度固定、不随村庄层级增长**：盗匪不会因为你村子变大而变强
+        // ⇒ 这正是它与兽潮的「形状不同」（基线 §11.5 要的通用性证据）。
+        var banditCombat = new ClaudeCodeGameStudios.Application.FormulaCombat(
+            monsterStats: stage => ScaleBeastTideMonster(
+                ClaudeCodeGameStudios.Domain.Combat.CombatParameters.MonsterFor(stage),
+                WorldEventBanditFixedTier));
+        _worldEvents.Register(ClaudeCodeGameStudios.Application.WorldEventTemplates.BanditRaid(
+            periodDays: WorldEventBanditPeriodDays,
+            banditCombat, banditCombat,
+            heroStats: BeastTideHeroStats,
+            tuning: () => BanditTuningBase));
+
         // D-081：商队市场（开摊 / 在售列表 / 成交）。
         // ⚠️ **延迟取实例**（委托而不是直接持有簿）：本方法跑在 `BuildScene` 之后，
         // 而簿就是这里才建的 ⇒ 直接持有没问题，但**委托更省心**：
@@ -108,6 +122,25 @@ public partial class Main : Node2D
 
     /// <summary>商队来访的触发周期（游戏内天数）。</summary>
     private const int WorldEventCaravanPeriodDays = 11;
+
+    /// <summary>盗匪来袭的触发周期（游戏内天数）（D-096）。</summary>
+    /// <remarks>
+    /// ⚠️ 与兽潮（7 天）、商队（11 天）错开 ⇒ 三个事件不会同日冲突。
+    /// </remarks>
+    private const int WorldEventBanditPeriodDays = 9;
+
+    /// <summary>
+    /// 盗匪的固定强度档位（D-096）——<b>不随村庄层级增长</b>。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ 这是它与兽潮的格式差异：兽潮越强岗子也越强，盗匪不会。
+    /// ⚠️ **建议值 1**：足够让「出击」有意义，又不会让旧村子永远抢不到。
+    /// </remarks>
+    private const int WorldEventBanditFixedTier = 1;
+
+    /// <summary>盗匪的数值（D-096：<b>建议值</b>，允许调）。</summary>
+    private static readonly ClaudeCodeGameStudios.Application.BanditTuning BanditTuningBase =
+        new(MaterialReward: 20L, GoldReward: 10L, MaterialLoss: 10L);
 
     /// <summary>
     /// 兽潮的<b>基准数值</b>（层级 0 时用这些；层级更高时按

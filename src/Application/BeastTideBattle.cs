@@ -45,13 +45,18 @@ public static class BeastTideBattle
     /// 这次战斗的标识。<b>要稳定</b>：战斗本身没有随机数（D-062），
     /// 但标识会进战报与幂等键 ⇒ 用随机数会让「同一份输入得到同一场战斗」这句话不成立。
     /// </param>
+    /// <param name="placeName">
+    /// 这是什么地方的战斗（写进战报）。
+    /// ⚠️ **为什么要做成参数</b>：盗团来袭（D-096）也要打一场 ⇒ 同一个解算器不能把「兽潮」写死。
+    /// </param>
     /// <returns>战斗结果。</returns>
     public static BeastTideBattleResult Resolve(
         IReadOnlyList<string> participants,
         Func<string, CombatStats> heroStats,
         IBattleResolver resolver,
         IBattleOutcomeReader outcomeReader,
-        string runId = "beasttide:probe")
+        string runId = "beasttide:probe",
+        string placeName = "兽潮")
     {
         if (participants is null) throw new ArgumentNullException(nameof(participants));
         if (heroStats is null) throw new ArgumentNullException(nameof(heroStats));
@@ -71,7 +76,7 @@ public static class BeastTideBattle
 
         var flow = DungeonFlow.Begin(
             new DungeonRunId(runId),
-            "兽潮", participants, resolver, outcomeReader, party: party);
+            placeName, participants, resolver, outcomeReader, party: party);
         var outcome = flow.RunToCompletion();
 
         return new BeastTideBattleResult(outcome.Succeeded, outcome.TotalRoundsUsed, participants.ToArray());

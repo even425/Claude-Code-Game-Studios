@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using ClaudeCodeGameStudios.Application;
+using WorldMap = ClaudeCodeGameStudios.Domain.Village.WorldMap;
 
 /// <summary>
 /// 村庄视图 —— 45° 俯视的等距地图（2:1 dimetric）。
@@ -17,8 +18,6 @@ using ClaudeCodeGameStudios.Application;
 public partial class VillageView : Node2D
 {
     public const int MaxTier = 5;
-    public const int MapW = 15;
-    public const int MapH = 10;
 
     public int Tier { get; private set; }
     public bool HasPeople { get; set; }
@@ -43,6 +42,8 @@ public partial class VillageView : Node2D
     private static readonly Color SkyLow   = new("a87a5a");
     private static readonly Color Grass    = new("4a6b3a");
     private static readonly Color GrassAlt = new("557a41");
+    /// <summary>村外的草地（D-117：比村里的暗一点 ⇒ 界线一眼可见）。</summary>
+    private static readonly Color WildGrass = new("3c5730");
     private static readonly Color Path     = new("9c8760");
     private static readonly Color Water    = new("35627a");
     private static readonly Color Roof     = new("a34a3a");
@@ -191,6 +192,21 @@ public partial class VillageView : Node2D
         QueueRedraw();
     }
 
+    /// <summary>村外的野兽（D-117）—— 视图只负责「照着画」。</summary>
+    private readonly List<ClaudeCodeGameStudios.Domain.Wildlife.WildBeast> _beasts = new();
+
+    /// <summary>设置「村外的野兽」（D-117）。</summary>
+    /// <param name="beasts">野兽列表。</param>
+    public void SetWildlife(IReadOnlyList<ClaudeCodeGameStudios.Domain.Wildlife.WildBeast> beasts)
+    {
+        _beasts.Clear();
+        if (beasts is not null)
+        {
+            foreach (var b in beasts) _beasts.Add(b);
+        }
+        QueueRedraw();
+    }
+
     /// <summary>
     /// 把本节点的局部坐标换回格位（D-093）。
     /// </summary>
@@ -220,9 +236,11 @@ public partial class VillageView : Node2D
         int gyi = (int)MathF.Round(gy);
 
         // ⚠️ **落点只能在可见的地图上**（D-093）。
-        // 地板是 0..MapW × 0..MapH；村庄的影响区（市集的）较大，连到地板之外
+        // 地板是 MapOrigin..MapOrigin+WorldMap.Width × MapOrigin..MapOrigin+WorldMap.Height（⚠️ D-117：地板有偏移）；
+        // 村庄的影响区（市集的）较大，连到地板之外
         // ⇒ 若不限，玩家会在「空里」点一下就把楼房放了 ⇒ 地图上出现一个悬在半空的标记。
-        if (gxi < 0 || gxi >= MapW || gyi < 0 || gyi >= MapH)
+        if (gxi < WorldMap.OriginX || gxi >= WorldMap.OriginX + WorldMap.Width
+            || gyi < WorldMap.OriginY || gyi >= WorldMap.OriginY + WorldMap.Height)
         {
             gridX = gxi;
             gridY = gyi;
@@ -250,10 +268,10 @@ public partial class VillageView : Node2D
     {
         if (affectsW <= 0 || affectsH <= 0) return;
 
-        int minX = Math.Max(0, gridX - (affectsW - 1));
-        int maxX = Math.Min(MapW, gridX + affectsW);
-        int minY = Math.Max(0, gridY - (affectsH - 1));
-        int maxY = Math.Min(MapH, gridY + affectsH);
+        int minX = Math.Max(WorldMap.OriginX, gridX - (affectsW - 1));
+        int maxX = Math.Min(WorldMap.OriginX + WorldMap.Width, gridX + affectsW);
+        int minY = Math.Max(WorldMap.OriginY, gridY - (affectsH - 1));
+        int maxY = Math.Min(WorldMap.OriginY + WorldMap.Height, gridY + affectsH);
         if (minX >= maxX || minY >= maxY) return;
 
         var area = new[]
@@ -483,6 +501,55 @@ public partial class VillageView : Node2D
         DrawLine(P(x + 0.34f, y + 0.34f, 20f), P(x + 0.66f, y + 0.66f, 20f), WoodDark, 4);
     }
 
+    /// <summary>
+    /// 画一只<b>村外的野兽</b>（D-117）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **只按「种类」画**：不画血条、不画名字 ——
+    /// 它是**野生世界的一部分**，不是 UI 元素 ⇒ 画面上只该有「那边有活物」的感觉。
+    /// <br>⚠️ <b>相位让它在轻轻动</b>（走路时的上下起伏）⇒ 静止的野兽看着像贴图。
+    /// </remarks>
+    private void DrawBeast(ClaudeCodeGameStudios.Domain.Wildlife.WildBeast beast)
+    {
+        Color body = beast.Kind switch
+        {
+            ClaudeCodeGameStudios.Domain.Wildlife.BeastKind.Boar => new Color("6b4f35"),
+            ClaudeCodeGameStudios.Domain.Wildlife.BeastKind.Wolf => new Color("7a7f86"),
+            _ => new Color("b08a63"),
+        };
+
+        // 走路的起伏（相位 0..1 ⇒ 一个来回）。
+        float bob = (float)Math.Sin(beast.Phase * MathF.PI * 2f) * 2.5f;
+        float x = beast.X + 0.5f;
+        float y = beast.Y + 0.5f;
+
+        // 身子：一个小菱形（等距投影的地面块）。
+        var c00 = P(x - 0.34f, y - 0.24f, 12f + bob);
+        var c10 = P(x + 0.18f, y - 0.34f, 12f + bob);
+        var c11 = P(x + 0.34f, y + 0.18f, 12f + bob);
+        var c01 = P(x - 0.18f, y + 0.34f, 12f + bob);
+        DrawPolygon(new[] { c00, c10, c11, c01 },
+                    new[] { Lighten(body, 0.18f), Lighten(body, 0.18f), body, body });
+
+        // 头：往前探一点（+x 方向）。
+        var head = P(x + 0.30f, y + 0.06f, 16f + bob);
+        DrawCircle(head, 7f, body);
+
+        // 四条腿：细线，站着不动 ⇒ 靠 bob 做出「在走」的感觉。
+        Color leg = Darken(body, 0.35f);
+        DrawLine(P(x - 0.18f, y - 0.10f, 12f + bob), P(x - 0.18f, y - 0.10f, 0f), leg, 2);
+        DrawLine(P(x + 0.10f, y - 0.10f, 12f + bob), P(x + 0.10f, y - 0.10f, 0f), leg, 2);
+        DrawLine(P(x - 0.10f, y + 0.18f, 12f + bob), P(x - 0.10f, y + 0.18f, 0f), leg, 2);
+        DrawLine(P(x + 0.16f, y + 0.18f, 12f + bob), P(x + 0.16f, y + 0.18f, 0f), leg, 2);
+
+        // 鹿有角（一眼能认出是「能抓的那只」）。
+        if (beast.Kind == ClaudeCodeGameStudios.Domain.Wildlife.BeastKind.Deer)
+        {
+            DrawLine(P(x + 0.34f, y + 0.02f, 22f + bob), P(x + 0.44f, y - 0.06f, 30f + bob), leg, 2);
+            DrawLine(P(x + 0.34f, y + 0.10f, 22f + bob), P(x + 0.44f, y + 0.02f, 30f + bob), leg, 2);
+        }
+    }
+
     /// <summary>施工中的建筑：脚手架（进度越高墙越完整）。</summary>
     private void DrawScaffold(float x, float y, float progress)
     {
@@ -539,6 +606,9 @@ public partial class VillageView : Node2D
         // ⚠️ **玩家自己盖的建筑也要参与深度排序**（D-097）：
         // 否则它永远画在最上层 ⇒ 站在它「后面」的英雄会被它盖住。
         foreach (var m in _buildingMarks) items.Add((m.GridX + m.GridY, () => DrawBuildingProp(m)));
+        // ⚠️ **D-117：村外的野兽也参与深度排序** —— 否则它永远在最后面 ⇒
+        // 走到树后面的野兽会被树挡住（而它本来该在树前面/后面按位置算）。
+        foreach (var b in _beasts) items.Add((b.X + b.Y, () => DrawBeast(b)));
 
         items.Sort((a, b) => a.key.CompareTo(b.key));
         foreach (var it in items) it.draw();
@@ -582,18 +652,27 @@ public partial class VillageView : Node2D
 
     private void DrawGroundPlate()
     {
-        // 整块地：一个菱形
-        var quad = new[] { P(0, 0), P(MapW, 0), P(MapW, MapH), P(0, MapH) };
+        // 整块地：一个菱形（⚠️ D-117：地板有**原点偏移**，村子在中间、四周是野外）
+        var quad = new[]
+        {
+            P(WorldMap.OriginX, WorldMap.OriginY),
+            P(WorldMap.OriginX + WorldMap.Width, WorldMap.OriginY),
+            P(WorldMap.OriginX + WorldMap.Width, WorldMap.OriginY + WorldMap.Height),
+            P(WorldMap.OriginX, WorldMap.OriginY + WorldMap.Height),
+        };
         DrawPolygon(quad, new[] { Grass, Grass, Grass, Grass });
 
         // 地面格子（隔一个画一条深色缝，地块感）
-        for (int x = 0; x < MapW; x++)
-            for (int y = 0; y < MapH; y++)
-                if ((x + y) % 2 == 0)
-                {
-                    var c = new[] { P(x, y), P(x + 1, y), P(x + 1, y + 1), P(x, y + 1) };
-                    DrawPolygon(c, new[] { GrassAlt, GrassAlt, GrassAlt, GrassAlt });
-                }
+        // ⚠️ **D-117：村外用另一种底色** —— 玩家一眼能看出「村子」与「野外」的界线。
+        for (int x = WorldMap.OriginX; x < WorldMap.OriginX + WorldMap.Width; x++)
+            for (int y = WorldMap.OriginY; y < WorldMap.OriginY + WorldMap.Height; y++)
+            {
+                bool wild = WorldMap.IsWilderness(x, y);
+                if (!wild && (x + y) % 2 != 0) continue;   // 村里照旧：隔一个画一条
+                var c = new[] { P(x, y), P(x + 1, y), P(x + 1, y + 1), P(x, y + 1) };
+                var col = wild ? WildGrass : GrassAlt;
+                DrawPolygon(c, new[] { col, col, col, col });
+            }
 
         // 土路：从村口斜穿过去
         DrawIsoPath(new[] { new Vector2(1, 8), new Vector2(5, 6), new Vector2(9, 4), new Vector2(14, 1) });
@@ -871,25 +950,26 @@ public partial class VillageView : Node2D
             (x > 0 && x < 3 && y > 8 && y < 10);
 
         // 树 —— 铺满全图，别都挤在边上。
+        // ⚠️ **D-117：村子之外（野外）也要有树** —— 玩家要能一眼看出「那边是野外」。
         // 注意：随机值必须在【建布局时】取好并捕获；放进 lambda 里就是绘制时求值，
         // 那样树会每帧变一次大小。
-        for (int i = 0; i < 30; i++)
+        for (int i = 0; i < 60; i++)
         {
-            float x = _rng.Next(0, MapW - 1), y = _rng.Next(0, MapH - 1);
+            float x = WorldMap.OriginX + _rng.Next(0, WorldMap.Width - 1), y = WorldMap.OriginY + _rng.Next(0, WorldMap.Height - 1);
             if (occupied(x, y)) continue;
             float s = 0.75f + _rng.NextSingle() * 0.7f;
             Add(x, y, v => v.Tree(x, y, s));
         }
-        for (int i = 0; i < 13; i++)
+        for (int i = 0; i < 26; i++)
         {
-            float x = _rng.Next(0, MapW - 1), y = _rng.Next(0, MapH - 1);
+            float x = WorldMap.OriginX + _rng.Next(0, WorldMap.Width - 1), y = WorldMap.OriginY + _rng.Next(0, WorldMap.Height - 1);
             if (occupied(x, y)) continue;
             float s = 0.8f + _rng.NextSingle() * 0.6f;
             Add(x, y, v => v.Bush(x, y, s));
         }
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < 12; i++)
         {
-            float x = _rng.Next(0, MapW - 1), y = _rng.Next(0, MapH - 1);
+            float x = WorldMap.OriginX + _rng.Next(0, WorldMap.Width - 1), y = WorldMap.OriginY + _rng.Next(0, WorldMap.Height - 1);
             if (occupied(x, y)) continue;
             float s = 0.7f + _rng.NextSingle() * 0.5f;
             Add(x, y, v => v.Rock(x, y, s));

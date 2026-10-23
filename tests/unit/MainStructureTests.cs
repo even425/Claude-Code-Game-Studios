@@ -45,6 +45,8 @@ public class MainStructureTests
             // D-108：采集器也要盖房子（钱得有出口）⇒ 规则在应用层，这里只接线。
             // D-111：两个对照开关的解析（归因实验用）。
             "HasZeroFlag",
+            // D-117：村外的野兽（生成 / 每天走一步 / 步态相位）。
+            "SeedWildlife", "TickWildlife", "AdvanceWildlifePhase",
             // D-110：把「村庄可花却没花的钱」单独记一笔（采集器不召唤 ⇒ 钱会囤）。
             "UnspentVillageGold",
         }),

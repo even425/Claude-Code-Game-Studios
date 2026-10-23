@@ -464,6 +464,14 @@
       "status": "【待定】P-13（D-003）",
       "note": "村庄最高层级（5）—— 已登记在规则层台账的 P-13 项下；与 `VillageUpgradeService.MaxTier` **重复**（两处分叉的隐患：测试盯着，但不是台账）",
       "value": "5"
+    },
+    {
+      "file": "Main.Wildlife.cs",
+      "name": "WildlifeCount",
+      "kind": "参数",
+      "status": "【建议值】D-117（待开发者确认）",
+      "note": "村外野兽的只数（D-117：够让「村外有活物」一眼可见，又不至于满地都是）",
+      "value": "8"
     }
   ],
   "nonParameters": [
@@ -665,20 +673,6 @@
     },
     {
       "file": "VillageView.cs",
-      "name": "MapH",
-      "kind": "非参数",
-      "status": "表现层",
-      "note": "地图格高"
-    },
-    {
-      "file": "VillageView.cs",
-      "name": "MapW",
-      "kind": "非参数",
-      "status": "表现层",
-      "note": "地图格宽"
-    },
-    {
-      "file": "VillageView.cs",
       "name": "WALL_H",
       "kind": "非参数",
       "status": "表现层",
@@ -697,6 +691,62 @@
       "kind": "非参数",
       "status": "哨兵",
       "note": "上次建造状态哨兵"
+    },
+    {
+      "file": "Domain/Village/WorldMap.cs",
+      "name": "Width",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "地图的格宽（D-117）"
+    },
+    {
+      "file": "Domain/Village/WorldMap.cs",
+      "name": "Height",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "地图的格高（D-117）"
+    },
+    {
+      "file": "Domain/Village/WorldMap.cs",
+      "name": "OriginX",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "地图原点的 X 偏移（D-117）"
+    },
+    {
+      "file": "Domain/Village/WorldMap.cs",
+      "name": "OriginY",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "地图原点的 Y 偏移（D-117）"
+    },
+    {
+      "file": "Domain/Village/WorldMap.cs",
+      "name": "VillageX0",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "村子的地盘 X 起点（D-117）"
+    },
+    {
+      "file": "Domain/Village/WorldMap.cs",
+      "name": "VillageY0",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "村子的地盘 Y 起点（D-117）"
+    },
+    {
+      "file": "Domain/Village/WorldMap.cs",
+      "name": "VillageX1",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "村子的地盘 X 终点（D-117）"
+    },
+    {
+      "file": "Domain/Village/WorldMap.cs",
+      "name": "VillageY1",
+      "kind": "非参数",
+      "status": "表现层",
+      "note": "村子的地盘 Y 终点（D-117）"
     }
   ],
   "tables": [

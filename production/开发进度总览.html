@@ -129,18 +129,18 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 1075</div>
-      <div class="d">全绿 · 新增 273 条</div>
+      <div class="v">802 <em>→</em> 1083</div>
+      <div class="d">全绿 · 新增 281 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">161 <em>档</em></div>
+      <div class="v">165 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">54 <em>条</em></div>
-      <div class="d">D-057 … D-116</div>
+      <div class="v">55 <em>条</em></div>
+      <div class="d">D-057 … D-117</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -854,6 +854,28 @@
         根因：老档补记的判据是「<b>资源里有没有这一项</b>」⇒ <b>而资产为 0 时它压根不进存档</b> ⇒ 新档被当成老档。
         ⇒ 判据改成<b>版本号</b>。⚠️ 教训：「某个键在不在」不是可靠判据（<b>值可能恰好是 0</b>）。</p>
         <div class="tags"><span class="tag">D-114</span><span class="tag">D-115</span><span class="tag">D-116</span><span class="tag">1075/1075</span></div>
+      </li>
+      <li>
+        <div class="when">23:50</div>
+        <h3>地图变大了，野外有野兽在走</h3>
+        <p>你说「地图太小、应该大点，能看到村外的野兽」⇒ 原来那块地板只占屏幕中间一小块、
+        四周全是天空 ⇒ <b>根本没有「村外」</b> ⇒ 现在地板扩到 <b>28×20</b>、<b>原点挪了</b>
+        ⇒ 村子留在中间，<b>四周多出一圈野外</b>（暗绿底色 ⇒ 界线一眼可见）。</p>
+        <p>⇒ 野外有 <b>8 只野兽</b>（野猪 / 狼 / 鹿，鹿有角）：<b>只生成在村外</b>、
+        <b>走不进村子</b>、<b>走不出地图</b>、<b>每天走一步</b>（夜里活动）。
+        规则住在领域层（可离线单测）⇒ 画面只是「照着画」。<br>
+        ⇒ 顺带抓到一个坐标坑：格位<b>可以是负数</b>（地板有偏移）⇒
+        「在不在地图上」不能用 <code>x &gt;= 0</code>。</p>
+        <p>⚠️ <b>还没做：狩猎</b> —— 现在野兽只是「世界的样子」，<b>还不能被打</b>。
+        下一步让英雄真的出村去猎（同时也是「材料有去处」这条老问题的候选解药）。</p>
+        <div class="tags"><span class="tag">D-117</span><span class="tag">变异 4/4</span><span class="tag">1083/1083</span></div>
+        <div class="shot" style="margin-top:12px">
+          <img src="qa/evidence/d117-beasts.png" alt="实机画面：扩大的地图，野外有野兽，村里没有" />
+          <div class="cap">
+            实机截图（D-117）：地面铺满窗口 ⇒ <b>暗绿的是野外</b>（左上有狼、中下有鹿、右边有野猪），
+            <b>亮绿棋盘格的是村子</b> —— 村外一眼可分，而且<b>野兽不会进村</b>。
+          </div>
+        </div>
       </li>
     </ol>
   </section>

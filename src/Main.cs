@@ -619,6 +619,10 @@ public partial class Main : Node2D
 
         BuildScene();
 
+        // D-117：村外的野兽 —— **开局长一批**（在 BuildScene 之后 ⇒ 随机流已就绪）。
+        //    ⚠️ 用存档里那个随机流（`_rng`）⇒ 同一个种子 ⇒ 同一片野外（可复现）。
+        SeedWildlife();
+
         // 关系应用入口：社交、同队副本都走它（幂等键与双向规则在应用层）。
         _relationships = new ClaudeCodeGameStudios.Application.RelationshipService(_relationship);
 
@@ -870,9 +874,17 @@ public partial class Main : Node2D
         // 4b. 大事件（D-079）：按游戏日推进一次（触发 → 阶段 → 结算）。
         TickWorldEvents();
 
+        // 4b-0. 村外的野兽（D-117）：**每天走一步**（夜里活动 ⇒ 白天换位置）。
+        //    ⚠️ 野兽**不入档**（野生生物是「世界的样子」，不是玩家的进度）。
+        TickWildlife();
+
         // 4b-1. 地图上「已建成的建筑」标记（D-093）—— **每帧**更新
         //   （玩家随时可能放下新建筑 ⇒ 放在日切里会晚一整天才显示）。
         UpdateBuildingMarks();
+
+        // 4b-2. 村外的野兽（D-117）：**每帧**喂给视图（它们的位置每帧都在动）。
+        _village.SetWildlife(_wildlife.Beasts);
+        AdvanceWildlifePhase(dt);
 
         // 5. 出征回来了没有
         if (Expending && _clock.AbsoluteHour >= _pendingEnd) ResolveExpedition();

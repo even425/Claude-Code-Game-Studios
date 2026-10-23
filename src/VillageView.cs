@@ -334,6 +334,9 @@ public partial class VillageView : Node2D
             case ClaudeCodeGameStudios.Presentation.BuildingVisual.Well:
                 DrawWellBuilding(x, y);
                 break;
+            case ClaudeCodeGameStudios.Presentation.BuildingVisual.Blacksmith:
+                DrawBlacksmithBuilding(x, y);
+                break;
             default:
                 DrawGenericBuilding(x, y);
                 break;
@@ -449,6 +452,35 @@ public partial class VillageView : Node2D
                     new[] { Roof, Roof, Roof });
         DrawPolygon(new[] { P(x + 1.05f, y - 0.05f, 56f), P(x - 0.05f, y + 1.05f, 56f), apex },
                     new[] { Darken(Roof, 0.2f), Darken(Roof, 0.2f), Darken(Roof, 0.1f) });
+    }
+
+    /// <summary>
+    /// 铁匠铺（D-107，层级附带建筑）：一间带炉火的石屋 —— <b>第 4 级就有它</b>。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>要能一眼认出来</b>（D-097 的规矩）：石屋 + **跳动的炉火** + 屋前的**铁砧**
+    /// ⇒ 玩家在地图上看到那团橙色的火光，就知道「这儿是铁匠铺」
+    /// ⇒ 而不是一个「和别的建筑长得一样」的石台。
+    /// </remarks>
+    private void DrawBlacksmithBuilding(float x, float y)
+    {
+        // 石屋（比井高一点点，但明显矮于试炼塔 ⇒ 一眼分得清）。
+        Box(x + 0.12f, y + 0.12f, 0.76f, 0.76f, 40f, Stone);
+        Box(x + 0.22f, y + 0.22f, 0.56f, 0.56f, 44f, StoneTop);
+        // 屋顶（两坡）。
+        var apex = P(x + 0.5f, y + 0.5f, 66f);
+        DrawPolygon(new[] { P(x + 0.05f, y + 0.05f, 44f), P(x + 0.95f, y + 0.95f, 44f), apex },
+                    new[] { Roof, Roof, Roof });
+        DrawPolygon(new[] { P(x + 0.95f, y + 0.05f, 44f), P(x + 0.05f, y + 0.95f, 44f), apex },
+                    new[] { Darken(Roof, 0.2f), Darken(Roof, 0.2f), Darken(Roof, 0.1f) });
+        // 炉火：门口一团橙红的光（D-097：认得出比画得细更要紧）。
+        var fire = P(x + 0.5f, y + 0.5f, 42f);
+        DrawCircle(fire + new Vector2(0, -3), 9f, new Color(1.0f, 0.55f, 0.15f, 0.85f));
+        DrawCircle(fire + new Vector2(0, -5), 5f, new Color(1.0f, 0.88f, 0.45f, 0.95f));
+        // 铁砧（屋前一块矮墩 + 上面的砧面）。
+        var anvil = P(x + 0.5f, y + 0.5f, 16f);
+        DrawCircle(anvil + new Vector2(0, -2), 7f, new Color(0.28f, 0.29f, 0.33f, 0.95f));
+        DrawLine(P(x + 0.34f, y + 0.34f, 20f), P(x + 0.66f, y + 0.66f, 20f), WoodDark, 4);
     }
 
     /// <summary>施工中的建筑：脚手架（进度越高墙越完整）。</summary>

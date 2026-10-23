@@ -157,6 +157,26 @@ public class WellGatheringTests
     }
 
     /// <summary>
+    /// ⑤' 升到第 4 级 ⇒ 井 + 铁匠铺<b>两个采集点叠加</b> ⇒ 每天多采 2 份（D-107）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ 这条守的是「<b>两个采集点要叠加，不是二选一</b>」：
+    /// 开发者把两栋都定成了采集点（井 = 采集点、铁匠铺 = 采集 +1）
+    /// ⇒ 第 4 级村庄的采集加成是 <b>+2</b>，不是 +1。
+    /// </remarks>
+    [TestCase]
+    public void UpgradingToTier4_StacksTheWellAndTheBlacksmith()
+    {
+        var (village, heroes, service) = MakeScene();
+
+        TierBuildingService.EnsureForTier(village, 4);
+
+        long got = service.Gather(heroes[Alice]);
+
+        Assertions.AssertThat(got).IsEqual(GatherService.GatheredAmountPerDay + 2);
+    }
+
+    /// <summary>
     /// ⑥ 判定依据是<b>效果</b>而不是名字（井改名也不该失效）。
     /// </summary>
     /// <remarks>

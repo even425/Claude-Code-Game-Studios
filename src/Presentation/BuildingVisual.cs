@@ -36,12 +36,15 @@ public static class BuildingVisual
     /// <summary>井（D-099：层级附带建筑）：一口带辘轳的石井。</summary>
     public const string Well = "well";
 
+    /// <summary>铁匠铺（D-107：层级附带建筑）：一间带炉火的石屋。</summary>
+    public const string Blacksmith = "blacksmith";
+
     /// <summary>兜底：一块矮石台（**只在不认识时用** ⇒ 守卫会红）。</summary>
     public const string Generic = "generic";
 
     /// <summary>全部已知的画法。</summary>
     public static readonly IReadOnlyList<string> All =
-        new[] { Fence, TrialTower, Shield, Well, Generic };
+        new[] { Fence, TrialTower, Shield, Well, Blacksmith, Generic };
 
     /// <summary>
     /// 这栋建筑该画成什么样。
@@ -74,8 +77,10 @@ public static class BuildingVisual
         var tierBuilding = TierBuildings.Find(id);
         if (tierBuilding is not null)
         {
-            // ⚠️ 层级附带建筑**当前只有井**，它有专属画法。
-            return tierBuilding.Value.Id.Value == TierBuildings.Well.Id.Value ? Well : Generic;
+            // ⚠️ 层级附带建筑**各有各的画法**（D-097 的规矩：长得不一样才认得出）。
+            if (tierBuilding.Value.Id.Value == TierBuildings.Well.Id.Value) return Well;
+            if (tierBuilding.Value.Id.Value == TierBuildings.Blacksmith.Id.Value) return Blacksmith;
+            return Generic;
         }
 
         var buildable = BuildableBuildings.Find(id);
@@ -88,5 +93,6 @@ public static class BuildingVisual
     /// <param name="shape">画法标识。</param>
     /// <returns>认识为 true；落到兜底为 false。</returns>
     public static bool IsKnown(string shape)
-        => shape == Fence || shape == TrialTower || shape == Shield || shape == Well;
+        => shape == Fence || shape == TrialTower || shape == Shield || shape == Well
+           || shape == Blacksmith;
 }

@@ -111,16 +111,54 @@ public partial class Main : Node2D
                  + $"实际采到={gathered}（应为 {expectedGathered}）⇒ {gatheringOk}");
 
         ok = ok && gatheringOk;
-        GD.Print($"TIERTEST 层级附带建筑 ⇒ {(ok ? "PASS" : "FAIL")}");
+        GD.Print($"TIERTEST 层级附带建筑（井）⇒ {(ok ? "PASS" : "FAIL")}");
+
+        // ⑤ **D-107：铁匠铺**（层级第 4 级 ⇒ 采集 +1，与井**叠加** ⇒ 共 +2）。
+        //    ⚠️ 同样要验「**实际采到几份**」⇒ 加成算对了却没接到采集上，是最可能出的错。
+        // ⚠️ **走「升级完成」那个入口**（`CompleteUpgrade`）—— 真实游戏里 Main 调的也是它
+        //    ⇒ 这样自检才覆盖**真实接线**（直接调 `EnsureForTier` 会绕开它）。
+        _upgradeService.CompleteUpgrade(4);
+        int shops = _villageModel.Buildings.Count(b => b.Id.Value == "blacksmith");
+        var shop = _villageModel.Buildings.FirstOrDefault(b => b.Id.Value == "blacksmith");
+        bool shopOk = shops == 1 && shop is not null && shop.GridX == 8 && shop.GridY == 0;
+
+        long bonusAfterShop = ClaudeCodeGameStudios.Domain.Village.GatheringPoints.BonusFor(_villageModel);
+        var stoneItem2 = new ClaudeCodeGameStudios.Domain.Items.ItemId("石料");
+        var gatherer2 = _heroes.FirstOrDefault(h => h.Bag.Count(stoneItem2) == 0);
+        long gathered2 = gatherer2 is null ? -1L : _gather.Gather(gatherer2);
+        long expectedGathered2 = ClaudeCodeGameStudios.Application.GatherService.GatheredAmountPerDay
+                                 + bonusAfterShop;
+        bool gathering2Ok = bonusAfterShop == 2 && gathered2 == expectedGathered2;
+
+        GD.Print($"TIERTEST D-107 铁匠铺数={shops}（应为 1），落在 ({shop?.GridX},{shop?.GridY})（应为 (8,0)）"
+                 + $"⇒ {shopOk}；采集加成={bonusAfterShop}（应为 2 —— 井+铁匠铺叠加），"
+                 + $"实际采到={gathered2}（应为 {expectedGathered2}）⇒ {gathering2Ok}");
+
+        bool allOk = ok && shopOk && gathering2Ok;
+        GD.Print($"TIERTEST 层级附带建筑（井 + 铁匠铺）⇒ {(allOk ? "PASS" : "FAIL")}");
 
         // ④ **证据图**：地图上要看得见那口井（它画在 (5,0)）。
         //    ⚠️ 这一步只为截图，不参与判定（截图工具另跑）。
-        if (OS.GetCmdlineUserArgs().Contains("--tiershot"))
+        //    ⚠️ **可带层级**（`--tiershot=4`）⇒ 截第 4 级的图（那时铁匠铺也在）。
+        var tierShotArg = OS.GetCmdlineUserArgs()
+            .FirstOrDefault(a => a.StartsWith("--tiershot=", StringComparison.Ordinal));
+        bool wantsTierShot = tierShotArg is not null
+            || OS.GetCmdlineUserArgs().Contains("--tiershot");
+        if (wantsTierShot)
         {
-            _tier = 2;
-            _village.SetTier(2);
+            int shotTier = 2;
+            if (tierShotArg is not null
+                && int.TryParse(tierShotArg.Substring("--tiershot=".Length), out int parsed))
+            {
+                shotTier = parsed;
+            }
+
+            _tier = shotTier;
+            _village.SetTier(shotTier);
+            ClaudeCodeGameStudios.Application.TierBuildingService.EnsureForTier(_villageModel, shotTier);
             Refresh();
-            GD.Print("TIERTEST 已切到第 2 级（截图用）—— 井在 (5,0)。");
+            GD.Print($"TIERTEST 已切到第 {shotTier} 级（截图用）—— 井在 (5,0)"
+                     + (shotTier >= 4 ? "、铁匠铺在 (8,0)" : "") + "。");
         }
     }
 }

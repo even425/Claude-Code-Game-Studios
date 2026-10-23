@@ -129,18 +129,18 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 1047</div>
-      <div class="d">全绿 · 新增 245 条</div>
+      <div class="v">802 <em>→</em> 1056</div>
+      <div class="d">全绿 · 新增 254 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">143 <em>档</em></div>
+      <div class="v">149 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">44 <em>条</em></div>
-      <div class="d">D-057 … D-105</div>
+      <div class="v">45 <em>条</em></div>
+      <div class="d">D-057 … D-107</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -732,6 +732,27 @@
         让守卫能喂进<b>名字与效果互相矛盾</b>的定义。</p>
         <div class="tags"><span class="tag">D-105</span><span class="tag">变异 7/7</span><span class="tag">真机自检 --tier</span><span class="tag">基线 §12.3</span></div>
       </li>
+      <li>
+        <div class="when">19:00</div>
+        <h3>铁匠铺：第 4 级村庄终于不是「只涨了个名字」</h3>
+        <p>你拍板「<b>采集 +1</b>（工具好，采得快）」⇒ 与井<b>同类不同源</b>（井 = 水，铁匠铺 = 工具）
+        ⇒ <b>两者叠加</b> ⇒ <b>第 4 级村庄的采集加成 = +2 份/天</b>。</p>
+        <p>为什么是第 4 级：层级阶梯里有一级<b>就叫「铁匠铺」</b>，而升级到第 4 级那次施工的名字
+        本来就叫「<b>起铁匠铺</b>」⇒ <b>不是实现者发明的</b>，是基线自己的说法。
+        落点固定 (8,0) · 不要钱 · 不要工期 · <b>不是可建建筑</b>（不能有两个来源）。</p>
+        <p>画法按 D-097 的规矩：<b>石屋 + 跳动的炉火 + 屋前的铁砧</b> ⇒ 地图上看到那团橙光就知道是铁匠铺。<br>
+        ⚠️ <b>顺手钉住一条容易漏的坑</b>：两栋的落点都是<b>写死的</b> ⇒ 一旦写重，
+        <code>TryPlace</code> 失败而 <code>EnsureForTier</code> <b>静默跳过</b> ⇒
+        <b>村里少一栋却不报任何错</b> ⇒ 守卫专门钉了「不重叠」+「真放一次，两栋都在」。</p>
+        <div class="tags"><span class="tag">D-107</span><span class="tag">变异 6/6</span><span class="tag">真机自检 --tier</span><span class="tag">基线 §12.1</span></div>
+        <div class="shot" style="margin-top:12px">
+          <img src="qa/evidence/d107-blacksmith.png" alt="实机画面：第 4 级村庄，右侧那间带炉火与铁砧的石屋就是铁匠铺" />
+          <div class="cap">
+            实机截图（D-107）：第 4 级村庄 —— 右上角那间<b>石屋</b>（屋顶下有一团<b>橙色炉火</b>、屋前一块铁砧）就是<b>铁匠铺</b>；
+            再往右一点、带辘轳的那口是<b>井</b>。两栋都是村子里<b>真的</b>一栋建筑。
+          </div>
+        </div>
+      </li>
     </ol>
   </section>
 
@@ -780,8 +801,9 @@
         钱真正在涨的原因是<b>大事件每天往村库发 18 金</b>，而<b>标定器从不花钱</b>（只升级村庄）⇒
         ⚠️ <b>「钱在涨」有很大一部分是标定器的失真</b>。<b>这是数值决策，得你拍板</b>（三选一在 `07` 的 D-106）。</li>
         <li><b>井该有什么玩法效果</b>：✅ 已定（D-105）= <b>采集点</b> ⇒ 采集每天多 1 份
-        （<b>+1 是建议值</b>，等你看完实测影响再定）⇒ 下一栋是<b>铁匠铺</b>（你已定：走「层级附带」），
-        但<b>它的功能仍空着</b> ⇒ 那又是一次需要你拍板的事</li>
+        （<b>+1 已由你拍板</b>，实测把经济从「缩」拉回「持平」）⇒ <b>铁匠铺也定了</b>（D-107）= <b>采集 +1</b>
+        ⇒ 第 4 级村庄采集 +2 ⇒ 剩下的建筑还有 <b>土屋 / 烟囱 / 武器店 / 服装店</b>四栋
+        （后两栋属「装备」族 ⇒ 要做就得推翻 D-066「暂不做」）</li>
       </ul>
     </div>
   </section>

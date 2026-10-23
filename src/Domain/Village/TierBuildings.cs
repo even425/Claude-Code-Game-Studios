@@ -56,9 +56,10 @@ public readonly record struct TierBuilding(
 /// <para>⚠️ <b>它为什么是「单一真源」</b>：村庄升级时<b>谁</b>该冒出来、<b>冒在哪</b>、
 /// <b>叫什么</b> ⇒ 全在这里 ⇒ 领域层、表现层、测试读的是<b>同一份</b>。</para>
 ///
-/// <para>⚠️ <b>不要在这里写「效果」</b>：这一版的井<b>还没有玩法效果</b>
-/// （基线 §12.3：「不能仅凭建筑名称自行指定功能」⇒ 功能得开发者拍板）
-/// ⇒ 现在它<b>只</b>是「这一级该有的那口井」：真的存在、真的入档、真的看得见。</para>
+/// <para>⚠️ <b>效果在这里，但只写「开发者拍板的」那些</b>：
+/// 基线 §12.3：「不能仅凭建筑名称自行指定功能」⇒
+/// 井的<b>采集点</b>效果（D-105）与铁匠铺的<b>采集 +1</b>效果（D-107）
+/// **都是开发者亲自指定的** ⇒ 写在这里是**记录拍板结果**，不是实现者自作主张。</para>
 /// </remarks>
 public static class TierBuildings
 {
@@ -87,8 +88,36 @@ public static class TierBuildings
         // D-105：开发者拍板「井 = 采集点」⇒ 它给采集加产量。
         Effect: BuildingEffect.Gathering);
 
+    /// <summary>
+    /// <b>铁匠铺</b>（D-107）：升到<b>第 4 级</b>时出现。
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠️ <b>为什么是第 4 级</b>：村庄层级阶梯里有一级就叫「<b>铁匠铺</b>」
+    /// （破落户 → 有人来往的村子 → 有井的村子 → 有围墙的村子 → <b>铁匠铺</b> → 王国第一的城），
+    /// 而升级到第 4 级那次施工的名字本来就叫「<b>起铁匠铺</b>」
+    /// ⇒ 「铁匠铺 = 第 4 级附带」<b>不是实现者发明的</b>，是基线自己的说法。</para>
+    /// <para>⚠️ <b>效果是开发者拍板的</b>（基线 §12.3：「不得由实现者自行指定每栋建筑的功能」）：
+    /// 开发者选的是「<b>采集 +1</b>（工具好，采得快）」⇒ 它也是一个<b>采集点</b>
+    /// ⇒ 与井**同类不同源**（井 = 水，铁匠铺 = 工具）⇒ 两者<b>可以叠加</b>
+    /// ⇒ 第 4 级村庄的采集加成是 <b>+2 份/天</b>。</para>
+    /// <para>⚠️ <b>落点 (8, 0)</b>：在<b>可见地图</b>上（0..15 × 0..10，D-093 的规矩），
+    /// 且**不与井重叠**（井在 (5,0)）。</para>
+    /// </remarks>
+    public static readonly TierBuilding Blacksmith = new(
+        new BuildingId("blacksmith"),
+        "铁匠铺",
+        Tier: 4,
+        GridX: 8,
+        GridY: 0,
+        FootprintW: 1,
+        FootprintH: 1,
+        AffectsAreaW: 0,
+        AffectsAreaH: 0,
+        // D-107：开发者拍板「采集 +1」⇒ 它也是一个采集点（与井叠加）。
+        Effect: BuildingEffect.Gathering);
+
     /// <summary>全部层级附带建筑。</summary>
-    public static IReadOnlyList<TierBuilding> All { get; } = new[] { Well };
+    public static IReadOnlyList<TierBuilding> All { get; } = new[] { Well, Blacksmith };
 
     /// <summary>
     /// 升到某一层级时，<b>应该出现</b>的层级附带建筑。

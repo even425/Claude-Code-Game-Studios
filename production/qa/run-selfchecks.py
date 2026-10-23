@@ -114,7 +114,7 @@ CHECKS = [
         # （老档补记 / 入档 / 不重复 —— 接线层，单测验不到）。
         "name": "tier",
         "args": ["--tier"],
-        "require": ["TIERTEST 层级附带建筑 ⇒ PASS"],
+        "require": ["TIERTEST 层级附带建筑（井 + 铁匠铺）⇒ PASS"],
         "forbid": ["FAIL"],
         "zeros": [],
     },

@@ -6,30 +6,31 @@ using ClaudeCodeGameStudios.Domain.WorldEvents;
 namespace ClaudeCodeGameStudios.Tests.Data;
 
 /// <summary>
-/// SaveVersion (0,9) 升版验证（R-05 第五轮 / D-083）。
+/// SaveVersion (0,10) 升版验证（D-104）。
 /// </summary>
 /// <remarks>
 /// <para><b>本文档保护：</b></para>
 /// <list type="bullet">
-/// <item><see cref="SaveVersion.Current"/> 现在是 (0,9)（上一轮是 (0,8)）。</item>
-/// <item>旧档 (0,8) / (0,7) / (0,6) / (0,5) / (0,4) / (0,3) / (0,2) / (0,1) 整份拒绝
+/// <item><see cref="SaveVersion.Current"/> 现在是 (0,10)（上一轮是 (0,9)）。</item>
+/// <item>旧档 (0,9) / (0,8) / (0,7) / (0,6) / (0,5) / (0,4) / (0,3) / (0,2) / (0,1) 整份拒绝
 /// （I11 + D-021/D-029/D-036 先例）——<b>不</b>写迁移器。</item>
-/// <item>0,8 新增 <see cref="WorldEventSave.State"/>（大事件实例的「可变部分」——
-/// 商队还剩多少货）：空字典不破校验；状态为 null / 键为空 / 值为空 ⇒ 校验失败。</item>
-/// <item>0,7 的字段（大事件实例与已应用后果键）<b>仍然在 0,8 里</b>，
-/// 它们的校验规则不变（升版只<b>加</b>字段，不放松旧规则）。</item>
+/// <item>0,10 新增 <see cref="HeroSave.TrialTowerHealthBonus"/>（试炼塔给的<b>永久</b>生命加成）：
+/// ≥ 0 合法；<b>负数整份拒绝</b>（加成只增不减，负数只可能是存档被改坏）。</item>
+/// <item>0,9 与更早的字段<b>仍然在 0,10 里</b>，它们的校验规则不变
+/// （升版只<b>加</b>字段，不放松旧规则）。</item>
 /// </list>
 /// <para>
-/// <b>为什么升版</b>：商队的货是<b>限量</b>的（限量是「不产生无限套利」的前提）⇒
-/// 卖掉多少必须跟着存档走 ⇒ 否则**读档就能白嫖**（读一次档货就补满）。
+/// <b>为什么升版</b>：试炼塔的加成定义就是「<b>永久</b>」（D-074）⇒
+/// 不存它，读档后加成归零，<b>玩家攒下来的强度凭空蒸发</b>，
+/// 而且游戏<b>不报任何错</b>（只是「这个人好像变弱了」）。
 /// </para>
 /// <para>
-/// ⚠️ <b>代价</b>：升版意味着 <b>(0,7) 的旧存档一律拒读</b>（开发者已知悉并认可）——
+/// ⚠️ <b>代价</b>：升版意味着 <b>(0,9) 的旧存档一律拒读</b>（开发者已知悉并认可）——
 /// 没有隐式迁移，宁可让玩家重开，也不要读出一份<b>对不上账</b>的存档。
 /// </para>
 /// </remarks>
 [TestSuite]
-public class SaveVersion09Tests
+public class SaveVersion010Tests
 {
     /// <summary>一份能通过其余校验的最小存档。</summary>
     private static SaveGame ValidSave(SaveVersion version) => new()
@@ -50,10 +51,130 @@ public class SaveVersion09Tests
     };
 
     [TestCase]
-    public void Current_Is_0_9()
+    public void Current_Is_0_10()
     {
         Assertions.AssertThat(SaveVersion.Current.Major).IsEqual(0);
-        Assertions.AssertThat(SaveVersion.Current.Minor).IsEqual(9);
+        Assertions.AssertThat(SaveVersion.Current.Minor).IsEqual(10);
+    }
+
+    /// <summary>
+    /// <b>(0,9) 旧档被整份拒绝</b> —— 0,10 的这一刀（开发者已知悉并认可）。
+    /// </summary>
+    /// <remarks>
+    /// (0,9) 档<b>没有</b>试炼塔的永久加成 ⇒ 读它等于读出一份
+    /// 「玩家攒下来的强度凭空蒸发」的存档 ⇒ 那比拒读更糟。
+    /// </remarks>
+    [TestCase]
+    public void OldSave_0_9_IsRejected_NoMigration()
+    {
+        var r = SaveValidator.Validate(ValidSave(new SaveVersion(0, 9)));
+
+        Assertions.AssertThat(r.IsValid).IsFalse();
+
+        bool hasVersionError = false;
+        foreach (var err in r.Errors)
+        {
+            if (err.Path.Contains("version") || err.Message.Contains("版本"))
+            {
+                hasVersionError = true;
+                break;
+            }
+        }
+
+        Assertions.AssertThat(hasVersionError).IsTrue();
+    }
+
+    // ── D-104：试炼塔的永久生命加成（0,10 新增）────────────────────────────
+
+    /// <summary>
+    /// <b>基准必须是合法的</b>：0 是「还没打过试炼塔」的合法值。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ 先断言基准合法，是为了让后面的「负数被拒」有参照 ——
+    /// 否则「整份拒绝」可能是因为别的原因（那这条守卫就抓不住被测的那条检查）。
+    /// </remarks>
+    [TestCase]
+    public void TrialTowerHealthBonus_Zero_IsValid()
+    {
+        var save = ValidSave(SaveVersion.Current);
+        save.Heroes[0].TrialTowerHealthBonus = 0;
+
+        var r = SaveValidator.Validate(save);
+
+        Assertions.AssertThat(r.IsValid).IsTrue();
+    }
+
+    /// <summary>
+    /// <b>正数合法</b>：打过一次试炼塔（+20 生命）必须能存。
+    /// </summary>
+    [TestCase]
+    public void TrialTowerHealthBonus_Positive_IsValid()
+    {
+        var save = ValidSave(SaveVersion.Current);
+        save.Heroes[0].TrialTowerHealthBonus = 20;
+
+        var r = SaveValidator.Validate(save);
+
+        Assertions.AssertThat(r.IsValid).IsTrue();
+    }
+
+    /// <summary>
+    /// <b>负数整份拒绝</b> —— 加成只增不减，负数没有任何合法来源。
+    /// </summary>
+    /// <remarks>
+    /// 断言「<b>是哪一条</b>检查拒的」（按 path 找 <c>trialTowerHealthBonus</c>），
+    /// 而不是只断言「整体非法」—— 否则关掉被测这条检查，存档仍可能因为
+    /// <b>别的原因</b>被拒 ⇒ 守卫照样绿 ⇒ 什么都没验到。
+    /// </remarks>
+    [TestCase]
+    public void TrialTowerHealthBonus_Negative_IsRejected_ByThatRule()
+    {
+        var save = ValidSave(SaveVersion.Current);
+        save.Heroes[0].TrialTowerHealthBonus = -1;
+
+        var r = SaveValidator.Validate(save);
+
+        Assertions.AssertThat(r.IsValid).IsFalse();
+
+        bool rejectedByThisRule = false;
+        foreach (var err in r.Errors)
+        {
+            if (err.Path.EndsWith("trialTowerHealthBonus")) { rejectedByThisRule = true; break; }
+        }
+
+        Assertions.AssertThat(rejectedByThisRule).IsTrue();
+    }
+
+    /// <summary>
+    /// <b>写盘 → 读盘，永久加成原样回来</b>（存档里真的有这个字段）。
+    /// </summary>
+    /// <remarks>
+    /// 这一条守的是「字段真的进了存档文件」——
+    /// 校验只管合法性，管不了「写没写」。
+    /// 走的是 <see cref="SavePort"/>（真实文件），不是内存里的序列化器。
+    /// </remarks>
+    [TestCase]
+    public void TrialTowerHealthBonus_SurvivesWriteThenRead()
+    {
+        var save = ValidSave(SaveVersion.Current);
+        save.Heroes[0].TrialTowerHealthBonus = 40;
+
+        string path = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(),
+            "d104-trial-bonus-" + System.Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var port = new SavePort(path);
+            port.Write(save);
+            var loaded = port.Read();
+
+            Assertions.AssertThat(loaded.Loaded).IsTrue();
+            Assertions.AssertThat(loaded.Save!.Heroes[0].TrialTowerHealthBonus).IsEqual(40);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+        }
     }
 
     /// <summary>
@@ -197,7 +318,7 @@ public class SaveVersion09Tests
     [TestCase]
     public void NewSave_0_7_WithoutEconomyData_Passes()
     {
-        var save = ValidSave(new SaveVersion(0, 9));
+        var save = ValidSave(new SaveVersion(0, 10));
 
         var r = SaveValidator.Validate(save);
 
@@ -213,7 +334,7 @@ public class SaveVersion09Tests
     [TestCase]
     public void NewSave_0_7_WithStallAndPurchaseKeys_Passes()
     {
-        var save = ValidSave(new SaveVersion(0, 9));
+        var save = ValidSave(new SaveVersion(0, 10));
         save.Heroes[0].LastShoppingDay = 2;
         save.DailyShoppingLastRunDay = 2;
         save.AppliedPurchaseKeys = new List<string> { "saverun-1" };
@@ -246,11 +367,11 @@ public class SaveVersion09Tests
     [TestCase]
     public void VillageCutRemainder_OutOfRange_IsRejected()
     {
-        var negative = ValidSave(new SaveVersion(0, 9));
+        var negative = ValidSave(new SaveVersion(0, 10));
         negative.Village.VillageCutRemainder = -1;
         Assertions.AssertThat(SaveValidator.Validate(negative).IsValid).IsFalse();
 
-        var tooBig = ValidSave(new SaveVersion(0, 9));
+        var tooBig = ValidSave(new SaveVersion(0, 10));
         tooBig.Village.VillageCutRemainder = 100;
         Assertions.AssertThat(SaveValidator.Validate(tooBig).IsValid).IsFalse();
     }
@@ -258,11 +379,11 @@ public class SaveVersion09Tests
     [TestCase]
     public void VillageCutRemainder_BoundaryValues_Pass()
     {
-        var zero = ValidSave(new SaveVersion(0, 9));
+        var zero = ValidSave(new SaveVersion(0, 10));
         zero.Village.VillageCutRemainder = 0;
         Assertions.AssertThat(SaveValidator.Validate(zero).IsValid).IsTrue();
 
-        var max = ValidSave(new SaveVersion(0, 9));
+        var max = ValidSave(new SaveVersion(0, 10));
         max.Village.VillageCutRemainder = 99;
         Assertions.AssertThat(SaveValidator.Validate(max).IsValid).IsTrue();
     }
@@ -279,11 +400,11 @@ public class SaveVersion09Tests
     [TestCase]
     public void HeroGoldCarry_OutOfRange_IsRejected()
     {
-        var negative = ValidSave(new SaveVersion(0, 9));
+        var negative = ValidSave(new SaveVersion(0, 10));
         negative.Heroes[0].GoldCarry = -1;
         Assertions.AssertThat(SaveValidator.Validate(negative).IsValid).IsFalse();
 
-        var tooBig = ValidSave(new SaveVersion(0, 9));
+        var tooBig = ValidSave(new SaveVersion(0, 10));
         tooBig.Heroes[0].GoldCarry = 100;
         Assertions.AssertThat(SaveValidator.Validate(tooBig).IsValid).IsFalse();
     }
@@ -291,11 +412,11 @@ public class SaveVersion09Tests
     [TestCase]
     public void HeroGoldCarry_BoundaryValues_Pass()
     {
-        var zero = ValidSave(new SaveVersion(0, 9));
+        var zero = ValidSave(new SaveVersion(0, 10));
         zero.Heroes[0].GoldCarry = 0;
         Assertions.AssertThat(SaveValidator.Validate(zero).IsValid).IsTrue();
 
-        var max = ValidSave(new SaveVersion(0, 9));
+        var max = ValidSave(new SaveVersion(0, 10));
         max.Heroes[0].GoldCarry = 99;
         Assertions.AssertThat(SaveValidator.Validate(max).IsValid).IsTrue();
     }
@@ -310,15 +431,15 @@ public class SaveVersion09Tests
     [TestCase]
     public void EconomyTotals_Negative_IsRejected()
     {
-        var granted = ValidSave(new SaveVersion(0, 9));
+        var granted = ValidSave(new SaveVersion(0, 10));
         granted.GoldGrantedTotal = -1;
         Assertions.AssertThat(SaveValidator.Validate(granted).IsValid).IsFalse();
 
-        var spent = ValidSave(new SaveVersion(0, 9));
+        var spent = ValidSave(new SaveVersion(0, 10));
         spent.GoldSpentTotal = -1;
         Assertions.AssertThat(SaveValidator.Validate(spent).IsValid).IsFalse();
 
-        var upgrades = ValidSave(new SaveVersion(0, 9));
+        var upgrades = ValidSave(new SaveVersion(0, 10));
         upgrades.VillageUpgrades = -1;
         Assertions.AssertThat(SaveValidator.Validate(upgrades).IsValid).IsFalse();
     }
@@ -334,11 +455,11 @@ public class SaveVersion09Tests
     [TestCase]
     public void VillageUpgrades_OutOfRange_IsRejected()
     {
-        var negative = ValidSave(new SaveVersion(0, 9));
+        var negative = ValidSave(new SaveVersion(0, 10));
         negative.VillageUpgrades = -1;
         Assertions.AssertThat(SaveValidator.Validate(negative).IsValid).IsFalse();
 
-        var tooBig = ValidSave(new SaveVersion(0, 9));
+        var tooBig = ValidSave(new SaveVersion(0, 10));
         tooBig.VillageUpgrades = ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier + 1;
         Assertions.AssertThat(SaveValidator.Validate(tooBig).IsValid).IsFalse();
     }
@@ -346,11 +467,11 @@ public class SaveVersion09Tests
     [TestCase]
     public void VillageTier_OutOfRange_IsRejected()
     {
-        var negative = ValidSave(new SaveVersion(0, 9));
+        var negative = ValidSave(new SaveVersion(0, 10));
         negative.VillageTier = -1;
         Assertions.AssertThat(SaveValidator.Validate(negative).IsValid).IsFalse();
 
-        var tooBig = ValidSave(new SaveVersion(0, 9));
+        var tooBig = ValidSave(new SaveVersion(0, 10));
         tooBig.VillageTier = ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier + 1;
         Assertions.AssertThat(SaveValidator.Validate(tooBig).IsValid).IsFalse();
     }
@@ -358,11 +479,11 @@ public class SaveVersion09Tests
     [TestCase]
     public void VillageTier_BoundaryValues_Pass()
     {
-        var zero = ValidSave(new SaveVersion(0, 9));
+        var zero = ValidSave(new SaveVersion(0, 10));
         zero.VillageTier = 0;
         Assertions.AssertThat(SaveValidator.Validate(zero).IsValid).IsTrue();
 
-        var max = ValidSave(new SaveVersion(0, 9));
+        var max = ValidSave(new SaveVersion(0, 10));
         max.VillageTier = ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier;
         Assertions.AssertThat(SaveValidator.Validate(max).IsValid).IsTrue();
     }
@@ -418,7 +539,7 @@ public class SaveVersion09Tests
     [TestCase]
     public void WorldEvents_WithLegalInstance_Passes()
     {
-        var save = ValidSave(new SaveVersion(0, 9));
+        var save = ValidSave(new SaveVersion(0, 10));
         save.WorldEvents = new List<WorldEventSave>
         {
             new()
@@ -440,7 +561,7 @@ public class SaveVersion09Tests
     [TestCase]
     public void WorldEvents_PhaseOutOfRange_IsRejected()
     {
-        var save = ValidSave(new SaveVersion(0, 9));
+        var save = ValidSave(new SaveVersion(0, 10));
         save.WorldEvents = new List<WorldEventSave>
         {
             new() { Id = "inst-x", TemplateId = "beast-tide", Phase = 99 },
@@ -453,7 +574,7 @@ public class SaveVersion09Tests
     [TestCase]
     public void WorldEvents_DuplicateId_IsRejected()
     {
-        var save = ValidSave(new SaveVersion(0, 9));
+        var save = ValidSave(new SaveVersion(0, 10));
         save.WorldEvents = new List<WorldEventSave>
         {
             new() { Id = "inst-x", TemplateId = "beast-tide", Phase = 1 },
@@ -467,7 +588,7 @@ public class SaveVersion09Tests
     [TestCase]
     public void WorldEvents_BrokenParticipantReference_IsRejected()
     {
-        var save = ValidSave(new SaveVersion(0, 9));
+        var save = ValidSave(new SaveVersion(0, 10));
         save.WorldEvents = new List<WorldEventSave>
         {
             new()
@@ -484,7 +605,7 @@ public class SaveVersion09Tests
     [TestCase]
     public void WorldEvents_EmptyConsequenceKey_IsRejected()
     {
-        var save = ValidSave(new SaveVersion(0, 9));
+        var save = ValidSave(new SaveVersion(0, 10));
         save.WorldEvents = new List<WorldEventSave>
         {
             new()
@@ -501,11 +622,11 @@ public class SaveVersion09Tests
     [TestCase]
     public void WorldEvents_EmptyIdOrTemplateId_IsRejected()
     {
-        var noId = ValidSave(new SaveVersion(0, 9));
+        var noId = ValidSave(new SaveVersion(0, 10));
         noId.WorldEvents = new List<WorldEventSave> { new() { Id = "", TemplateId = "beast-tide" } };
         Assertions.AssertThat(SaveValidator.Validate(noId).IsValid).IsFalse();
 
-        var noTemplate = ValidSave(new SaveVersion(0, 9));
+        var noTemplate = ValidSave(new SaveVersion(0, 10));
         noTemplate.WorldEvents = new List<WorldEventSave> { new() { Id = "inst-x", TemplateId = "" } };
         Assertions.AssertThat(SaveValidator.Validate(noTemplate).IsValid).IsFalse();
     }
@@ -528,7 +649,7 @@ public class SaveVersion09Tests
     [TestCase]
     public void WorldEventState_WithLegalState_Passes()
     {
-        var save = ValidSave(new SaveVersion(0, 9));
+        var save = ValidSave(new SaveVersion(0, 10));
         save.WorldEvents = new List<WorldEventSave>
         {
             new()
@@ -545,7 +666,7 @@ public class SaveVersion09Tests
     [TestCase]
     public void WorldEventState_Null_IsRejected()
     {
-        var save = ValidSave(new SaveVersion(0, 9));
+        var save = ValidSave(new SaveVersion(0, 10));
         save.WorldEvents = new List<WorldEventSave>
         {
             new() { Id = "inst-x", TemplateId = "caravan", Phase = 3, State = null! },
@@ -563,7 +684,7 @@ public class SaveVersion09Tests
     [TestCase]
     public void WorldEventState_EmptyKeyOrValue_IsRejected()
     {
-        var emptyKey = ValidSave(new SaveVersion(0, 9));
+        var emptyKey = ValidSave(new SaveVersion(0, 10));
         emptyKey.WorldEvents = new List<WorldEventSave>
         {
             new()
@@ -574,7 +695,7 @@ public class SaveVersion09Tests
         };
         Assertions.AssertThat(SaveValidator.Validate(emptyKey).IsValid).IsFalse();
 
-        var emptyValue = ValidSave(new SaveVersion(0, 9));
+        var emptyValue = ValidSave(new SaveVersion(0, 10));
         emptyValue.WorldEvents = new List<WorldEventSave>
         {
             new()

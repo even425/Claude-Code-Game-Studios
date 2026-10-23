@@ -9,8 +9,23 @@ namespace ClaudeCodeGameStudios.Data;
 /// <summary>存档格式版本。基线 §13.7 要求存档带版本号并有迁移入口。</summary>
 public readonly record struct SaveVersion(int Major, int Minor)
 {
-    /// <summary>当前版本。<b>【已确认】</b>(0,9) —— R-05 第五轮 / D-083 升。</summary>
+    /// <summary>当前版本。<b>【已确认】</b>(0,10) —— D-104 升。</summary>
     /// <remarks>
+    /// <b>0,9 → 0,10</b>（`07` **D-104**）：存档里增
+    /// <list type="bullet">
+    /// <item><see cref="HeroSave.TrialTowerHealthBonus"/>（试炼塔给的<b>永久</b>生命加成）</item>
+    /// </list>
+    /// <para>
+    /// <b>为什么必须存</b>：这个加成的定义就是「<b>永久</b>」（D-074）⇒
+    /// 不存它，<b>读档后加成归零</b>，玩家攒下来的强度凭空蒸发，
+    /// 而游戏<b>不会报任何错</b>（只是「这个人好像变弱了」）——
+    /// 这类「静默丢状态」正是 D-083（建筑）、D-052（税额余数）、D-054（待发零头）
+    /// 反复修过的同一族缺陷。
+    /// </para>
+    /// <para>
+    /// 旧档<b>整份拒绝</b>（I11 + D-021/D-029/D-036 先例），<b>不</b>写迁移器。
+    /// </para>
+    /// <para>
     /// <b>0,8 → 0,9</b>（`07` **D-083**）：存档里**建筑**终于真的存了
     /// <list type="bullet">
     /// <item><see cref="SaveGame.Village"/> 的 <see cref="BuildingSave"/> 列表
@@ -68,7 +83,7 @@ public readonly record struct SaveVersion(int Major, int Minor)
     /// 而升级花掉的金币已经记下了 → <b>账实不符</b>。这次一并补上。
     /// </para>
     /// </remarks>
-    public static SaveVersion Current => new(0, 9);
+    public static SaveVersion Current => new(0, 10);
 
     /// <inheritdoc />
     public override string ToString() => $"{Major}.{Minor}";
@@ -224,6 +239,21 @@ public sealed class HeroSave
     /// <para><b>合法范围 [0, 99]</b>：满 100 就该发出去一张整金了。</para>
     /// </remarks>
     public long GoldCarry { get; set; }
+
+    /// <summary>
+    /// 该英雄从试炼塔拿到的<b>永久生命加成</b>（D-074）。<b>0,10 新增</b>（D-104）。
+    /// </summary>
+    /// <remarks>
+    /// <para><b>为什么必须存</b>：这个加成的定义就是「<b>永久</b>」——
+    /// 玩家打赢了试炼塔，换来的加生命要<b>一直</b>跟着这个人。
+    /// 不存它 ⇒ 读档后加成归零 ⇒ 玩家攒下来的强度<b>凭空蒸发</b>，
+    /// 而游戏<b>不会报任何错</b>（只是「这个人好像变弱了」）。</para>
+    /// <para><b>为什么是英雄个体</b>：战斗属性按个人换算，
+    /// 加成跟着人走而不是跟着塔走（塔只是入口）。</para>
+    /// <para><b>合法范围</b>：≥ 0。加成只会<b>增加</b>（<c>+=</c>），
+    /// 负数没有任何合法来源 ⇒ 只可能是存档被改坏 ⇒ 整份拒绝。</para>
+    /// </remarks>
+    public int TrialTowerHealthBonus { get; set; }
 }
 
 /// <summary>
@@ -797,6 +827,15 @@ public static class SaveValidator
             {
                 errors.Add(new SaveError(
                     $"{path}.lastShoppingDay", $"上次自主购物日 {h.LastShoppingDay} 为负（0 = 从未购过）。"));
+            }
+
+            // 试炼塔的永久生命加成（0,10 新增，D-104）：只能 ≥ 0。
+            // 负数没有任何合法来源（加成只增不减）⇒ 只可能是存档被改坏 ⇒ 整份拒绝。
+            if (h.TrialTowerHealthBonus < 0)
+            {
+                errors.Add(new SaveError(
+                    $"{path}.trialTowerHealthBonus",
+                    $"试炼塔永久生命加成 {h.TrialTowerHealthBonus} 为负（加成只增不减）。"));
             }
 
             // 随队的人不应同时挂着日常行动（SetOnMission 会释放行动）。

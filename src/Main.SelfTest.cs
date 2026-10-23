@@ -454,6 +454,13 @@ public partial class Main : Node2D
         const int TierSeed = 2;          // 村庄层级
         const long UpgradesSeed = 2L;    // 累计已付款的升级次数
 
+        // ── D-104（存档 0.10）：试炼塔的**永久**生命加成也要走一遍「摆好 → 搅乱 → 读回来」──
+        //   这个加成的定义就是「永久」⇒ 读档后归零 = 玩家攒下来的强度凭空蒸发，
+        //   而且**游戏不报任何错**（只是「这个人好像变弱了」）⇒ 最容易漏的一类缺陷。
+        const int TrialBonusSeed = 20;   // 永久生命加成（1 次试炼塔胜利 = +20 生命）
+
+        _heroes[0].TrialTowerHealthBonus = TrialBonusSeed;
+
         _walletWriter.RestorePending(_heroes[0].Id, CarrySeed);
         _walletWriter.RestoreTotalGranted(GrantedSeed);
         _upgradeService.RestoreTotals(SpentSeed, UpgradesSeed);
@@ -511,6 +518,8 @@ public partial class Main : Node2D
             Array.Empty<string>());
         _dailyShopping.RestoreLastRunDay(int.MinValue);
         if (_heroes.Count >= 2) _heroes[1].LastShoppingDay = 0;
+        // D-104（存档 0.10）：试炼塔永久加成也搅乱 —— 它必须是被读档「找回来」的。
+        _heroes[0].TrialTowerHealthBonus = 0;
         // R-05 第二轮 / D-052：税额余数也要搅乱 —— 它必须是被读档「找回来」的。
         long carryBefore = _stallService.VillageCutCarry;
         _stallService.RestoreVillageCutCarry(0);
@@ -595,6 +604,15 @@ public partial class Main : Node2D
                  $"村庄层级 {_tier}（应为 {TierSeed}）；" +
                  $"累计升级 {_upgradeService.UpgradesStarted}（应为 {UpgradesSeed}）");
         GD.Print(econ06Ok ? "SAVETEST 0.6 PASS" : "SAVETEST 0.6 FAIL");
+
+        // ── D-104（存档 0.10）：试炼塔的**永久**生命加成必须真的读回来 ──
+        //   读不到的后果不是「少了一个数」，而是**玩家攒下来的强度凭空蒸发**：
+        //   战斗那边（CombatStatsFor / BuildingCoordinator）照样读这个字段
+        //   ⇒ 读档后这个人默默地变弱了，而且不报任何错。
+        int trialBonusAfter = _heroes[0].TrialTowerHealthBonus;
+        bool trialBonusOk = trialBonusAfter == TrialBonusSeed;
+        GD.Print($"SAVETEST 0.10 试炼塔永久生命加成 {trialBonusAfter}（应为 {TrialBonusSeed}）→ {trialBonusOk}");
+        GD.Print(trialBonusOk ? "SAVETEST 0.10 PASS" : "SAVETEST 0.10 FAIL");
 
         // ── R-03：在场性 / 行动 / 目标 / 首通标记是否真的恢复 ──
         if (_states.Count >= 3)

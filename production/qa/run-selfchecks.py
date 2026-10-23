@@ -42,7 +42,9 @@ CHECKS = [
         "name": "save",
         "args": ["--save"],
         "require": ["SAVETEST 0.6 PASS", "SAVETEST R-03 PASS", "SAVETEST M4 PASS",
-                    "SAVETEST MT-04 PASS"],
+                    "SAVETEST MT-04 PASS",
+                    # D-104：试炼塔的**永久**生命加成必须真的读回来。
+                    "SAVETEST 0.10 PASS"],
         "forbid": ["FAIL"],
         "zeros": [],
     },

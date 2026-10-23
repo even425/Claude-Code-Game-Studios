@@ -96,6 +96,9 @@ public partial class Main : Node2D
                 // D-054 阶段 4（存档 0.6）：该英雄的**待发零头**（单位 1/100 金）。
                 // 不存它 = 已挣到但还没发出去的钱凭空消失。
                 GoldCarry = _walletWriter.PendingOf(h.Id),
+                // D-104（存档 0.10）：试炼塔给的**永久**生命加成。
+                // 不存它 ⇒ 读档后永久加成归零（"永久"就名存实亡了），而且**不报错**。
+                TrialTowerHealthBonus = ClaudeCodeGameStudios.Application.TrialTowerBonusPersistence.Export(h),
                 Origin = s.Definition.Origin,
                 TraitModifiers = new Dictionary<string, double>(s.Definition.TraitModifiers),
                 PreferenceWeights = new Dictionary<string, double>(s.Definition.PreferenceWeights),
@@ -255,6 +258,11 @@ public partial class Main : Node2D
             agent.RestoreBag(new ClaudeCodeGameStudios.Domain.Items.Inventory(bagDict));
             // 第四阶段 M4：自主购物的每日频率状态（0 = 从未购过）
             agent.LastShoppingDay = hs.LastShoppingDay;
+            // D-104（存档 0.10）：恢复试炼塔给的**永久**生命加成。
+            // ⚠️ 不恢复它 = 玩家攒下来的永久强度在读档后**凭空蒸发**，
+            // 而战斗那边（`CombatStatsFor` / `BuildingCoordinator`）照样读这个字段
+            // ⇒ 读档后这个人**默默地变弱了**，而且不报任何错。
+            ClaudeCodeGameStudios.Application.TrialTowerBonusPersistence.Import(hs, agent);
             // D-054 阶段 4（存档 0.6）：恢复该英雄的**待发零头**。
             // 不恢复它 = 已挣到但还没发出去的钱凭空消失（与税额余数同一条理由）。
             _walletWriter.RestorePending(new ClaudeCodeGameStudios.Domain.Heroes.HeroId(hs.Id), hs.GoldCarry);

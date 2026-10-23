@@ -9,11 +9,12 @@ public partial class Main : Node2D
     /// <c>--tier</c>：D-099 真机自检 —— <b>层级附带建筑（井）</b>那条链。
     /// </summary>
     /// <remarks>
-    /// <para><b>验的是三件事</b>（都是<b>接线层</b>，单测验不到）：
+    /// <para><b>验的是四件事</b>（都是<b>接线层</b>，单测验不到）：
     /// <list type="number">
     /// <item><b>老档（没有井的存档）读回来 ⇒ 井被补记</b>（不升存档版本、不写迁移器）。</item>
     /// <item><b>读档 ⇒ 井还在</b>（它是村里的一栋建筑 ⇒ 必须入档）。</item>
     /// <item><b>补齐是幂等的</b>（读档后不该多出第二口井）。</item>
+    /// <item><b>D-105：读档后采集产量真的变快</b>（井 = 采集点 ⇒ 实际采到的份数变多）。</item>
     /// </list></para>
     ///
     /// <para>⚠️ <b>顺序很重要</b>：<b>先</b>验老档（那时村里**还没有**井 ⇒ 判据才成立），
@@ -94,6 +95,22 @@ public partial class Main : Node2D
         GD.Print($"TIERTEST 存档里有井={wellInSave} ⇒ 读档后井数={wellsAfterLoad}（应为 1 —— 不重复）");
 
         bool ok = wellsAtStart == 0 && oldSaveOk && saveOk;
+
+        // ④ **D-105：井 = 采集点** ⇒ 读档后**采集产量真的变快**（接线层，单测验不到）。
+        //    ⚠️ 必须验「实际采到几份」而不只是「加成是几」——
+        //    加成算对了却没接到采集上，是最可能出的错。
+        long gatheringBonus = ClaudeCodeGameStudios.Domain.Village.GatheringPoints.BonusFor(_villageModel);
+        var stoneItem = new ClaudeCodeGameStudios.Domain.Items.ItemId("石料");
+        var gatherer = _heroes.FirstOrDefault(h => h.Bag.Count(stoneItem) == 0);
+        long gathered = gatherer is null ? -1L : _gather.Gather(gatherer);
+        long expectedGathered = ClaudeCodeGameStudios.Application.GatherService.GatheredAmountPerDay
+                                + gatheringBonus;
+        bool gatheringOk = gatheringBonus == 1 && gathered == expectedGathered;
+
+        GD.Print($"TIERTEST D-105 采集加成={gatheringBonus}（应为 1 —— 井是采集点），"
+                 + $"实际采到={gathered}（应为 {expectedGathered}）⇒ {gatheringOk}");
+
+        ok = ok && gatheringOk;
         GD.Print($"TIERTEST 层级附带建筑 ⇒ {(ok ? "PASS" : "FAIL")}");
 
         // ④ **证据图**：地图上要看得见那口井（它画在 (5,0)）。

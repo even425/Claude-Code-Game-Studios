@@ -684,7 +684,11 @@ public partial class Main : Node2D
         // 第三阶段 M2：随机源改为 Main._rng（可存档），社交目标与关系权重在此注入。
         // ⚠️ **D-086**：采集的材料进**采集者自己的背包**（⇒ 能卖 ⇒ 才是个人收入），
         // 不再直接进村庄材料池（那个池子已经过剩到 7.5 万份了）。
-        _gather = new ClaudeCodeGameStudios.Application.GatherService(_stallService, _priceBook);
+        // ⚠️ **D-105**：有采集点（井，D-099 的层级附带建筑）⇒ 采集**多采一点**。
+        // 加成**每次现问**村庄（委托）⇒ 升级 / 读档后自动跟着变，不会变成过期值。
+        _gather = new ClaudeCodeGameStudios.Application.GatherService(
+            _stallService, _priceBook,
+            () => ClaudeCodeGameStudios.Domain.Village.GatheringPoints.BonusFor(_villageModel));
         // D-087：村庄收购站 —— 村庄按市价收购在村英雄的采集品，钱从村库回流到人。
         // 预算规则在服务里（村库余额 − 下一级村庄升级所需金币）⇒ 这里只给依赖。
         _purchase = new ClaudeCodeGameStudios.Application.VillagePurchaseService(

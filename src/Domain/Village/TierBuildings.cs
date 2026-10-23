@@ -36,6 +36,7 @@ namespace ClaudeCodeGameStudios.Domain.Village;
 /// <param name="FootprintH">占地格高。</param>
 /// <param name="AffectsAreaW">影响区 X 方向半径（0 = 不影响任何地方）。</param>
 /// <param name="AffectsAreaH">影响区 Y 方向半径（0 = 不影响任何地方）。</param>
+/// <param name="Effect">这栋建筑的<b>效果</b>（D-105 起：井 = 采集点）。</param>
 public readonly record struct TierBuilding(
     BuildingId Id,
     string Name,
@@ -45,7 +46,8 @@ public readonly record struct TierBuilding(
     int FootprintW,
     int FootprintH,
     int AffectsAreaW,
-    int AffectsAreaH);
+    int AffectsAreaH,
+    BuildingEffect Effect);
 
 /// <summary>
 /// <b>层级附带建筑</b>的目录（D-099）。
@@ -81,7 +83,9 @@ public static class TierBuildings
         FootprintW: 1,
         FootprintH: 1,
         AffectsAreaW: 0,
-        AffectsAreaH: 0);
+        AffectsAreaH: 0,
+        // D-105：开发者拍板「井 = 采集点」⇒ 它给采集加产量。
+        Effect: BuildingEffect.Gathering);
 
     /// <summary>全部层级附带建筑。</summary>
     public static IReadOnlyList<TierBuilding> All { get; } = new[] { Well };

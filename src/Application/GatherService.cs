@@ -21,6 +21,10 @@ namespace ClaudeCodeGameStudios.Application;
 /// <para>⇒ 本类补上那两截：<b>① 采集的材料进英雄自己的背包</b>；
 /// <b>② 有货就自动开摊</b>（复用现成的摆摊规则：价格表定价 + 5% 摊位费
 /// ⇒ <b>不新造经济</b>）。</para>
+///
+/// <para>⚠️ <b>D-105</b>：采集产量受村庄的<b>采集点</b>影响（井 = 采集点，
+/// 开发者拍板）⇒ 每有一个采集点，采集者每天<b>多采 1 份</b>。
+/// ⇒ 加成用<b>委托</b>注入（每次现问村庄）⇒ 升级 / 读档后自动生效。</para>
 /// </remarks>
 public sealed class GatherService
 {
@@ -43,14 +47,26 @@ public sealed class GatherService
 
     private readonly Stall.StallService _stalls;
     private readonly PriceBook _book;
+    private readonly Func<long> _gatheringBonus;
 
     /// <summary>构造采集服务。</summary>
     /// <param name="stalls">摆摊服务（开摊与成交都走它 ⇒ 规则只有一份）。</param>
     /// <param name="book">价格表（哪些能卖、卖多少钱）。</param>
-    public GatherService(Stall.StallService stalls, PriceBook book)
+    /// <param name="gatheringBonus">
+    /// 村庄给的<b>采集加成</b>（D-105：每个采集点 +N 份/天）。
+    /// <b>可为 null</b>（等价于没有采集点）。
+    /// </param>
+    /// <remarks>
+    /// ⚠️ <b>为什么用委托而不是直接把村庄塞进来</b>：
+    /// 采集服务要的是「<b>现在</b>有多少加成」⇒ 委托每次现问 ⇒
+    /// 升级 / 读档 / 建筑被拆之后<b>自动跟着变</b>，
+    /// 而缓存一个数会在村庄变化后变成<b>过期值</b>（那是很难查的一类错）。
+    /// </remarks>
+    public GatherService(Stall.StallService stalls, PriceBook book, Func<long>? gatheringBonus = null)
     {
         _stalls = stalls ?? throw new ArgumentNullException(nameof(stalls));
         _book = book ?? throw new ArgumentNullException(nameof(book));
+        _gatheringBonus = gatheringBonus ?? (() => 0L);
     }
 
     /// <summary>
@@ -72,13 +88,34 @@ public sealed class GatherService
         // **不是** `Inventory.Capacity` —— 后者是 **0（无限）**
         // （D-053 审计的发现：容量防线在领域层**从不生效**）。
         // ⇒ 用错尺子的话，「背包满了就白采」这条规则**根本不会触发**。
-        if (hero.Bag.Count(item) >= Stall.HeroBehaviorService.BagItemLimit) return 0L;
+        //
+        // ⚠️ **D-105：有采集点（井）就多采一些** —— 但背包**装多少就是多少**
+        // ⇒ 装不下的那部分**采不到**（不是丢了，是根本没采上来）。
+        long room = Stall.HeroBehaviorService.BagItemLimit - hero.Bag.Count(item);
+        if (room <= 0) return 0L;
 
-        var bag = hero.Bag.TryAdd(item, GatheredAmountPerDay);
+        long wanted = GatheredAmountPerDay + BonusFromGatheringPoints();
+        long amount = wanted < room ? wanted : room;
+
+        var bag = hero.Bag.TryAdd(item, amount);
         if (bag is null) return 0L;
 
         hero.ApplyTradeResult(hero.Wallet, bag);
-        return GatheredAmountPerDay;
+        return amount;
+    }
+
+    /// <summary>
+    /// 村庄给的采集加成（D-105：每个采集点 +1 份/天）。
+    /// </summary>
+    /// <returns>加成的份数（永远 ≥ 0 —— 负数没有合法来源）。</returns>
+    /// <remarks>
+    /// ⚠️ <b>负数一律当 0</b>：加成的来源是「有几个采集点」⇒ 不会是负数
+    /// ⇒ 出现负数只可能是委托被写坏 ⇒ **不把它变成「倒扣材料」**。
+    /// </remarks>
+    private long BonusFromGatheringPoints()
+    {
+        long bonus = _gatheringBonus();
+        return bonus > 0 ? bonus : 0L;
     }
 
     /// <summary>

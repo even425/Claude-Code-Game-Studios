@@ -58,6 +58,14 @@
       "value": "1"
     },
     {
+      "file": "Domain/Village/GatheringPoints.cs",
+      "name": "BonusPerPoint",
+      "kind": "参数",
+      "status": "【建议值】D-105（待开发者确认）",
+      "note": "一个采集点（井）给采集加多少份/天 —— D-105 开发者拍板的是「井 = 采集点」这个方向；+1 份/天是我先跑一版、实测后请他改的",
+      "value": "1"
+    },
+    {
       "file": "Application/GatherService.cs",
       "name": "StallQuantityPerOpen",
       "kind": "参数",

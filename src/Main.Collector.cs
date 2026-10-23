@@ -315,6 +315,23 @@ public partial class Main : Node2D
     }
 
     /// <summary>
+    /// 村庄<b>可花却没花</b>的钱（D-110）。
+    /// </summary>
+    /// <remarks>
+    /// 口径 = 村库现金 + 村庄资产 − <b>下一级升级要留的钱</b>
+    /// （留着的钱不算「没花」—— 它有明确的用处：升级村庄）。
+    /// <br>⚠️ <b>为什么要有这一项</b>：采集器<b>不召唤</b>（人口固定 ⇒ 标定可比），
+    /// 而召唤是真实游戏里唯一<b>持续</b>的花钱方式 ⇒ 钱只会囤
+    /// ⇒ 这一项让「囤着的钱」<b>单独可见</b>（≈ 还能招多少人）。
+    /// </remarks>
+    private long UnspentVillageGold()
+    {
+        long asset = _villageModel.Get(ClaudeCodeGameStudios.Application.VillageUpgradeService.Asset);
+        long reserve = _upgradeService.CostFor(_tier).Gold;   // 满级时是 0
+        return ClaudeCodeGameStudios.Application.VillageUnspent.Amount(VillageGold, asset, reserve);
+    }
+
+    /// <summary>
     /// 记一份<b>每日经济快照</b>到流水（D-054 阶段 3）。
     /// </summary>
     /// <remarks>
@@ -388,7 +405,10 @@ public partial class Main : Node2D
             // ⚠️ **D-101**：大事件的「外部收入 / 外部支出」两项
             // （大事件发的钱是从外面进来的 ⇒ 守恒律右边必须加上它）。
             ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldIn,
-            ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldOut);
+            ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldOut,
+            // ⚠️ **D-110**：村庄「可花却没花」的钱（采集器不召唤 ⇒ 钱只会囤）。
+            // 口径 = 村库现金 + 村庄资产 − 下一级升级要留的钱。
+            UnspentVillageGold());
 
         // ⚠️ **逐日守恒律自检**（D-091 引入的记账多了一条路 ⇒ 必须自己盯住）：
         // 「Σ英雄钱包 + 村库金币 + 村庄资产 + 累计销毁 = 初始金币 + 累计发放」

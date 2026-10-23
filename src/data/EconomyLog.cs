@@ -206,6 +206,20 @@ public sealed record EconomyRow
     public long? EventGoldOut { get; init; }
 
     /// <summary>
+    /// <b>村庄「可花却没花」的钱</b>（D-110）—— 采集器一直没花出去的那部分。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>为什么要有这一项</b>：采集器<b>不召唤</b>（人口固定 ⇒ 标定可比），
+    /// 而召唤是真实游戏里唯一<b>持续</b>的花钱方式 ⇒ 村庄的钱只会囤
+    /// ⇒ 「钱在涨」里有一部分是<b>标定器没花钱</b>造成的。
+    /// <br>⇒ 这一项把「囤着的钱」<b>单独记一笔</b> ⇒ 看得见缺口，
+    /// 而<b>不改变</b>标定世界本身（人口仍固定）。
+    /// <br>⇒ 口径 = 村库现金 + 村庄资产 − <b>下一级升级要留的钱</b>
+    /// （留着的钱不算「没花」，它有明确的用处）。
+    /// </remarks>
+    public long? VillageUnspentGold { get; init; }
+
+    /// <summary>
     /// 其中<b>商队销毁</b>掉的那部分（D-088；已含在 <see cref="GoldSpent"/> 里）。
     /// </summary>
     /// <remarks>
@@ -573,7 +587,8 @@ public sealed class EconomyLog : IDisposable
         long? caravanDestroyed = null,
         long? villageAsset = null,
         long? eventGoldIn = null,
-        long? eventGoldOut = null)
+        long? eventGoldOut = null,
+        long? villageUnspentGold = null)
     {
         if (_writer is null) return false;
 
@@ -607,6 +622,7 @@ public sealed class EconomyLog : IDisposable
             VillageAsset = villageAsset,
             EventGoldIn = eventGoldIn,
             EventGoldOut = eventGoldOut,
+            VillageUnspentGold = villageUnspentGold,
         };
 
         _writer.WriteLine(JsonSerializer.Serialize(row, Options));

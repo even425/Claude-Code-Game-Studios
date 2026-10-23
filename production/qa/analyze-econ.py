@@ -288,7 +288,34 @@ def analyze(path, label, verbose=True):
                 print("待发零头自洽  : 一致（每英雄 < 100，合计 < 100x人数）")
             if growth is not None:
                 verdict = "稳态（≈0）" if abs(growth) < 0.5 else ("仍在涨" if growth > 0 else "仍在缩")
-                print(f"流通金增长率  : {growth:+.2f} 金/天（后半段最小二乘）→ {verdict}")
+                print(f"流通金增长率  : {growth:+.2f} 金/天（后半段最小二乘）→ {verdict}"
+                      f"　（⚠️ **D-109：这一项已不是判据** —— X 是弱旋钮，"
+                      f"钱在涨的根因是外部注入 + 村庄没出口 ⇒ 新判据见下面两行）")
+            # ⚠️ **D-109：判据改成「分布健康 + 村庄花得出去」** ——
+            #   ① 分布健康：最富的人占人均的几倍（集中度）
+            #   ② 村庄花得出去：村里「可花却没花」的钱有多少（D-110 记的那一笔）
+            dist = [s for s in snaps if s.get("HeroGoldMedian") is not None]
+            if dist:
+                s = dist[-1]
+                cnt = max(1, s.get("HeroCount") or 1)
+                total = s.get("HeroGoldTotal") or 0
+                mean = total / cnt
+                top = s.get("HeroGoldMax") or 0
+                ratio = (top / mean) if mean > 0 else 0
+                # 集中度判据：最富的人 ≤ 人均的 4 倍 ⇒ 算「分布健康」（实测中位与最大同量级）。
+                print(f"①分布健康    : 最富 {top} / 人均 {mean:.1f} = {ratio:.1f} 倍"
+                      f" → {'✅ 健康（≤4 倍）' if ratio <= 4 else '⚠️ 偏集中（>4 倍）'}"
+                      f"（中位 {s.get('HeroGoldMedian')}）")
+            unspent = [s for s in snaps if s.get("VillageUnspentGold") is not None]
+            if unspent:
+                a, b = unspent[0], unspent[-1]
+                days = max(1, (b.get("Day") or 0) - (a.get("Day") or 0))
+                delta = (b.get("VillageUnspentGold") or 0) - (a.get("VillageUnspentGold") or 0)
+                now = b.get("VillageUnspentGold") or 0
+                # 「花得出去」= 未花的钱**没有一路涨**；能招几个人 = 还能召唤几次。
+                print(f"②村庄花得出去: 可花未花 {now} 金（≈ 可召唤 {now // 100} 人）"
+                      f"；全程每天 {(delta / days):+.2f} 金"
+                      f" → {'⚠️ 一路囤（越攒越多）' if delta > 0 else '✅ 花得出去（没有囤积）'}")
             # 人均金币的**分布**（D-054 阶段 5）：合计稳 ≠ 钱分得匀。
             dist = [s for s in snaps if s.get("HeroGoldMedian") is not None]
             if dist:

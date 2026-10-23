@@ -137,6 +137,10 @@ def analyze(log: Path) -> dict:
     for line in text.splitlines():
         if "流通金增长率" in line:
             res["growth"] = line.split(":", 1)[1].strip() if ":" in line else line
+        elif "①分布健康" in line:
+            res["health"] = line.split(":", 1)[1].strip() if ":" in line else line
+        elif "②村庄花得出去" in line:
+            res["unspent"] = line.split(":", 1)[1].strip() if ":" in line else line
         elif "金币分布(末次)" in line:
             res["dist"] = line.split(":", 1)[1].strip() if ":" in line else line
         elif line.strip().startswith("成交 "):
@@ -182,19 +186,22 @@ def main() -> int:
             log = collect(label, args.days, seed, x, prices_path)
             info = analyze(log)
             rows.append((x, seed, info))
-            print(f"   → X={x} seed={seed}: {info.get('growth', '(无)')}", flush=True)
+            print(f"   → X={x} seed={seed}: {info.get('health', '(无)')}", flush=True)
 
     print()
     print("=" * 78)
-    print("汇总（X / 种子 / 流通金增长率 / 末次分布 / 成交 / 守恒律）")
+    print("汇总（X / 种子 / 分布健康 / 村庄花得出去 / 末次分布 / 成交 / 守恒律）")
     print("=" * 78)
     for x, seed, info in rows:
-        print(f"X={x:<6} seed={seed:<6} {info.get('growth', '?')}")
+        print(f"X={x:<6} seed={seed:<6} {info.get('health', '?')}")
+        print(f"        {info.get('unspent', '?')}")
         print(f"        {info.get('dist', '?')}")
         print(f"        {info.get('trades', '?')} | {info.get('conserve', '?')}")
     print()
-    print("**「哪个 X 是固定点」看增长率变号的那一档**；")
-    print("**「分布要不要加约束」是开发者的决定** —— 脚本只负责把数量出来。")
+    print("**判据（D-109 拍板）**：① **分布健康**（最富的人 ≤ 人均的 4 倍）"
+          "＋② **村庄花得出去**（可花未花的钱不一路囤）。")
+    print("**「流通金增长率」只作观察，不再是判据** —— D-106 已证明 X 是弱旋钮"
+          "（每 +0.01 X ≈ +0.2 金/天，而钱每天涨 3~11 金）。")
     return 0
 
 

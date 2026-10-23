@@ -129,18 +129,18 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 1063</div>
-      <div class="d">全绿 · 新增 261 条</div>
+      <div class="v">802 <em>→</em> 1074</div>
+      <div class="d">全绿 · 新增 272 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">155 <em>档</em></div>
+      <div class="v">160 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">50 <em>条</em></div>
-      <div class="d">D-057 … D-112</div>
+      <div class="v">51 <em>条</em></div>
+      <div class="d">D-057 … D-113</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -820,6 +820,22 @@
         而「钱在囤」被 <b>D-110</b> 那笔账明确显示出来（可花未花 625 金 ≈ 可召唤 6 人）
         ⇒ <b>缺口不再被假绿掩盖</b>。</p>
         <div class="tags"><span class="tag">D-112</span><span class="tag">市场复活</span><span class="tag">变异 4/4</span></div>
+      </li>
+      <li>
+        <div class="when">00:30</div>
+        <h3>试炼塔终于不是「可以无限刷」了</h3>
+        <p>你拍板「<b>给试炼塔加限制</b>」⇒ 此前它<b>没有任何限制</b>：一个「莽 / 肝」的英雄可以
+        <b>无限刷</b> ⇒ 永久加生命<b>无上限</b> ⇒ <b>副本难度形同虚设</b>
+        （采集器不去挑战 ⇒ 这个问题在标定数据里<b>看不出来</b> ⇒ 是读码时发现的）。</p>
+        <p>规则：**每人每天一次**（第一次正常打、赢 +20 生命永久；同一天第二次<b>不打</b>；
+        第二天又能试）⇒ 成长变成<b>稳定的节律</b>，而不是无限刷。
+        ⚠️「今天已经试过」<b>不是「输了」</b> ⇒ 单独一个跳过原因 ⇒ 界面单独说一句。</p>
+        <p>⚠️ <b>必须入档</b>（存档 0.10 → <b>0.11</b>）：不存「上次试炼的日号」⇒
+        <b>读档后那条限制就白设了</b>（读一次档就能多刷一次）⇒ 与 D-104 同一族。</p>
+        <p>⇒ 守卫：单测 **6 条** ＋ 存档 **4 条** ＋ 真机自检两处（`--save` 验日号读回来、
+        `--build` <b>走界面的那条路</b> ⇒ 「界面忘了传日号」也抓得到）· 变异矩阵 <b>5/5</b>。
+        顺带把两个顶到 1200 行上限的文件<b>拆了</b>（纯搬家，调用点一个字没改）。</p>
+        <div class="tags"><span class="tag">D-113</span><span class="tag">变异 5/5</span><span class="tag">存档 0.11</span></div>
       </li>
     </ol>
   </section>

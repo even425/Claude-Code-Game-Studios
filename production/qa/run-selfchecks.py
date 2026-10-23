@@ -44,7 +44,9 @@ CHECKS = [
         "require": ["SAVETEST 0.6 PASS", "SAVETEST R-03 PASS", "SAVETEST M4 PASS",
                     "SAVETEST MT-04 PASS",
                     # D-104：试炼塔的**永久**生命加成必须真的读回来。
-                    "SAVETEST 0.10 PASS"],
+                    "SAVETEST 0.10 PASS",
+                    # D-113：上次试炼的日号必须真的读回来（「每天限一次」在读档后还成立）。
+                    "SAVETEST 0.11 PASS"],
         "forbid": ["FAIL"],
         "zeros": [],
     },
@@ -131,7 +133,9 @@ CHECKS = [
         # D-093：玩家自己选落点（接线层，单测验不到）。
         "name": "build",
         "args": ["--build"],
-        "require": ["BUILDTEST 落点由玩家定 ⇒ PASS", "BUILDTEST 建筑长得不一样 ⇒ PASS"],
+        "require": ["BUILDTEST 落点由玩家定 ⇒ PASS", "BUILDTEST 建筑长得不一样 ⇒ PASS",
+                    # D-113：试炼塔每天限一次（接线层：同一天第二次必须被拦下）。
+                    "BUILDTEST D-113 试炼塔每天限一次 ⇒ PASS"],
         "forbid": ["FAIL"],
         "zeros": [],
     },

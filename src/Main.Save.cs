@@ -99,6 +99,9 @@ public partial class Main : Node2D
                 // D-104（存档 0.10）：试炼塔给的**永久**生命加成。
                 // 不存它 ⇒ 读档后永久加成归零（"永久"就名存实亡了），而且**不报错**。
                 TrialTowerHealthBonus = ClaudeCodeGameStudios.Application.TrialTowerBonusPersistence.Export(h),
+                // D-113：上次试炼的日号（「每天限一次」那条限制的凭据）⇒ 不存它，
+                // 读档后那条限制就白设了（读一次档就能多刷一次永久加成）。
+                LastTrialDay = h.LastTrialDay,
                 Origin = s.Definition.Origin,
                 TraitModifiers = new Dictionary<string, double>(s.Definition.TraitModifiers),
                 PreferenceWeights = new Dictionary<string, double>(s.Definition.PreferenceWeights),
@@ -263,6 +266,8 @@ public partial class Main : Node2D
             // 而战斗那边（`CombatStatsFor` / `BuildingCoordinator`）照样读这个字段
             // ⇒ 读档后这个人**默默地变弱了**，而且不报任何错。
             ClaudeCodeGameStudios.Application.TrialTowerBonusPersistence.Import(hs, agent);
+            // D-113：恢复「上次试炼的日号」⇒ 读档后「每天限一次」照样成立。
+            agent.LastTrialDay = hs.LastTrialDay;
             // D-054 阶段 4（存档 0.6）：恢复该英雄的**待发零头**。
             // 不恢复它 = 已挣到但还没发出去的钱凭空消失（与税额余数同一条理由）。
             _walletWriter.RestorePending(new ClaudeCodeGameStudios.Domain.Heroes.HeroId(hs.Id), hs.GoldCarry);

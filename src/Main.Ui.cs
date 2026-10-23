@@ -609,66 +609,6 @@ public partial class Main : Node2D
     private void OnBuildShield() => OnBuild(BuildableBuildings.Shield);
 
     /// <summary>
-    /// D-074：进试炼塔打一场（<b>第 1 个在场且空闲的英雄</b>）。
-    /// </summary>
-    /// <remarks>
-    /// <b>赢了 ⇒ 永久加生命</b>；输了什么也不发生（无惩罚）。
-    /// ⇒ 战斗完全确定（D-062 不设命中）⇒ 同一个英雄进塔，结果永远一样。
-    /// </remarks>
-    private void OnTrialTower()
-    {
-        if (!_buildingService.IsCompleted(BuildableBuildings.TrialTower.Id))
-        {
-            GD.Print("TRIAL 试炼塔还没建好。");
-            Refresh();
-            return;
-        }
-
-        HeroAgent? challenger = null;
-        foreach (var h in _heroes)
-        {
-            if (h.Away || h.ToSite) continue;
-            if (!IsPresent(h)) continue;
-            challenger = h;
-            break;
-        }
-
-        if (challenger is null)
-        {
-            GD.Print("TRIAL 村口没人（都在路上或工地上）。");
-            Refresh();
-            return;
-        }
-
-        var outcome = _buildingCoordinator.TryTrial(challenger.Id);
-        if (outcome is null)
-        {
-            GD.Print("TRIAL 找不到这个人。");
-            Refresh();
-            return;
-        }
-
-        if (outcome.Value.Won)
-        {
-            Emit(EvTrialTowerCleared, challenger.Name,
-                new[] { StHeroTally, StVillageBuilding },
-                new Dictionary<string, string>
-                {
-                    ["hero"] = challenger.Name,
-                    ["bonus"] = outcome.Value.HealthBonusGained.ToString(),
-                    ["total"] = challenger.TrialTowerHealthBonus.ToString(),
-                },
-                ev => Chronicle.TrialTowerWon((int)_clock.Day, ev.Payload["hero"], ev.Payload["total"]).Text);
-        }
-        else
-        {
-            GD.Print($"TRIAL {challenger.Name} 没打过试炼塔的守卫（无惩罚）。");
-        }
-
-        Refresh();
-    }
-
-    /// <summary>
     /// 在施工的几栋建筑 + 各自进度（顶栏那行用；没有在建时返回空串）。
     /// </summary>
     /// <returns>例如「围栏 40% · 试炼塔 20%」。</returns>

@@ -33,18 +33,29 @@ public sealed class TrialTowerService
     /// <param name="HealthBonusGained">这次获得的生命加成（输了为 0）。</param>
     /// <param name="StatsAfter">打赢后他<b>实际变成</b>的属性（输了 = 原属性）。</param>
     /// <param name="Log">战斗日志。</param>
+    /// <param name="SkipReason">
+    /// <b>为什么这次没打成</b>（D-113：每天限一次）。
+    /// <c>None</c> = 正常试炼；<c>AlreadyTriedToday</c> = 今天已经打过 ⇒ 不打。
+    /// </param>
     /// <remarks>
-    /// ⚠️ <b>为什么带「变成的属性」而不只是「加了多少」</b>：
-    /// 若只报「+20」，那「只加生命」这条规则就<b>没有落点</b> ——
-    /// 调用方爱怎么加就怎么加（加攻防也没人管）⇒ 守卫只能去测调用方，
-    /// 而调用方有好几处 ⇒ 守不住。
-    /// ⇒ <b>由本服务算出「变成什么」</b>，调用方<b>只负责应用</b>
-    /// ⇒ 「只加生命」这条规则<b>只有一处实现</b> ⇒ 守得住。
+    /// ⚠️ <b>为什么带这个字段</b>：「今天已经试过了」<b>不是失败</b>（他没输，是没上场）
+    /// ⇒ 不能拿 <c>Won=false</c> 冒充 ⇒ 否则界面会说「他输了」，而真相是「规则拦下了」。
     /// </remarks>
     public readonly record struct TrialOutcome(
         HeroId HeroId, bool Won, int HealthBonusGained,
         CombatStats StatsAfter,
-        IReadOnlyList<BattleLogEntry> Log);
+        IReadOnlyList<BattleLogEntry> Log,
+        TrialSkipReason SkipReason = TrialSkipReason.None);
+
+    /// <summary>试炼被跳过的原因（D-113）。</summary>
+    public enum TrialSkipReason
+    {
+        /// <summary>正常试炼（没有跳过）。</summary>
+        None = 0,
+
+        /// <summary>今天已经试过了 ⇒ <b>每天限一次</b>（D-113）。</summary>
+        AlreadyTriedToday = 1,
+    }
 
     /// <summary>
     /// 赢一场获得的<b>生命加成</b>（D-074）。
@@ -95,10 +106,17 @@ public sealed class TrialTowerService
     /// <param name="heroId">参试英雄。</param>
     /// <param name="heroName">显示名（写进战斗日志）。</param>
     /// <param name="stats">他现在的战斗属性（含已有的试炼塔加成）。</param>
+    /// <param name="todayDay">今天是第几天（0 = 不知道 ⇒ 不限次数）。</param>
+    /// <param name="lastTrialDay">他上次试炼是第几天（0 = 从未试过）。</param>
     /// <returns>试炼结果。</returns>
     /// <exception cref="ArgumentException">英雄标识或名字为空。</exception>
     /// <exception cref="InvalidOperationException">战斗属性不明（全 0）⇒ 不能开打。</exception>
-    public TrialOutcome Try(HeroId heroId, string heroName, CombatStats stats)
+    public TrialOutcome Try(
+        HeroId heroId,
+        string heroName,
+        CombatStats stats,
+        int todayDay = 0,
+        int lastTrialDay = 0)
     {
         if (string.IsNullOrEmpty(heroId.Value))
         {
@@ -108,6 +126,22 @@ public sealed class TrialTowerService
         if (string.IsNullOrEmpty(heroName))
         {
             throw new ArgumentException("英雄名字不能为空。", nameof(heroName));
+        }
+
+        // ⚠️ **D-113：每天限一次** ——
+        // 以前**没有任何限制** ⇒ 一个「莽 / 肝」的英雄可以**无限刷**试炼塔
+        // ⇒ 永久加生命**无上限** ⇒ 副本难度形同虚设。
+        // ⇒ 现在：同一天第二次 ⇒ **不打**（不是「输了」，是「规则拦下了」）。
+        //
+        // ⚠️ **为什么在这里判、而不是让调用方自己拦**：
+        // 调用方有好几处（界面 / 采集器 / 未来的脚本）⇒ 规则只有一处实现，才守得住。
+        if (todayDay > 0 && lastTrialDay == todayDay)
+        {
+            return new TrialOutcome(
+                heroId, Won: false, HealthBonusGained: 0,
+                StatsAfter: stats,
+                Log: Array.Empty<BattleLogEntry>(),
+                SkipReason: TrialSkipReason.AlreadyTriedToday);
         }
 
         if (!stats.IsKnown)

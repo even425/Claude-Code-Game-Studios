@@ -459,7 +459,12 @@ public partial class Main : Node2D
         //   而且**游戏不报任何错**（只是「这个人好像变弱了」）⇒ 最容易漏的一类缺陷。
         const int TrialBonusSeed = 20;   // 永久生命加成（1 次试炼塔胜利 = +20 生命）
 
+        // ── D-113（存档 0.11）：「上次试炼的日号」也要走一遍「摆好 → 读回来」──
+        //   读不到的后果：**「每天限一次」在读档后就白设了**（读一次档就能多刷一次）。
+        const int LastTrialDaySeed = 99;
+
         _heroes[0].TrialTowerHealthBonus = TrialBonusSeed;
+        _heroes[0].LastTrialDay = LastTrialDaySeed;
 
         _walletWriter.RestorePending(_heroes[0].Id, CarrySeed);
         _walletWriter.RestoreTotalGranted(GrantedSeed);
@@ -613,6 +618,14 @@ public partial class Main : Node2D
         bool trialBonusOk = trialBonusAfter == TrialBonusSeed;
         GD.Print($"SAVETEST 0.10 试炼塔永久生命加成 {trialBonusAfter}（应为 {TrialBonusSeed}）→ {trialBonusOk}");
         GD.Print(trialBonusOk ? "SAVETEST 0.10 PASS" : "SAVETEST 0.10 FAIL");
+
+        // ── D-113（存档 0.11）：「上次试炼的日号」必须真的读回来 ──
+        //   读不到的后果：**「每天限一次」在读档后就白设了**（读一次档就能多刷一次
+        //   永久加成）⇒ 与 D-104「永久加成不入档」同一族。
+        int lastTrialAfter = _heroes[0].LastTrialDay;
+        bool lastTrialOk = lastTrialAfter == LastTrialDaySeed;
+        GD.Print($"SAVETEST 0.11 上次试炼日号 {lastTrialAfter}（应为 {LastTrialDaySeed}）→ {lastTrialOk}");
+        GD.Print(lastTrialOk ? "SAVETEST 0.11 PASS" : "SAVETEST 0.11 FAIL");
 
         // ── R-03：在场性 / 行动 / 目标 / 首通标记是否真的恢复 ──
         if (_states.Count >= 3)

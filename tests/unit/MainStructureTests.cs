@@ -104,6 +104,8 @@ public class MainStructureTests
         "SocialPreferenceWeight",
         "OnRosterItemActivated", "OnSummon", "OnSummonPaid", "SummonHero", "OnTask", "OnUpgrade",
         "OnBuild", "OnBuildFence", "OnBuildTower", "OnBuildShield", "OnTrialTower", "RefreshBuildButton",
+        // D-113：试炼塔界面的实现（可断言的结果）—— 它是界面那条路的一部分。
+        "RunTrialTower",
         // D-093：玩家自选落点（放置模式）
         "BeginPlacement", "CancelPlacement", "PlacePendingAt", "UpdatePlacementPreview",
         "UpdateBuildingMarks",

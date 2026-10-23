@@ -112,5 +112,36 @@ public partial class Main : Node2D
         bool allDistinct = shapes.Distinct().Count() == shapes.Length;
         GD.Print($"BUILDTEST 建筑画法：{string.Join("/", shapes)} ⇒ 都有画法={allKnown} 互不相同={allDistinct}");
         GD.Print($"BUILDTEST 建筑长得不一样 ⇒ {(allKnown && allDistinct ? "PASS" : "FAIL")}");
+
+        // ⑥ **D-113：试炼塔每天限一次**（接线层，单测验不到界面那条路）。
+        //    ⚠️ **走的是界面的那个实现**（`RunTrialTower`）⇒ 这样「界面忘了传日号」
+        //    这类接线错误也**抓得到**（直接调协调器会绕开它）。
+        bool trialLimitOk = false;
+        if (_heroes.Count > 0)
+        {
+            var challenger = _heroes[0];
+            int today = (int)_clock.Day;
+
+            // 第一次：界面那条路（它自己挑「第一个在场且空闲的英雄」）。
+            var first = RunTrialTower();
+            int bonusAfterFirst = challenger.TrialTowerHealthBonus;
+
+            // 第二次（同一天）⇒ 规则必须拦下（**结果**必须是 SkippedToday）。
+            var second = RunTrialTower();
+
+            bool skipped = second == TrialTowerUiResult.SkippedToday;
+            bool noNewBonus = challenger.TrialTowerHealthBonus == bonusAfterFirst;
+            bool dayRecorded = challenger.LastTrialDay == today;
+
+            trialLimitOk = skipped && noNewBonus && dayRecorded;
+            GD.Print($"BUILDTEST D-113 试炼塔每天限一次：第一次={first} 第二次={second}（应为 SkippedToday）"
+                     + $" 加成未变={noNewBonus}({bonusAfterFirst}→{challenger.TrialTowerHealthBonus})"
+                     + $" 记下了日号={dayRecorded}({challenger.LastTrialDay})");
+            GD.Print($"BUILDTEST D-113 试炼塔每天限一次 ⇒ {(trialLimitOk ? "PASS" : "FAIL")}");
+        }
+        else
+        {
+            GD.Print("BUILDTEST D-113 试炼塔每天限一次：村口没人 ⇒ 跳过（不参与判定）");
+        }
     }
 }

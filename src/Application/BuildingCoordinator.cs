@@ -54,8 +54,14 @@ public sealed class BuildingCoordinator
 
     /// <summary>去试炼塔打一场。</summary>
     /// <param name="heroId">参试英雄。</param>
+    /// <param name="todayDay">今天是第几天（0 = 不知道 ⇒ 不限次数）。</param>
     /// <returns>试炼结果；英雄不存在时返回 null。</returns>
-    public TrialTowerService.TrialOutcome? TryTrial(HeroId heroId)
+    /// <remarks>
+    /// ⚠️ <b>D-113：每天限一次</b> ——「今天已经打过」⇒ <b>不打</b>。
+    /// ⇒ 那条判定<b>只有一处实现</b>（在 <c>TrialTowerService</c> 里），
+    /// 调用方（界面 / 采集器 / 未来的脚本）都走它 ⇒ 守得住。
+    /// </remarks>
+    public TrialTowerService.TrialOutcome? TryTrial(HeroId heroId, int todayDay = 0)
     {
         var agent = _heroLookup(heroId);
         if (agent is null) return null;
@@ -69,7 +75,13 @@ public sealed class BuildingCoordinator
         if (bonus != 0) stats = stats with { Health = stats.Health + bonus };
 
         // ⚠️ `Try` **从不失败**（它要失败会抛）⇒ 这里拿到的一定是有效结果。
-        var outcome = _trialTower.Try(heroId, agent.Name, stats);
+        var outcome = _trialTower.Try(heroId, agent.Name, stats, todayDay, agent.LastTrialDay);
+
+        // ⚠️ **D-113：今天已经打过** ⇒ 什么都不做（不消耗今天的机会，也不加属性）。
+        if (outcome.SkipReason == TrialTowerService.TrialSkipReason.AlreadyTriedToday)
+        {
+            return outcome;
+        }
 
         if (outcome.Won)
         {
@@ -79,6 +91,9 @@ public sealed class BuildingCoordinator
             // 若哪天服务改成也加攻防，差值会把攻防也算进来 ⇒ 应用的就不只是生命。
             agent.TrialTowerHealthBonus += outcome.StatsAfter.Health - stats.Health;
         }
+
+        // ⚠️ **D-113：记下「今天试过了」**（不管赢没赢 ⇒ 每天只有一次机会）。
+        if (todayDay > 0) agent.LastTrialDay = todayDay;
 
         return outcome;
     }

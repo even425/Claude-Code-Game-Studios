@@ -50,6 +50,14 @@
       "value": "3"
     },
     {
+      "file": "Application/VillageStart.cs",
+      "name": "StartingGold",
+      "kind": "参数",
+      "status": "【建议值】D-114（待开发者确认）",
+      "note": "村庄的开局启动资金 —— 用来打破「税收→收购站→采集品→税收」从 0 就转不起来的死锁（否则村金永远是 0、村庄升级那条路走不通）；它是从外面进来的钱 ⇒ 守恒律右边要加上它",
+      "value": "100"
+    },
+    {
       "file": "Application/GatherService.cs",
       "name": "GatheredAmountPerDay",
       "kind": "参数",

@@ -109,7 +109,6 @@ public partial class Main : Node2D
     _btnBuildShield = MakeButton("建防护罩", left, OnBuildShield);
         _btnTrialTower = MakeButton("进试炼塔", left, OnTrialTower);
         _btnSummon = MakeButton("招募一个人", left, OnSummonPaid);
-        _btnStall = MakeButton("摆摊", left, OnStall);
         _btnMarket = MakeButton("看摊位", left, OnMarket);
         // D-081：商队面板（商队来访期间才看得到货）。
         _btnCaravan = MakeButton("看看商队", left, OnCaravan);
@@ -670,99 +669,6 @@ public partial class Main : Node2D
                           || _villageModel.IsOccupied(definition.GridX, definition.GridY);
     }
 
-    /// <summary>
-    /// M7 摆摊按钮 handler —— 弹 LineEdit 输入物品名 + 数量，<b>第 1 个在场且空闲的英雄</b>开摊。
-    /// </summary>
-    /// <remarks>
-    /// <b>v1 极简</b>（D-029）：不选英雄（自动选第一个在场 + 空闲 + 持可售物 ≥ 1 的），
-    /// 不开"选物品下拉"（直接输物品名）—— 完整 Panel v2 再做。
-    /// 队伍 <b>未选</b>时也能摆摊（前提：英雄在场）。
-    /// </remarks>
-    private void OnStall()
-    {
-        // 找第一个可摆摊的英雄（在场 + 空闲 + 持可售物品 ≥ 1）
-        HeroAgent? owner = null;
-        foreach (var h in _heroes)
-        {
-            if (h.Away) continue;
-            if (h.ToSite) continue;
-            // 持任意一个 PriceBook 登记的物品 ≥ 1
-            var anySellable = false;
-            foreach (var item in new[] { "石料", "木料", "布匹" })
-            {
-                if (h.Bag.Count(new ClaudeCodeGameStudios.Domain.Items.ItemId(item)) >= 1)
-                {
-                    anySellable = true;
-                    break;
-                }
-            }
-            if (anySellable) { owner = h; break; }
-        }
-        if (owner is null)
-        {
-            Add(new Chronicle.Entry(
-                (int)_clock.Day, "没人能摆摊：要么都在忙，要么背包里没可卖的（石料/木料/布匹）。", null));
-            Refresh();
-            return;
-        }
-
-        // 弹个临时 LineEdit + Label
-        var panel = new Panel { Position = new Vector2(900, 200), CustomMinimumSize = new Vector2(280, 100) };
-        AddChild(panel);
-        var title = new Label { Text = $"摆摊 — {owner.Name}", Position = new Vector2(10, 6) };
-        panel.AddChild(title);
-        var hint = new Label { Text = "格式：物品名:数量  (例:石料:5)", Position = new Vector2(10, 28) };
-        panel.AddChild(hint);
-        var input = new LineEdit { Position = new Vector2(10, 54), CustomMinimumSize = new Vector2(260, 0) };
-        panel.AddChild(input);
-        var ok = new Button { Text = "开摆", Position = new Vector2(10, 78), CustomMinimumSize = new Vector2(80, 0) };
-        panel.AddChild(ok);
-        var cancel = new Button { Text = "取消", Position = new Vector2(190, 78), CustomMinimumSize = new Vector2(80, 0) };
-        panel.AddChild(cancel);
-
-        // 回车也确认
-        input.TextSubmitted += (s) => OnStallConfirm(panel, owner, input.Text);
-        ok.Pressed += () => OnStallConfirm(panel, owner, input.Text);
-        cancel.Pressed += () => panel.QueueFree();
-        input.GrabFocus();
-    }
-
-    private void OnStallConfirm(Panel panel, HeroAgent owner, string raw)
-    {
-        try
-        {
-            // 格式："物品名:数量"
-            var parts = raw.Split(':');
-            if (parts.Length != 2 || !long.TryParse(parts[1].Trim(), out var qty) || qty < 1)
-            {
-                Add(new Chronicle.Entry(
-                    (int)_clock.Day, $"摆摊格式错：{raw}（要「物品名:数量」，例「石料:5」）", null));
-                panel.QueueFree();
-                Refresh();
-                return;
-            }
-            var itemId = new ClaudeCodeGameStudios.Domain.Items.ItemId(parts[0].Trim());
-            var simTime = _clock.Day * 24.0;
-            var r = _stallService.PlaceStall(owner.Id, itemId, qty, simTime);
-            if (r is null)
-            {
-                Add(new Chronicle.Entry(
-                    (int)_clock.Day,
-                    $"{owner.Name} 摆摊失败（{itemId.Value} × {qty}）—— 检查背包/价格/已开摊。", null));
-            }
-            else
-            {
-                Add(new Chronicle.Entry(
-                    (int)_clock.Day,
-                    $"{owner.Name} 开摊卖 {itemId.Value} × {qty}（单价 {r.Stall.UnitPrice}）。", owner.Name));
-            }
-        }
-        finally
-        {
-            panel.QueueFree();
-            Refresh();
-        }
-    }
 
     /// <summary>
     /// R-02：打开摊位面板（正式购买 UI + 摊位库存面板 R-04）。
@@ -861,14 +767,19 @@ public partial class Main : Node2D
         int on = _heroes.Count(h => h.Present);
         int away = _squad.Count(h => h.Away);
 
+        // ⚠️ **D-114：顶栏要同时显示「村庄资产」** ——
+        // 村庄升级花掉的钱**变成资产**（D-090）⇒ 只显示现金 ⇒ 玩家看到「村金 0」，
+        // 而钱其实在资产里 ⇒ **那是在骗玩家**。
+        string villageMoney = $"村金 {VillageGold} · 资产 {VillageAsset}";
+
         // ⚠️ **多栋同时施工时要能一眼看出**（D-082）：顶栏那行只放得下一个名字，
         // 所以把在施工的几栋连同进度**合成一句**（「围栏 40% · 试炼塔 20%」）。
         string sites = ActiveSitesText();
         _stats.Text = _buildTarget >= 0
-            ? $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    村金 {VillageGold}    在村 {on}/{_heroes.Count}    工地：{_village.BuildName}"
+            ? $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    {villageMoney}    在村 {on}/{_heroes.Count}    工地：{_village.BuildName}"
             : sites.Length > 0
-                ? $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    村金 {VillageGold}    在村 {on}/{_heroes.Count}    工地：{sites}"
-                : $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    村金 {VillageGold}    在村 {on}/{_heroes.Count}";
+                ? $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    {villageMoney}    在村 {on}/{_heroes.Count}    工地：{sites}"
+                : $"{TierName(_tier)}    第 {_clock.Day} 天 {_clock.Clock}    材料 {Mat}    {villageMoney}    在村 {on}/{_heroes.Count}";
 
         RefreshRoster();
         RefreshRelationSummary();

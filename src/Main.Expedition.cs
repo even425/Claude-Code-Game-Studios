@@ -147,6 +147,12 @@ public partial class Main : Node2D
     private readonly DomainVillage _villageModel = BuildInitialVillage();
 
     /// <summary>M5 / D-033：开局在 (-5, -5) 放一个市集，影响区覆盖 (0,0)——默认摆摊位置能过位置守门。</summary>
+    /// <remarks>
+    /// ⚠️ **D-114：给村庄一笔启动资金** ——
+    /// 没有它，「税收 → 收购站 → 采集品 → 税收」这个环**从 0 就转不起来**
+    /// ⇒ 村金永远是 0 ⇒ 村庄升级那条路走不通（详见 <c>VillageStart</c>）。
+    /// ⇒ 它是**从外面进来的钱** ⇒ 守恒律右边要加上它（快照里专门记一列）。
+    /// </remarks>
     private static DomainVillage BuildInitialVillage()
     {
         var v = new DomainVillage("村庄");
@@ -156,6 +162,8 @@ public partial class Main : Node2D
             constructionProgress: 1.0,
             affectsAreaW: 11, affectsAreaH: 11);
         v.TryPlace(market);
+        v.Add(new ClaudeCodeGameStudios.Domain.Village.ResourceId("金币"),
+              ClaudeCodeGameStudios.Application.VillageStart.StartingGold);
         return v;
     }
 

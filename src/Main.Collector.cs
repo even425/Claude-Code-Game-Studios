@@ -338,7 +338,10 @@ public partial class Main : Node2D
             ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldOut,
             // ⚠️ **D-110**：村庄「可花却没花」的钱（采集器不召唤 ⇒ 钱只会囤）。
             // 口径 = 村库现金 + 村庄资产 − 下一级升级要留的钱。
-            UnspentVillageGold());
+            UnspentVillageGold(),
+            // ⚠️ **D-114**：村庄的开局启动资金（**从外面进来的钱**）
+            // ⇒ 守恒律的右边必须加上它，否则账对不上。
+            ClaudeCodeGameStudios.Application.VillageStart.StartingGold);
 
         // ⚠️ **逐日守恒律自检**（D-091 引入的记账多了一条路 ⇒ 必须自己盯住）：
         // 「Σ英雄钱包 + 村库金币 + 村庄资产 + 累计销毁 = 初始金币 + 累计发放」
@@ -350,8 +353,10 @@ public partial class Main : Node2D
                  // ⚠️ **D-101**：被大事件带走的金币（流出系统的）⇒ 算在左边。
                  + ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldOut;
         long rhs = (long)_heroes.Count * 100 + _walletWriter.TotalGranted
-                 // ⚠️ **D-101**：大事件带来的金币（从外面进来的）⇒ 算在右边。
-                 + ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldIn;
+                   // ⚠️ **D-101**：大事件带来的金币（从外面进来的）⇒ 算在右边。
+                   + ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldIn
+                   // ⚠️ **D-114**：村庄的开局启动资金（也是从外面进来的）⇒ 算在右边。
+                   + ClaudeCodeGameStudios.Application.VillageStart.StartingGold;
         if (lhs != rhs)
         {
             GD.Print($"CONSERVATION 第{(int)_clock.Day}天 对不上：左边 {lhs} / 右边 {rhs}"
@@ -359,6 +364,7 @@ public partial class Main : Node2D
                      + $" · 资产 {_villageModel.Get(ClaudeCodeGameStudios.Application.VillageUpgradeService.Asset)}"
                      + $" · 销毁 {destroyed} · 发放 {_walletWriter.TotalGranted}"
                      + $" · 升级 {_upgradeService.UpgradesStarted}"
+                     + $" · 启动资金 {ClaudeCodeGameStudios.Application.VillageStart.StartingGold}"
                      + $" · 事件收入 {ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldIn}"
                      + $" · 事件支出 {ClaudeCodeGameStudios.Application.WorldEventResourceApplier.TotalEventGoldOut}");
         }

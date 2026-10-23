@@ -294,14 +294,22 @@ public sealed class SaveGame
     /// </remarks>
     /// <param name="save">存档。</param>
     /// <returns>要补记的金额；不需要补记时返回 0。</returns>
+    /// <remarks>
+    /// <para>⚠️ <b>D-116：判据是「版本」，不是「资源里有没有这一项」</b> ——
+    /// 资产<b>为 0</b> 时它<b>根本不会进存档</b>（<c>Village.Snapshot</c> 只带非零资源）
+    /// ⇒ 老逻辑（「没这一项 ⇒ 当老档 ⇒ 补记累计升级花费」）会
+    /// <b>凭空给村庄加出几百金</b>（实测：资产 0、累计花 333 ⇒ 读档后资产变 333）。
+    /// ⇒ 版本才是可靠判据（<b>0.6 起</b>这一项就在存档里了）。</para>
+    /// </remarks>
     public static long VillageAssetToRestore(SaveGame save)
     {
         if (save is null) return 0L;
         if (save.Village is null) return 0L;
         if (save.Village.Resources is null) return 0L;
 
-        string assetKey = ClaudeCodeGameStudios.Application.VillageUpgradeService.Asset.Value;
-        if (save.Village.Resources.ContainsKey(assetKey)) return 0L;   // 新档：已有 ⇒ 不补
+        // ⚠️ **0.6 起就有「村庄资产」这一项了** ⇒ 新旧档的判据是**版本**。
+        if (save.Version.Major > 0 || save.Version.Minor >= 6) return 0L;
+
         return save.GoldSpentTotal > 0 ? save.GoldSpentTotal : 0L;
     }
 

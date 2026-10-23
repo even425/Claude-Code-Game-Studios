@@ -173,7 +173,6 @@ public partial class Main : Node2D
     private Button _btnBuildShield = null!;
     private Button _btnTrialTower = null!;
     private Button _btnSummon = null!;
-    private Button _btnStall = null!;   // M7：摆摊按钮
     private Button _btnMarket = null!;  // R-02：看摊位（正式购买 UI + 摊位库存面板）
     private Button _btnSave = null!;    // M7：存盘按钮
     private Button _btnLoad = null!;    // M7：读盘按钮
@@ -488,6 +487,16 @@ public partial class Main : Node2D
     /// </remarks>
     private long VillageGold =>
         _villageModel.Get(ClaudeCodeGameStudios.Application.Stall.StallService.Gold);
+
+    /// <summary>
+    /// 村庄资产（D-090：升级花掉的钱变成它，它**还在**、还能再花）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **D-114：顶栏要把它显示出来** —— 只显示现金的话，
+    /// 玩家会看到「村金 0」，而钱其实在资产里 ⇒ **那是在骗玩家**。
+    /// </remarks>
+    private long VillageAsset =>
+        _villageModel.Get(ClaudeCodeGameStudios.Application.VillageUpgradeService.Asset);
 
     private int _tier = 0;
     private float _buildProgress = 0f;

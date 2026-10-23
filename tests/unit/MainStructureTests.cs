@@ -110,7 +110,7 @@ public class MainStructureTests
         "BeginPlacement", "CancelPlacement", "PlacePendingAt", "UpdatePlacementPreview",
         "UpdateBuildingMarks",
         "PendingPlacement",
-        "OnStall", "OnStallConfirm", "OnMarket", "OnManualTradeCompleted",
+        "OnMarket", "OnManualTradeCompleted",
         "OnCaravan", "OnCaravanBought",   // D-081：商队面板（玩家命令入口）
         "OnSave", "OnLoad",
         "Refresh", "RefreshRoster", "RosterLine", "ShoppingNoteFor",

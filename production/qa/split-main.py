@@ -41,7 +41,7 @@ GROUPS = {
         "RefreshRelationSummary", "TierName",
         # 玩家命令入口（按钮 → 领域调用）
         "OnRosterItemActivated", "OnSummon", "OnTask", "OnUpgrade",
-        "OnStall", "OnStallConfirm", "OnMarket", "OnManualTradeCompleted",
+        "OnMarket", "OnManualTradeCompleted",
         "OnSave", "OnLoad",
         # 社交的表现部分
         "SocialTargetCandidates", "OnSocialCompleted", "SocialStageLine",

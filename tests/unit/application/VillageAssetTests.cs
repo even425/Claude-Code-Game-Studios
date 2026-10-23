@@ -155,6 +155,9 @@ public class VillageAssetTests
     {
         var save = new SaveGame
         {
+            // ⚠️ **D-116：老档必须真的是老档**（版本 0.5）⇒
+            // 补记的判据是**版本**，不是「资源里有没有这一项」。
+            Version = new SaveVersion(0, 5),
             GoldSpentTotal = 150,      // 老档里「累计销毁（升级花费）」= 150
             Village = new VillageSave
             {
@@ -197,10 +200,42 @@ public class VillageAssetTests
     {
         var save = new SaveGame
         {
+            Version = new SaveVersion(0, 5),
             GoldSpentTotal = 0,
             Village = new VillageSave { Id = "v1", Resources = new Dictionary<string, long>() },
         };
 
         Assertions.AssertThat(SaveGame.VillageAssetToRestore(save)).IsEqual(0);
+    }
+
+    /// <summary>
+    /// ⚠️ <b>D-116：新档但资产恰好是 0</b> ⇒ <b>不许补记</b>。
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠️ <b>这条守的是一个「凭空造钱」的缺陷</b>：资产为 0 时
+    /// 它<b>根本不会进存档</b>（<c>Village.Snapshot</c> 只带非零资源）
+    /// ⇒ 旧判据（「没这一项 ⇒ 当老档」）会把「累计升级花费」全补回来
+    /// ⇒ <b>读一次档，村庄凭空多出几百金</b>（实测：资产 0、累计花 333 ⇒ 读档后 333）。</para>
+    /// <para>⇒ 真实触发路径：升级到第 5 级（累计花 750）→ 收购站把资产花光（资产 = 0）
+    /// → 存盘 → 读档 ⇒ <b>+750 金</b>。</para>
+    /// </remarks>
+    [TestCase]
+    public void NewSave_WithZeroAsset_DoesNotGetVillageAssetRestored()
+    {
+        var save = new SaveGame
+        {
+            Version = SaveVersion.Current,
+            GoldSpentTotal = 333,      // 升级花过 333
+            Village = new VillageSave
+            {
+                Id = "v1",
+                // ⚠️ **资源里没有「村庄资产」这一项**（因为它是 0 ⇒ 不进存档）
+                Resources = new Dictionary<string, long> { { "金币", 20 } },
+            },
+        };
+
+        long restore = SaveGame.VillageAssetToRestore(save);
+
+        Assertions.AssertThat(restore).IsEqual(0L);
     }
 }

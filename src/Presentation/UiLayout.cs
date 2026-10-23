@@ -97,7 +97,7 @@ public static class UiLayout
     /// 长出更多行（升级选项、建哪些建筑）⇒ 固定高度必然把底部的按钮挤出屏幕 ⇒
     /// 左栏改成<b>可滚动</b>（见 <see cref="LeftColumnScrolls"/>）。</para>
     /// </remarks>
-    public const int ButtonCount = 12;
+    public const int ButtonCount = 11;
 
     /// <summary>
     /// 左栏<b>是否可滚动</b>：<b>是</b>（D-081 修的界面缺陷）。
@@ -112,8 +112,12 @@ public static class UiLayout
     public const bool LeftColumnScrolls = true;
 
     /// <summary>
-    /// 左栏内容的最小高度。两个标题 + 花名册 + 队伍文字 + 6 个按钮 + 9 个间隔。
+    /// 左栏内容的最小高度。两个标题 + 花名册 + 队伍文字 + 按钮 + 间隔。
     /// </summary>
+    /// <remarks>
+    /// ⚠️ **D-115：按钮数从 12 变成 11**（删掉了「摆摊」那个手动按钮 ——
+    /// 英雄的摆摊从 D-086 起就是**自主行为**，那个按钮只是 M7 的遗留）。
+    /// </remarks>
     public const float LeftContentMinHeight =
         HeaderHeight + RosterMinHeight + HeaderHeight + SquadLineHeight
         + ButtonCount * ButtonMinHeight

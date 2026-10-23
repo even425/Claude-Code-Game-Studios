@@ -148,7 +148,10 @@ def analyze(path, label, verbose=True):
                + (s.get("GoldSpent") or 0)
                + (s.get("EventGoldOut") or 0)) * 100
         rhs = ((s.get("HeroCount") or 0) * 100 + (s.get("GoldGranted") or 0)
-               + (s.get("EventGoldIn") or 0)) * 100
+               + (s.get("EventGoldIn") or 0)
+               #   ⚠️ **D-114**：村庄的开局启动资金 —— 也是「从外面进来的钱」
+               #      ⇒ 它在右边（不在任何钱包里，也不是大事件发的）。
+               + (s.get("VillageStartGold") or 0)) * 100
         if lhs == rhs:
             conserve_ok += 1
         else:

@@ -220,6 +220,15 @@ public sealed record EconomyRow
     public long? VillageUnspentGold { get; init; }
 
     /// <summary>
+    /// 村庄的<b>开局启动资金</b>（D-114）—— 一笔<b>从外面进来的钱</b>。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>为什么它必须单独记一列</b>：它不在任何人的钱包里、也不是大事件发的
+    /// ⇒ 守恒律的<b>右边</b>要加上它，否则账对不上（左边多了这笔钱，右边没有）。
+    /// </remarks>
+    public long? VillageStartGold { get; init; }
+
+    /// <summary>
     /// 其中<b>商队销毁</b>掉的那部分（D-088；已含在 <see cref="GoldSpent"/> 里）。
     /// </summary>
     /// <remarks>
@@ -588,7 +597,8 @@ public sealed class EconomyLog : IDisposable
         long? villageAsset = null,
         long? eventGoldIn = null,
         long? eventGoldOut = null,
-        long? villageUnspentGold = null)
+        long? villageUnspentGold = null,
+        long? villageStartGold = null)
     {
         if (_writer is null) return false;
 
@@ -623,6 +633,7 @@ public sealed class EconomyLog : IDisposable
             EventGoldIn = eventGoldIn,
             EventGoldOut = eventGoldOut,
             VillageUnspentGold = villageUnspentGold,
+            VillageStartGold = villageStartGold,
         };
 
         _writer.WriteLine(JsonSerializer.Serialize(row, Options));

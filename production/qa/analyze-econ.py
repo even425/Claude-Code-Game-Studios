@@ -316,6 +316,16 @@ def analyze(path, label, verbose=True):
                 print(f"②村庄花得出去: 可花未花 {now} 金（≈ 可召唤 {now // 100} 人）"
                       f"；全程每天 {(delta / days):+.2f} 金"
                       f" → {'⚠️ 一路囤（越攒越多）' if delta > 0 else '✅ 花得出去（没有囤积）'}")
+            # ⚠️ **D-111：第三条判据「市场还在转」** ——
+            #   D-109 的两条判据**会绿得没有意义**：钱不流通 ⇒ 人人都在囤 ⇒ 分布当然均匀。
+            #   实测（2000 天）：市场在第 100 天停摆 ⇒ 后 1900 天一笔没有
+            #   ⇒ 而「分布健康」仍然 ✅ ⇒ 所以必须单独看「后期还有没有成交」。
+            last_half_day = (snaps[-1].get("Day") or 0) // 2
+            late_trades = sum(1 for t in trades if (t.get("Day") or 0) > last_half_day)
+            total_trades = len(trades)
+            print(f"③市场还在转  : 后半段（Day > {last_half_day}）成交 {late_trades} 笔"
+                  f"（全程 {total_trades} 笔）"
+                  f" → {'✅ 还在转' if late_trades > 0 else '⚠️ **市场已停摆**（后半段零成交）'}")
             # 人均金币的**分布**（D-054 阶段 5）：合计稳 ≠ 钱分得匀。
             dist = [s for s in snaps if s.get("HeroGoldMedian") is not None]
             if dist:

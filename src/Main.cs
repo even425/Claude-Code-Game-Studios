@@ -695,7 +695,11 @@ public partial class Main : Node2D
         // 加成**每次现问**村庄（委托）⇒ 升级 / 读档后自动跟着变，不会变成过期值。
         _gather = new ClaudeCodeGameStudios.Application.GatherService(
             _stallService, _priceBook,
-            () => ClaudeCodeGameStudios.Domain.Village.GatheringPoints.BonusFor(_villageModel));
+            // ⚠️ **D-111 对照开关**：`--gatherbonus=0` 可以关掉采集点的加成
+            // ⇒ 用来分离「采集加成」这一个变量（见 `07` 的 D-111）。
+            () => _gatherBonusOff
+                ? 0L
+                : ClaudeCodeGameStudios.Domain.Village.GatheringPoints.BonusFor(_villageModel));
         // D-087：村庄收购站 —— 村庄按市价收购在村英雄的采集品，钱从村库回流到人。
         // 预算规则在服务里（村库余额 − 下一级村庄升级所需金币）⇒ 这里只给依赖。
         _purchase = new ClaudeCodeGameStudios.Application.VillagePurchaseService(

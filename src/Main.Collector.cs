@@ -60,6 +60,35 @@ public partial class Main : Node2D
                  $" · 金币报酬 X = {_goldRewardUnits / 100.0:0.##} 金/参战者" +
                  $" · 价格表 = {_priceBookSource}（{_priceBook.Describe()}）" +
                  $" · 流水路径 = {_economyLog?.FilePath ?? "（无）"}");
+
+        // ⚠️ **D-111 的两个对照开关**（只用于归因实验，正常采集一律开着）：
+        //   `--collectbuild=0`  采集器**不盖房子**（D-108 的改动）
+        //   `--gatherbonus=0`  关掉**采集点的加成**（D-105 / D-107 的改动）
+        // ⇒ 用来回答「市场的停摆是哪个改动带来的」。
+        _collectBuildOff = HasZeroFlag("--collectbuild=");
+        _gatherBonusOff = HasZeroFlag("--gatherbonus=");
+        if (_collectBuildOff || _gatherBonusOff)
+        {
+            GD.Print($"COLLECT 对照实验：盖房={(_collectBuildOff ? "关" : "开")}" +
+                     $" · 采集加成={(_gatherBonusOff ? "关" : "开")}（D-111 归因用）");
+        }
+    }
+
+    /// <summary>
+    /// 命令行里有没有「某个开关 = 0」的参数（对照实验用）。
+    /// </summary>
+    /// <param name="prefix">参数前缀（如 <c>--collectbuild=</c>）。</param>
+    /// <returns>值为 0（或 0.0）时为 true。</returns>
+    private static bool HasZeroFlag(string prefix)
+    {
+        var arg = OS.GetCmdlineUserArgs()
+            .FirstOrDefault(a => a.StartsWith(prefix, StringComparison.Ordinal));
+        if (arg is null) return false;
+
+        string raw = arg.Substring(prefix.Length);
+        return double.TryParse(raw, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out double v)
+            && Math.Abs(v) < 1e-9;
     }
 
     /// <summary>
@@ -109,9 +138,15 @@ public partial class Main : Node2D
     ///
     /// <para>⚠️ <b>落点用的是玩家那把尺子</b>（<c>CanPlaceAt</c>）⇒
     /// 「测到的」就是「玩到的」。</para>
+    ///
+    /// <para>⚠️ <b>D-111 的对照开关</b>：<c>--collectbuild=0</c> 让采集器<b>不盖房子</b>
+    /// ⇒ 用来分离「盖房」与「采集加成」这两个变量（见 <c>07</c> 的 D-111）。</para>
     /// </remarks>
     private void BuildForCollection()
     {
+        // ⚠️ **D-111 对照开关**：关掉时这一段整段跳过（只用于对照实验）。
+        if (_collectBuildOff) return;
+
         // ⚠️ **一次只盖一样**（D-074）：村庄升级在施工时，独立建筑拿不到人（停工）。
         if (_buildTarget >= 0) return;
         if (_buildingService.ActiveConstructions.Count > 0) return;

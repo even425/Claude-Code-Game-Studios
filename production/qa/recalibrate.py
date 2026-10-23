@@ -141,6 +141,8 @@ def analyze(log: Path) -> dict:
             res["health"] = line.split(":", 1)[1].strip() if ":" in line else line
         elif "②村庄花得出去" in line:
             res["unspent"] = line.split(":", 1)[1].strip() if ":" in line else line
+        elif "③市场还在转" in line:
+            res["market"] = line.split(":", 1)[1].strip() if ":" in line else line
         elif "金币分布(末次)" in line:
             res["dist"] = line.split(":", 1)[1].strip() if ":" in line else line
         elif line.strip().startswith("成交 "):
@@ -195,11 +197,14 @@ def main() -> int:
     for x, seed, info in rows:
         print(f"X={x:<6} seed={seed:<6} {info.get('health', '?')}")
         print(f"        {info.get('unspent', '?')}")
+        print(f"        {info.get('market', '?')}")
         print(f"        {info.get('dist', '?')}")
         print(f"        {info.get('trades', '?')} | {info.get('conserve', '?')}")
     print()
-    print("**判据（D-109 拍板）**：① **分布健康**（最富的人 ≤ 人均的 4 倍）"
-          "＋② **村庄花得出去**（可花未花的钱不一路囤）。")
+    print("**判据（D-109 拍板 + D-111 补第三条）**：")
+    print("① **分布健康**（最富的人 ≤ 人均的 4 倍）")
+    print("＋② **村庄花得出去**（可花未花的钱不一路囤）")
+    print("＋③ **市场还在转**（后半段仍有成交 —— D-111：没有这一条，前两条会绿得没有意义）")
     print("**「流通金增长率」只作观察，不再是判据** —— D-106 已证明 X 是弱旋钮"
           "（每 +0.01 X ≈ +0.2 金/天，而钱每天涨 3~11 金）。")
     return 0

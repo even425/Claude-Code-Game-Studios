@@ -117,9 +117,93 @@ public partial class Main : Node2D
         // ⚠️ **D-086**：开摊走**游戏的那一份**（`OpenStallsForIdleHeroes`），
         // 不再是采集器自己的一套 ⇒ 「测到的」就是「玩到的」。
         OpenStallsForIdleHeroes();
-        UpgradeVillageForCollection();
+        // ⚠️ **D-122：先盖店，再升级**（施工队是同一批人 ⇒ 一次只盖一样）。
+        // ⇒ 商店盖完后（或在施工时）本轮**不升级** ⇒ 升级等商店建成再说。
+        bool shopStarted = BuildShopsForCollection();
+        if (!shopStarted) UpgradeVillageForCollection();
         // ⚠️ **D-108**：采集器也要**盖房子**（钱得有出口）⇒ 真实玩家每天都在做这件事。
         RecordEconomySnapshot();
+    }
+
+    /// <summary>
+    /// 采集用盖店：<b>有余钱就盖一间武器店 / 服装店</b>（D-122，开发者拍板）。
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠️ <b>只盖商店，不盖别的</b>：D-112 的教训 —— 采集器盖房（围栏 / 试炼塔）
+    /// 曾把收购站的预算抽干 ⇒ 背包占满 ⇒ <b>市场在第 100 天停摆</b>。
+    /// ⇒ 这次候选表里<b>只有两间店</b>，且沿用 D-108 的老规矩：
+    /// <b>盖完还得买得起下一级村庄升级</b>（否则村庄永远升不上去）。</para>
+    ///
+    /// <para>⚠️ <b>工期与人力</b>：走的是<b>玩家那套建造流程</b>
+    /// （<c>BuildingService</c> ⇒ 进度由人力推进 ⇒ 与真实游戏一致）。</para>
+    /// </remarks>
+    private bool BuildShopsForCollection()
+    {
+        var candidates = new[]
+        {
+            ClaudeCodeGameStudios.Domain.Village.BuildableBuildings.WeaponShop,
+            ClaudeCodeGameStudios.Domain.Village.BuildableBuildings.ArmorShop,
+        };
+
+        // ⚠️ **已经有店在施工** ⇒ 本轮不发起新的（施工队是同一批人 ⇒ 一次只盖一样）。
+        foreach (var active in _buildingService.ActiveConstructions)
+        {
+            foreach (var c in candidates)
+            {
+                if (active.Definition.Id.Value == c.Id.Value) return true;
+            }
+        }
+
+        // ⚠️ **只挑「还没建成」的那间**（同一种建筑只能有一栋 ⇒ 已建成的不再考虑）。
+        var pending = new List<ClaudeCodeGameStudios.Domain.Village.BuildableBuilding>();
+        foreach (var c in candidates)
+        {
+            if (!_buildingService.IsCompleted(c.Id)) pending.Add(c);
+        }
+
+        // 两间都盖好了 ⇒ 本轮不盖 ⇒ **也让出升级的钱**（商店不再是唯一出口）。
+        if (pending.Count == 0) return true;
+
+        // 已经盖了几栋（同一种建筑只能有一栋 ⇒ 计数只可能是 0 或 1）。
+        var existing = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var c in candidates)
+        {
+            int count = 0;
+            foreach (var b in _villageModel.Buildings)
+            {
+                if (b.Id.Value == c.Id.Value) count++;
+            }
+            existing[c.Id.Value] = count;
+        }
+
+        // ⚠️ **留够升级的钱**：下一级村庄升级要多少（满级时是 0）。
+        long nextUpgradeGold = _tier < ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier
+            ? _upgradeService.CostFor(_tier).Gold
+            : 0L;
+
+        var plan = ClaudeCodeGameStudios.Application.CollectorBuildingPlan.Plan(
+            VillageGold,
+            nextUpgradeGold,
+            pending,
+            existing,
+            def => _buildingService.CanStart(def),
+            def => ClaudeCodeGameStudios.Application.BuildingSpotFinder.Find(
+                def, (x, y) => _buildingService.CanPlaceAt(def, x, y)),
+            // ⚠️ **D-122：商店不占升级的钱** —— 升级 5 级共 750 金，
+            // 而商店 100 金 ⇒ 若也必须留升级钱，它就**永远排不上**
+            // （实测：采集器一天都没盖成店 ⇒ 装备线在标定里从不发生）。
+            keepUpgradeReserve: false);
+
+        if (plan is null) return false;
+
+        // ⚠️ **人力由每帧的 `AssignWorkers` 分配** ⇒ 这里给 0（不占人）也照样会推进。
+        if (!_buildingService.TryStartAt(plan.Value.Definition, plan.Value.GridX, plan.Value.GridY, 0))
+        {
+            return false;
+        }
+
+        GD.Print($"COLLECT 盖店：{plan.Value.Definition.Name} @ ({plan.Value.GridX},{plan.Value.GridY})");
+        return true;
     }
 
     /// <summary>
@@ -154,14 +238,12 @@ public partial class Main : Node2D
         int n = _heroes.Count;
         int start = n > 0 ? (((int)_clock.Day * 2 + index * 2) % n + n) % n : 0;
 
-        var crew = new List<HeroAgent>();
-        for (int k = 0; k < n && crew.Count < 2; k++)
-        {
-            var h = _heroes[(start + k) % n];
-            if (h.Away || h.ToSite) continue;               // 不在场 / 在工地的不派
-            if (IsOnMission(_states[_heroes.IndexOf(h)])) continue;   // 已在别的任务里
-            crew.Add(h);
-        }
+        // ⚠️ **D-122：优先派有装备的人**（开发者拍板）⇒ 装备才是成长线，
+        // 而不只是「挂在身上的一件东西」。规则在 `CrewSelection`（应用层纯函数）。
+        var crew = ClaudeCodeGameStudios.Application.CrewSelection.Select(
+            _heroes, start, 2,
+            h => !h.Away && !h.ToSite && !IsOnMission(_states[_heroes.IndexOf(h)]))
+            .ToList();
 
         if (crew.Count == 0)
         {

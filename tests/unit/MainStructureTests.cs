@@ -131,6 +131,8 @@ public class MainStructureTests
         "Add", "PublishEvent", "Emit",
         // 存档：组装 / 读回 / 枚举解析
         "SelfTestSaves", "ParseStallStatus",
+        // D-122：采集器盖商店（接线：应用层计划 + 建造流程）
+        "BuildShopsForCollection",
         // 采集器的测量与打印（不是玩法推进）
         "RecordEconomySnapshot", "Percentile",
         "PublishShoppingResults", "RecordShoppingMissed", "PrintShoppingResults",

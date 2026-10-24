@@ -210,8 +210,10 @@ public static class BuildableBuildings
         AffectsAreaH: 0,
         Effect: BuildingEffect.WeaponShop)
     {
-        GridX = 2,
-        GridY = -3,
+        // ⚠️ **D-122：默认落点必须在市集的影响区里**（市集 (-5,-5)、11×11 ⇒ 覆盖 [-10,0]×[-10,0]）
+        // ⇒ 否则采集器（不选点，直接用默认落点）与玩家「不选点直接放」都会被落点规则拒。
+        GridX = 0,
+        GridY = -4,
     };
 
     /// <summary>
@@ -232,8 +234,9 @@ public static class BuildableBuildings
         AffectsAreaH: 0,
         Effect: BuildingEffect.ArmorShop)
     {
-        GridX = 4,
-        GridY = -3,
+        // ⚠️ **D-122：同武器店**（在市集影响区内，且不与围栏 (-3,-3) / 试炼塔 (-1,-3) 重叠）。
+        GridX = -2,
+        GridY = -5,
     };
 
     /// <summary>

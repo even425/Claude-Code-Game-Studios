@@ -80,6 +80,20 @@ public sealed class WorldEventTemplate
     /// <param name="participants">参与者（英雄标识）。</param>
     /// <returns>结算结果（可为空 ⇒ 这次事件没有后果）。</returns>
     public Func<WorldEventInstance, IReadOnlyList<string>, WorldEventOutcome>? Settle { get; init; }
+
+    /// <summary>
+    /// 这是不是一个<b>战斗型</b>事件（参与者真的打了一场）？<b>默认不是</b>。
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠️ <b>为什么要有它</b>（D-121）：战斗会让装备磨损
+    /// （耐久 -1，副本 / 试炼塔 / 狩猎 / 兽潮 / 盗匪**四处一致**）
+    /// ⇒ 但「参与了大事件」**不等于**「打了仗」——
+    /// 商队来访也带参与者，可他们**没打任何一场</b>。</para>
+    /// <para>⇒ 框架里<b>不写死</b>「兽潮」或「盗匪」（基线 §11.5 的硬要求），
+    /// 只让模板自己声明「我这是战斗型」⇒ 新增一个战斗事件时，
+    /// 照着写一行就够（磨损规则仍是同一处）。</para>
+    /// </remarks>
+    public bool IsCombat { get; init; }
 }
 
 /// <summary>一次大事件的<b>实例</b>（基线 §11.3）—— 「这一次是什么样的」。</summary>

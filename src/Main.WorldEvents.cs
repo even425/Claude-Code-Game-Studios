@@ -362,6 +362,20 @@ public partial class Main : Node2D
                 if (outcome is not null)
                 {
                     var template = _worldEvents.Template(moved.TemplateId);
+
+                    // ⚠️ **D-121：战斗型事件 ⇒ 参战者的装备磨损**（耐久 -1）。
+                    // ⚠️ **只看模板自己声明的「战斗型」** ⇒ 商队来访也带参与者，
+                    // 但他们**没打任何一场** ⇒ 不能磨损。
+                    if (template is not null && template.IsCombat)
+                    {
+                        int worn = ClaudeCodeGameStudios.Application.EquipmentWearDown
+                            .Apply(_heroes, moved.Participants);
+                        if (worn > 0)
+                        {
+                            GD.Print($"EQUIP 战斗磨损：{template.Name} · {worn} 人的装备耐久 -1");
+                        }
+                    }
+
                     var notes = applied.Count > 0
                         ? applied
                         : outcome.Consequences.Values.Select(c => c.Description).ToList();

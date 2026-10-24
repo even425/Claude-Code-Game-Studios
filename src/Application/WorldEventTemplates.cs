@@ -125,6 +125,8 @@ public static class WorldEventTemplates
             Id = BeastTideId,
             Name = "兽潮",
             PeriodDays = periodDays,
+            // ⚠️ **D-121：这是战斗型事件** ⇒ 参战者的装备会磨损（耐久 -1）。
+            IsCombat = true,
             Phases = new[]
             {
                 WorldEventPhase.Omen,          // 预兆：村民先看到远处的动静
@@ -273,6 +275,8 @@ public static class WorldEventTemplates
             Id = BanditRaidId,
             Name = "盗匪来袭",
             PeriodDays = periodDays,
+            // ⚠️ **D-121：这是战斗型事件** ⇒ 出击者的装备会磨损（耐久 -1）。
+            IsCombat = true,
             Phases = new[]
             {
                 WorldEventPhase.Omen,          // 预兆：有人报说路上有人

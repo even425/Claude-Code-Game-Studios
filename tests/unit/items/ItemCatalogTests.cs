@@ -104,7 +104,8 @@ public class ItemCatalogTests
             Assertions.AssertThat(prices.IsSellable(item.Id)).IsTrue();
         }
 
-        Assertions.AssertThat(catalog.Count).IsEqual(5);
+        // ⚠️ **D-119**：多了四件装备 ⇒ 九件。
+        Assertions.AssertThat(catalog.Count).IsEqual(9);
     }
 
     [TestCase]
@@ -112,7 +113,7 @@ public class ItemCatalogTests
     {
         var ids = ItemCatalog.Default.All.Select(d => d.Id.Value).ToArray();
 
-        // ⚠️ **D-118**：多了两样狩猎战利品（兽皮 / 兽肉）⇒ 五个。
-        Assertions.AssertThat(ids).IsEqual(new[] { "兽皮", "兽肉", "布匹", "木料", "石料" });
+        // ⚠️ **D-118**：多了两样狩猎战利品（兽皮 / 兽肉）；**D-119**：多了四件装备 ⇒ 九个。
+        Assertions.AssertThat(ids).IsEqual(new[] { "兽皮", "兽肉", "布匹", "木料", "猎弓", "皮甲", "石剑", "石料", "锁甲" });
     }
 }

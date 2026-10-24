@@ -1,4 +1,4 @@
-using GdUnit4;
+﻿using GdUnit4;
 using ClaudeCodeGameStudios.Application;
 using ClaudeCodeGameStudios.Domain.Combat;
 using ClaudeCodeGameStudios.Domain.Heroes;
@@ -92,7 +92,7 @@ public class TrialTowerDailyLimitTests
             new BuildingService(new ClaudeCodeGameStudios.Domain.Village.Village("v1"),
                 new ClaudeCodeGameStudios.Domain.Village.ResourceId("金币"),
                 new ClaudeCodeGameStudios.Domain.Village.ResourceId("材料")),
-            tower, id => hero);
+            tower, id => hero, ClaudeCodeGameStudios.Domain.Items.EquipmentCatalog.Default);
 
         coordinator.TryTrial(Alice, todayDay: 12);
 
@@ -110,7 +110,7 @@ public class TrialTowerDailyLimitTests
             new BuildingService(new ClaudeCodeGameStudios.Domain.Village.Village("v1"),
                 new ClaudeCodeGameStudios.Domain.Village.ResourceId("金币"),
                 new ClaudeCodeGameStudios.Domain.Village.ResourceId("材料")),
-            tower, id => hero);
+            tower, id => hero, ClaudeCodeGameStudios.Domain.Items.EquipmentCatalog.Default);
 
         coordinator.TryTrial(Alice, todayDay: 12);
         int bonusAfterFirst = hero.TrialTowerHealthBonus;
@@ -137,7 +137,7 @@ public class TrialTowerDailyLimitTests
             new BuildingService(new ClaudeCodeGameStudios.Domain.Village.Village("v1"),
                 new ClaudeCodeGameStudios.Domain.Village.ResourceId("金币"),
                 new ClaudeCodeGameStudios.Domain.Village.ResourceId("材料")),
-            tower, id => hero);
+            tower, id => hero, ClaudeCodeGameStudios.Domain.Items.EquipmentCatalog.Default);
 
         var outcome = coordinator.TryTrial(Alice, todayDay: 5);
 

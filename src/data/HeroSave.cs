@@ -135,6 +135,59 @@ public sealed class HeroSave
     /// <para><b>合法范围</b>：≥ 0（0 = 从未试过；负数只可能是存档被改坏）。</para>
     /// </remarks>
     public int LastTrialDay { get; set; }
+
+    // ── 装备（D-119，存档 0.12 新增）──
+
+    /// <summary>
+    /// 该英雄<b>穿着的武器</b>的物品 Id（空串 = 没穿武器）。<b>0.12 新增</b>（D-119）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>为什么必须入档</b>：基线 §15 明列「加载时要避免<b>装备丢失或重复</b>」
+    /// ⇒ 不存 ⇒ 读档后装备<b>凭空消失</b>，而游戏<b>不报任何错</b>
+    /// （这个人只是「忽然变弱了」）—— 与 D-104「永久加成不入档」同一族。</remarks>
+    public string EquippedWeaponId { get; set; } = "";
+
+    /// <summary>
+    /// 武器的当前耐久（0 = 坏了 ⇒ 加成不生效）。<b>0.12 新增</b>（D-119）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>合法范围</b>：0..该装备的耐久上限（超出 ⇒ 存档被改坏 ⇒ 整份拒绝）。</remarks>
+    public int WeaponDurability { get; set; }
+
+    /// <summary>
+    /// 该英雄<b>穿着的衣服</b>的物品 Id（空串 = 没穿衣服）。<b>0.12 新增</b>（D-119）。
+    /// </summary>
+    public string EquippedArmorId { get; set; } = "";
+
+    /// <summary>
+    /// 衣服的当前耐久（0 = 坏了 ⇒ 加成不生效）。<b>0.12 新增</b>（D-119）。
+    /// </summary>
+    public int ArmorDurability { get; set; }
+}
+
+/// <summary>
+/// 存档里的<b>一家商店的货架</b>（D-119，存档 0.12 新增）。
+/// </summary>
+/// <remarks>
+/// ⚠️ <b>为什么库存也要入档</b>：它是村庄的状态 ⇒ 不存 ⇒ 读档后货架空了
+/// ⇒ 玩家刚买到的装备「凭空买不到」⇒ 也是「装备丢失或重复」那一族。</remarks>
+public sealed class ShopStockSave
+{
+    /// <summary>店铺（建筑）标识。</summary>
+    public string ShopId { get; set; } = "";
+
+    /// <summary>货架上的东西（物品 Id + 数量）。</summary>
+    public List<ShopItemSave> Items { get; set; } = new();
+}
+
+/// <summary>货架上的一件东西（D-119）。</summary>
+public sealed record ShopItemSave
+{
+    /// <summary>物品 Id（必须是已登记的装备）。</summary>
+    public string ItemId { get; set; } = "";
+
+    /// <summary>数量（必须 ≥ 0）。</summary>
+    public long Count { get; set; }
 }
 
 /// <summary>

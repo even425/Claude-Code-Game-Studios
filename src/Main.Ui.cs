@@ -107,6 +107,9 @@ public partial class Main : Node2D
         _btnBuildTower = MakeButton("建试炼塔", left, OnBuildTower);
     // D-095：防护罩（专职防御建筑 ⇒ 兽潮规模 −1 级，与围栏可叠加）。
     _btnBuildShield = MakeButton("建防护罩", left, OnBuildShield);
+        // D-119：装备线（武器店 / 服装店 ⇒ 英雄自主买装备；铁匠铺负责修理）。
+        _btnBuildWeaponShop = MakeButton("建武器店", left, OnBuildWeaponShop);
+        _btnBuildArmorShop = MakeButton("建服装店", left, OnBuildArmorShop);
         _btnTrialTower = MakeButton("进试炼塔", left, OnTrialTower);
         _btnSummon = MakeButton("招募一个人", left, OnSummonPaid);
         _btnMarket = MakeButton("看摊位", left, OnMarket);
@@ -607,6 +610,12 @@ public partial class Main : Node2D
     /// <summary>建防护罩（D-095）。</summary>
     private void OnBuildShield() => OnBuild(BuildableBuildings.Shield);
 
+    /// <summary>建武器店（D-119：卖武器给英雄）。</summary>
+    private void OnBuildWeaponShop() => OnBuild(BuildableBuildings.WeaponShop);
+
+    /// <summary>建服装店（D-119：卖衣服给英雄）。</summary>
+    private void OnBuildArmorShop() => OnBuild(BuildableBuildings.ArmorShop);
+
     /// <summary>
     /// 在施工的几栋建筑 + 各自进度（顶栏那行用；没有在建时返回空串）。
     /// </summary>
@@ -826,6 +835,9 @@ public partial class Main : Node2D
         RefreshBuildButton(_btnBuildFence, BuildableBuildings.Fence);
         RefreshBuildButton(_btnBuildTower, BuildableBuildings.TrialTower);
         RefreshBuildButton(_btnBuildShield, BuildableBuildings.Shield);
+        // D-119：装备线的两间店（武器店 / 服装店）。
+        RefreshBuildButton(_btnBuildWeaponShop, BuildableBuildings.WeaponShop);
+        RefreshBuildButton(_btnBuildArmorShop, BuildableBuildings.ArmorShop);
 
         _btnTrialTower.Text = _buildingService.IsCompleted(BuildableBuildings.TrialTower.Id)
             ? "进试炼塔（打赢 +20 生命）"
@@ -893,6 +905,11 @@ public partial class Main : Node2D
     {
         string economy = EconomySummary.For(
             hero, ClaudeCodeGameStudios.Application.Stall.StallService.Gold);
+
+        // ⚠️ **D-119：身上穿的装备也显示出来**（武器/衣服 + 剩余耐久）。
+        // ⇒ 玩家看得见「他穿了什么」与「快坏了」⇒ 修理那条链才有意义。
+        string gear = GearSummary(hero);
+        if (!string.IsNullOrEmpty(gear)) economy = $"{economy}  {gear}";
 
         string note = ShoppingNoteFor(hero);
         return string.IsNullOrEmpty(note) ? economy : $"{economy}  {note}";

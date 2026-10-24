@@ -50,6 +50,18 @@ public static class TestPrices
     /// <summary>兽肉单价（夹具值，<b>不是</b>产品价；D-118 狩猎战利品）。</summary>
     public const long Meat = 3L;
 
+    /// <summary>石剑单价（夹具值，<b>不是</b>产品价；D-119 装备）。</summary>
+    public const long StoneSword = 30L;
+
+    /// <summary>猎弓单价（夹具值，<b>不是</b>产品价；D-119 装备）。</summary>
+    public const long Bow = 45L;
+
+    /// <summary>皮甲单价（夹具值，<b>不是</b>产品价；D-119 装备）。</summary>
+    public const long HideArmor = 25L;
+
+    /// <summary>锁甲单价（夹具值，<b>不是</b>产品价；D-119 装备）。</summary>
+    public const long ChainArmor = 40L;
+
     /// <summary>测试用的价格表（可售物品，各有一个明确的价格）。</summary>
     public static readonly PriceBook Book = new(new[]
     {
@@ -59,5 +71,10 @@ public static class TestPrices
         // ⚠️ **D-118**：狩猎的战利品也得能卖（否则「狩猎」在测试里根本没法卖东西）。
         new KeyValuePair<ItemId, long>(new ItemId("兽皮"), Hide),
         new KeyValuePair<ItemId, long>(new ItemId("兽肉"), Meat),
+        // ⚠️ **D-119**：装备也要登记（否则「发装备」那套入口会判成「不是可售物品」）。
+        new KeyValuePair<ItemId, long>(new ItemId("石剑"), StoneSword),
+        new KeyValuePair<ItemId, long>(new ItemId("猎弓"), Bow),
+        new KeyValuePair<ItemId, long>(new ItemId("皮甲"), HideArmor),
+        new KeyValuePair<ItemId, long>(new ItemId("锁甲"), ChainArmor),
     });
 }

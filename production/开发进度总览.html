@@ -129,18 +129,18 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 1089</div>
-      <div class="d">全绿 · 新增 287 条</div>
+      <div class="v">802 <em>→</em> 1117</div>
+      <div class="d">全绿 · 新增 315 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">169 <em>档</em></div>
+      <div class="v">175 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">56 <em>条</em></div>
-      <div class="d">D-057 … D-118</div>
+      <div class="v">57 <em>条</em></div>
+      <div class="d">D-057 … D-119</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -899,6 +899,33 @@
           <div class="cap">
             实机截图（D-118）：<b>暗绿的野外</b>里有野兽在游走；左栏的货架上已经出现了
             <b>兽皮</b>与<b>兽肉</b>（有人猎到了、摆摊卖、别人买走）⇒ 狩猎这条链真的闭合了。
+          </div>
+        </div>
+      </li>
+      <li>
+        <div class="when">下午</div>
+        <h3>装备线：武器店、服装店，还有会坏的装备</h3>
+        <p>你拍板：<b>武器店 + 服装店</b>、<b>英雄自己买</b>、<b>穿上生效但会磨损</b>、
+        <b>商店自己盖</b>、<b>补货吃村库的材料和钱、修理只花钱</b>。</p>
+        <p>⇒ <b>「会磨损」这条把铁匠铺救活了</b>：它此前只有「采集 +1」，
+        现在第二个用途是<b>修理</b>（它的第二个效果 ⇒ 一栋建筑要两种效果 ⇒ 层级建筑加了一个效果字段）。<br>
+        ⇒ 仓库里原本只有「村民摊位」与「商队」两种交易，<b>没有村庄自己的商店</b>
+        ⇒ 新建了一条 <b>村 → 英雄</b>的链：每天每家店补 1 件（村库 1 份材料 + 5 金），
+        英雄自己看「缺武器 / 缺衣服 / 装备坏了」⇒ 钱不够就不买。<br>
+        ⇒ ⚠️ 补货那 5 金<b>记进「村庄资产」</b>（钱变成了货架上的货）
+        ⇒ 守恒律不破；买卖的钱<b>进村库</b>（村与英雄之间搬钱）。</p>
+        <p>⇒ <b>坏掉的装备没有加成</b>（不是减半）⇒ 所以英雄会<b>先修再买</b>；
+        每打一场战斗磨损 1 点（副本 / 试炼塔 / 狩猎）。
+        ⇒ ⚠️ 顺手修掉一个真缺陷：<b>战斗属性此前有两处重复判定</b>
+        （副本与试炼塔各抄一份）⇒ 装备再加一条就是第三处 ⇒ 症状是「数字对不上却不报错」
+        ⇒ 收敛成<b>一个纯函数</b>。</p>
+        <p>⇒ 存档升 <b>0.12</b>：装备、耐久、货架都入档 ⇒ 不存的话读一次档装备就凭空消失。</p>
+        <div class="tags"><span class="tag">D-119</span><span class="tag">变异 6/6</span><span class="tag">1117/1117</span><span class="tag">守卫 28 条</span><span class="tag">自检 --equip</span></div>
+        <div class="shot" style="margin-top:12px">
+          <img src="qa/evidence/d119-equipment.png" alt="实机画面：花名册里能看到英雄身上的装备与耐久，左栏有武器店与服装店按钮" />
+          <div class="cap">
+            实机截图（D-119）：花名册行尾能看到 <b>石剑(20/20)</b>、<b>皮甲(18/18)</b>
+            —— 穿什么、还剩多少耐久，一眼可见；左栏是 <b>武器店（已建成）/ 服装店（已建成）</b>。
           </div>
         </div>
       </li>

@@ -355,6 +355,12 @@ public partial class VillageView : Node2D
             case ClaudeCodeGameStudios.Presentation.BuildingVisual.Blacksmith:
                 DrawBlacksmithBuilding(x, y);
                 break;
+            case ClaudeCodeGameStudios.Presentation.BuildingVisual.WeaponShop:
+                DrawWeaponShopBuilding(x, y);
+                break;
+            case ClaudeCodeGameStudios.Presentation.BuildingVisual.ArmorShop:
+                DrawArmorShopBuilding(x, y);
+                break;
             default:
                 DrawGenericBuilding(x, y);
                 break;
@@ -487,9 +493,9 @@ public partial class VillageView : Node2D
         Box(x + 0.22f, y + 0.22f, 0.56f, 0.56f, 44f, StoneTop);
         // 屋顶（两坡）。
         var apex = P(x + 0.5f, y + 0.5f, 66f);
-        DrawPolygon(new[] { P(x + 0.05f, y + 0.05f, 44f), P(x + 0.95f, y + 0.95f, 44f), apex },
+        DrawPolygon(new[] { P(x + 0.05f, y + 0.05f, 44f), P(x + 0.95f, y + 0.05f, 44f), apex },   // 三点不能共线（原来两点同对角线 ⇒ 三角化失败 ⇒ Godot 每帧报 ERROR）
                     new[] { Roof, Roof, Roof });
-        DrawPolygon(new[] { P(x + 0.95f, y + 0.05f, 44f), P(x + 0.05f, y + 0.95f, 44f), apex },
+        DrawPolygon(new[] { P(x + 0.95f, y + 0.95f, 44f), P(x + 0.05f, y + 0.95f, 44f), apex },
                     new[] { Darken(Roof, 0.2f), Darken(Roof, 0.2f), Darken(Roof, 0.1f) });
         // 炉火：门口一团橙红的光（D-097：认得出比画得细更要紧）。
         var fire = P(x + 0.5f, y + 0.5f, 42f);
@@ -499,6 +505,63 @@ public partial class VillageView : Node2D
         var anvil = P(x + 0.5f, y + 0.5f, 16f);
         DrawCircle(anvil + new Vector2(0, -2), 7f, new Color(0.28f, 0.29f, 0.33f, 0.95f));
         DrawLine(P(x + 0.34f, y + 0.34f, 20f), P(x + 0.66f, y + 0.66f, 20f), WoodDark, 4);
+    }
+
+    /// <summary>
+    /// <b>武器店</b>（D-119）：一间挂着刀剑的木铺。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>要能一眼认出来</b>（D-097 的规矩）：木屋 + 门口一排<b>竖着的刀剑</b>
+    /// ⇒ 与服装店（挂着布袍）、铁匠铺（石屋 + 炉火）各不相同。
+    /// </remarks>
+    private void DrawWeaponShopBuilding(float x, float y)
+    {
+        // 木屋（比铁匠铺矮、比井高）。
+        Box(x + 0.14f, y + 0.14f, 0.72f, 0.72f, 38f, Wood);
+        Box(x + 0.24f, y + 0.24f, 0.52f, 0.52f, 42f, WoodDark);
+        // 屋顶（两坡，比铁匠铺尖一点）。
+        var apex = P(x + 0.5f, y + 0.5f, 64f);
+        DrawPolygon(new[] { P(x + 0.05f, y + 0.05f, 42f), P(x + 0.95f, y + 0.05f, 42f), apex },   // 三点不能共线（否则 Godot 报三角化失败）
+                    new[] { Roof, Roof, Roof });
+        DrawPolygon(new[] { P(x + 0.95f, y + 0.95f, 42f), P(x + 0.05f, y + 0.95f, 42f), apex },
+                    new[] { Darken(Roof, 0.2f), Darken(Roof, 0.2f), Darken(Roof, 0.1f) });
+        // 门口的刀架：两根竖着的刀身（银灰）+ 一道横杆。
+        for (int i = 0; i < 3; i++)
+        {
+            float sx = x + 0.28f + i * 0.22f;
+            DrawLine(P(sx, y + 0.86f, 14f), P(sx, y + 0.86f, 40f), new Color(0.82f, 0.85f, 0.9f), 3);
+        }
+        DrawLine(P(x + 0.22f, y + 0.86f, 26f), P(x + 0.78f, y + 0.86f, 26f), WoodDark, 3);
+    }
+
+    /// <summary>
+    /// <b>服装店</b>（D-119）：一间挂着衣袍的铺子。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ 与武器店区分开：屋顶更平、门口挂的是<b>布袍</b>（几片垂下来的色块）。
+    /// </remarks>
+    private void DrawArmorShopBuilding(float x, float y)
+    {
+        // 布屋（浅木色）。
+        Box(x + 0.14f, y + 0.14f, 0.72f, 0.72f, 36f, new Color(0.78f, 0.68f, 0.52f));
+        Box(x + 0.24f, y + 0.24f, 0.52f, 0.52f, 40f, new Color(0.68f, 0.58f, 0.44f));
+        // 屋顶（比武器店平）。
+        var apex = P(x + 0.5f, y + 0.5f, 56f);
+        DrawPolygon(new[] { P(x + 0.05f, y + 0.05f, 40f), P(x + 0.95f, y + 0.05f, 40f), apex },   // 三点不能共线（否则 Godot 报三角化失败）
+                    new[] { Darken(Roof, 0.35f), Darken(Roof, 0.35f), Darken(Roof, 0.3f) });
+        DrawPolygon(new[] { P(x + 0.95f, y + 0.95f, 40f), P(x + 0.05f, y + 0.95f, 40f), apex },
+                    new[] { Darken(Roof, 0.4f), Darken(Roof, 0.4f), Darken(Roof, 0.32f) });
+        // 门口挂的两件布袍（垂下来的色块）。
+        // ⚠️ 三角形的三个点**不能共线**（否则 Godot 三角化失败 ⇒ 画面报 ERROR）。
+        DrawLine(P(x + 0.18f, y + 0.82f, 34f), P(x + 0.82f, y + 0.82f, 34f), WoodDark, 3);
+        DrawPolygon(new[] { P(x + 0.24f, y + 0.86f, 32f), P(x + 0.40f, y + 0.78f, 32f),
+                            P(x + 0.30f, y + 0.90f, 12f) },
+                    new[] { new Color(0.36f, 0.48f, 0.72f), new Color(0.36f, 0.48f, 0.72f),
+                            new Color(0.28f, 0.38f, 0.6f) });
+        DrawPolygon(new[] { P(x + 0.56f, y + 0.86f, 32f), P(x + 0.72f, y + 0.78f, 32f),
+                            P(x + 0.62f, y + 0.90f, 12f) },
+                    new[] { new Color(0.72f, 0.4f, 0.4f), new Color(0.72f, 0.4f, 0.4f),
+                            new Color(0.6f, 0.32f, 0.32f) });
     }
 
     /// <summary>

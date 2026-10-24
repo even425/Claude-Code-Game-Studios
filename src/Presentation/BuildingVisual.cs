@@ -39,12 +39,18 @@ public static class BuildingVisual
     /// <summary>铁匠铺（D-107：层级附带建筑）：一间带炉火的石屋。</summary>
     public const string Blacksmith = "blacksmith";
 
+    /// <summary>武器店（D-119）：一间挂着刀剑的铺子。</summary>
+    public const string WeaponShop = "weapon_shop";
+
+    /// <summary>服装店（D-119）：一间挂着衣袍的铺子。</summary>
+    public const string ArmorShop = "armor_shop";
+
     /// <summary>兜底：一块矮石台（**只在不认识时用** ⇒ 守卫会红）。</summary>
     public const string Generic = "generic";
 
     /// <summary>全部已知的画法。</summary>
     public static readonly IReadOnlyList<string> All =
-        new[] { Fence, TrialTower, Shield, Well, Blacksmith, Generic };
+        new[] { Fence, TrialTower, Shield, Well, Blacksmith, WeaponShop, ArmorShop, Generic };
 
     /// <summary>
     /// 这栋建筑该画成什么样。
@@ -61,6 +67,8 @@ public static class BuildingVisual
             BuildingEffect.Range => Fence,
             BuildingEffect.TrialTower => TrialTower,
             BuildingEffect.Shield => Shield,
+            BuildingEffect.WeaponShop => WeaponShop,
+            BuildingEffect.ArmorShop => ArmorShop,
             _ => Generic,
         };
 
@@ -94,5 +102,5 @@ public static class BuildingVisual
     /// <returns>认识为 true；落到兜底为 false。</returns>
     public static bool IsKnown(string shape)
         => shape == Fence || shape == TrialTower || shape == Shield || shape == Well
-           || shape == Blacksmith;
+           || shape == Blacksmith || shape == WeaponShop || shape == ArmorShop;
 }

@@ -91,6 +91,20 @@ public partial class HeroAgent
     /// </remarks>
     public int LastTrialDay { get; set; }
 
+    /// <summary>
+    /// 他<b>身上穿着什么</b>（D-119）—— 武器槽 + 衣服槽 + 各自的耐久。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>为什么在英雄个体上</b>：装备跟着人走（跟试炼塔加成同理）
+    /// ⇒ 换一身行头，属性就变。
+    /// <br>⚠️ <b>必须入档</b>（存档 0.12）：不存 ⇒ 读档后装备与耐久**凭空消失**
+    /// （基线 §15 明列「加载时要避免装备丢失或重复」）。
+    /// <br>⚠️ <b>为什么不在背包里</b>：装备一旦进背包就会出现「背包里那把剑到底穿没穿」
+    /// 的第二个真相 ⇒ 槽位是<b>唯一</b>的真相。</para>
+    /// </remarks>
+    public ClaudeCodeGameStudios.Domain.Items.EquippedGear Equipment { get; set; } =
+        ClaudeCodeGameStudios.Domain.Items.EquippedGear.Empty;
+
 
     // ---- 当下状态 -------------------------------------------------------
 

@@ -97,6 +97,30 @@ public enum BuildingEffect
     /// 而规则要能被一处判、几处读（D-097 的画法映射、D-098 的范围类判定都是这个道理）。
     /// </remarks>
     Gathering = 4,
+
+    /// <summary>
+    /// <b>武器店</b>：卖武器给英雄（D-119，开发者拍板「武器店 + 服装店」）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **玩家可建**（开发者拍板「花钱 + 材料自己盖」）⇒ 它在
+    /// <see cref="BuildableBuildings"/> 目录里，与围栏 / 试炼塔 / 防护罩同款。
+    /// </remarks>
+    WeaponShop = 5,
+
+    /// <summary>
+    /// <b>服装店</b>：卖衣服给英雄（D-119，开发者拍板「武器店 + 服装店」）。
+    /// </summary>
+    ArmorShop = 6,
+
+    /// <summary>
+    /// <b>修理</b>：把坏了的装备修好（D-119，开发者拍板「铁匠铺 = 修理」）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ 铁匠铺<b>已经</b>是采集点（D-107）⇒ 一栋建筑要同时有两种效果
+    /// ⇒ 层级附带建筑用<b>第二个效果字段</b>承载（<see cref="TierBuilding.SecondaryEffect"/>），
+    /// 可建建筑仍是一效果一栋。
+    /// </remarks>
+    Repair = 7,
 }
 
 /// <summary>
@@ -167,9 +191,62 @@ public static class BuildableBuildings
         AffectsAreaH: 9,
         Effect: BuildingEffect.Shield);
 
-    /// <summary>全部可建建筑。</summary>
+    /// <summary>
+    /// <b>武器店</b>（D-119，开发者拍板「玩家可建：花钱 + 材料自己盖」）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>数值是建议值</b>（允许调）：100 金 / 50 材料 / 10 工时。
+    /// ⚠️ 影响区 0×0：商店<b>不</b>扩大村子的地盘（它不是范围类建筑 ⇒ D-098 同款）。
+    /// </remarks>
+    public static readonly BuildableBuilding WeaponShop = new(
+        new BuildingId("weapon_shop"),
+        "武器店",
+        GoldCost: 100L,
+        MaterialCost: 50L,
+        BaseBuildHours: 10.0,
+        FootprintW: 1,
+        FootprintH: 1,
+        AffectsAreaW: 0,
+        AffectsAreaH: 0,
+        Effect: BuildingEffect.WeaponShop)
+    {
+        GridX = 2,
+        GridY = -3,
+    };
+
+    /// <summary>
+    /// <b>服装店</b>（D-119，开发者拍板「玩家可建」）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>数值是建议值</b>（允许调）：80 金 / 40 材料 / 8 工时。
+    /// </remarks>
+    public static readonly BuildableBuilding ArmorShop = new(
+        new BuildingId("armor_shop"),
+        "服装店",
+        GoldCost: 80L,
+        MaterialCost: 40L,
+        BaseBuildHours: 8.0,
+        FootprintW: 1,
+        FootprintH: 1,
+        AffectsAreaW: 0,
+        AffectsAreaH: 0,
+        Effect: BuildingEffect.ArmorShop)
+    {
+        GridX = 4,
+        GridY = -3,
+    };
+
+    /// <summary>
+    /// 全部可建建筑。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **必须声明在各个建筑之后**（D-119 踩过的坑）：
+    /// 静态字段按**声明顺序**初始化 ⇒ 若 <c>All</c> 写在 <c>WeaponShop</c> / <c>ArmorShop</c>
+    /// <b>前面</b>，它拿到的就是两个<b>还没初始化的空实例</b>（Id 为空）
+    /// ⇒ 目录里凭空多出两栋「没有名字的建筑」⇒ 守卫（每栋都要有画法）当场红。
+    /// </remarks>
     public static IReadOnlyList<BuildableBuilding> All { get; } =
-        new[] { Fence, TrialTower, Shield };
+        new[] { Fence, TrialTower, Shield, WeaponShop, ArmorShop };
 
     /// <summary>按标识查一栋可建建筑。</summary>
     /// <param name="id">建筑标识。</param>

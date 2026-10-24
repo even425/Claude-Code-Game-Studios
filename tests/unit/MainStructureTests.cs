@@ -88,6 +88,7 @@ public class MainStructureTests
         "RunBanditSelfTest",   // D-096：盗匪来袭真机自检
         "RunTierSelfTest",   // D-099：层级附带建筑真机自检
         "RunEventSelfTest",   // D-101：大事件真会结算吗
+        "RunEquipSelfTest",   // D-119：装备线真机自检
         "SelfTestEnsurePresentAndIdle",   // 自检夹具：把英雄摆成「在场且空闲」
     };
 
@@ -108,6 +109,10 @@ public class MainStructureTests
         "SocialPreferenceWeight",
         "OnRosterItemActivated", "OnSummon", "OnSummonPaid", "SummonHero", "OnTask", "OnUpgrade",
         "OnBuild", "OnBuildFence", "OnBuildTower", "OnBuildShield", "OnTrialTower", "RefreshBuildButton",
+        // D-119：装备线的两间店（玩家命令入口）。
+        "OnBuildWeaponShop", "OnBuildArmorShop",
+        // D-119：每日装备回合（补货 + 自主购买）与装备摘要（纯展示）。
+        "EquipmentRound", "GearSummary", "InitEquipmentServices",
         // D-113：试炼塔界面的实现（可断言的结果）—— 它是界面那条路的一部分。
         "RunTrialTower",
         // D-093：玩家自选落点（放置模式）

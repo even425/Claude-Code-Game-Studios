@@ -122,6 +122,12 @@ public sealed class PriceBook
         // ⇒ 它们**可卖** ⇒ 猎人能靠狩猎挣钱 ⇒ 「出村狩猎」这件事在经济上成立。
         new KeyValuePair<ItemId, long>(new ItemId("兽皮"), 4L),
         new KeyValuePair<ItemId, long>(new ItemId("兽肉"), 2L),
+        // ⚠️ **D-119：装备的售价**（建议值）
+        // ⇒ 英雄的钱会流向村庄（买装备 / 修理）⇒ 「钱有去处」这条老问题多了一个出口。
+        new KeyValuePair<ItemId, long>(new ItemId("石剑"), 30L),
+        new KeyValuePair<ItemId, long>(new ItemId("猎弓"), 45L),
+        new KeyValuePair<ItemId, long>(new ItemId("皮甲"), 25L),
+        new KeyValuePair<ItemId, long>(new ItemId("锁甲"), 40L),
     });
 
     /// <summary>

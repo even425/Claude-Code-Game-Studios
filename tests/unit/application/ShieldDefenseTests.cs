@@ -99,7 +99,8 @@ public class ShieldDefenseTests
         var shield = BuildableBuildings.Shield;
 
         Assertions.AssertThat(shield.Name).IsEqual("防护罩");
-        Assertions.AssertThat(BuildableBuildings.All.Count).IsEqual(3);
+        // ⚠️ **D-119**：多了武器店 / 服装店两栋 ⇒ 五栋。
+        Assertions.AssertThat(BuildableBuildings.All.Count).IsEqual(5);
         Assertions.AssertThat(BuildableBuildings.Find(shield.Id)).IsNotNull();
         Assertions.AssertThat(shield.Effect).IsEqual(BuildingEffect.Shield);
         // ⚠️ 成本与工时必须是**正数**（否则「建得起」永远是假的）。

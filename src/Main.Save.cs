@@ -70,10 +70,21 @@ public partial class Main : Node2D
             // 连「试炼塔给的永久加生命」都还在、塔却没了。
             // ⇒ 转换逻辑住在 `BuildingPersistence`（生产代码，守卫直接调它）。
             Buildings = ClaudeCodeGameStudios.Data.BuildingPersistence.Export(_villageModel),
+            // D-119（存档 0.12）：商店的货架库存。
+            // ⚠️ 不存它 ⇒ 读档后货架空了 ⇒ 玩家刚买到的装备「凭空买不到」。
+            Shops = ClaudeCodeGameStudios.Application.EquipmentPersistence.ExportStock(
+                _equipmentShops,
+                new[]
+                {
+                    ClaudeCodeGameStudios.Domain.Village.BuildableBuildings.WeaponShop.Id,
+                    ClaudeCodeGameStudios.Domain.Village.BuildableBuildings.ArmorShop.Id,
+                }),
         },
         Heroes = _states.Select(s =>
         {
             var h = AgentOf(s);
+            // D-119（存档 0.12）：身上穿的装备 + 各自的耐久（导出一次，别导四遍）。
+            var gear = ClaudeCodeGameStudios.Application.EquipmentPersistence.Export(h);
             return new ClaudeCodeGameStudios.Data.HeroSave
             {
                 Id = s.Definition.Id.Value,
@@ -102,6 +113,12 @@ public partial class Main : Node2D
                 // D-113：上次试炼的日号（「每天限一次」那条限制的凭据）⇒ 不存它，
                 // 读档后那条限制就白设了（读一次档就能多刷一次永久加成）。
                 LastTrialDay = h.LastTrialDay,
+                // D-119（存档 0.12）：身上穿的装备 + 各自的耐久。
+                // ⚠️ 不存它 ⇒ 读档后装备与耐久**凭空消失**（基线 §15「装备丢失或重复」）。
+                EquippedWeaponId = gear.Weapon,
+                WeaponDurability = gear.WeaponDurability,
+                EquippedArmorId = gear.Armor,
+                ArmorDurability = gear.ArmorDurability,
                 Origin = s.Definition.Origin,
                 TraitModifiers = new Dictionary<string, double>(s.Definition.TraitModifiers),
                 PreferenceWeights = new Dictionary<string, double>(s.Definition.PreferenceWeights),
@@ -268,6 +285,9 @@ public partial class Main : Node2D
             ClaudeCodeGameStudios.Application.TrialTowerBonusPersistence.Import(hs, agent);
             // D-113：恢复「上次试炼的日号」⇒ 读档后「每天限一次」照样成立。
             agent.LastTrialDay = hs.LastTrialDay;
+            // D-119（存档 0.12）：恢复身上的装备与耐久。
+            // ⚠️ 不恢复 ⇒ 读档后装备**凭空消失**（这个人只是「忽然变弱了」，还不报错）。
+            ClaudeCodeGameStudios.Application.EquipmentPersistence.Import(hs, agent);
             // D-054 阶段 4（存档 0.6）：恢复该英雄的**待发零头**。
             // 不恢复它 = 已挣到但还没发出去的钱凭空消失（与税额余数同一条理由）。
             _walletWriter.RestorePending(new ClaudeCodeGameStudios.Domain.Heroes.HeroId(hs.Id), hs.GoldCarry);
@@ -400,6 +420,11 @@ public partial class Main : Node2D
         {
             GD.Print($"LOAD 补记层级附带建筑「{b.Id.Value}」（第 {_tier} 级该有）。");
         }
+
+        // ── D-119：恢复商店的货架库存 ──
+        // ⚠️ 不恢复 ⇒ 读档后货架空了 ⇒ 玩家刚买到的装备「凭空买不到」。
+        ClaudeCodeGameStudios.Application.EquipmentPersistence.ImportStock(
+            save.Village.Shops, _equipmentShops);
 
         // 编成按**存档**恢复，不是「取前 N 个在场者」——
         // 后者是猜测，玩家挑好的搭配会被悄悄换掉，而且不报错。

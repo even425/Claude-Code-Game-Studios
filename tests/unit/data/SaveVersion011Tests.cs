@@ -50,10 +50,10 @@ public class SaveVersion011Tests
     };
 
     [TestCase]
-    public void Current_Is_0_11()
+    public void Current_Is_0_12_And_0_11_IsNowOld()
     {
         Assertions.AssertThat(SaveVersion.Current.Major).IsEqual(0);
-        Assertions.AssertThat(SaveVersion.Current.Minor).IsEqual(11);
+        Assertions.AssertThat(SaveVersion.Current.Minor).IsEqual(12);
     }
 
     /// <summary>
@@ -429,7 +429,7 @@ public class SaveVersion011Tests
     [TestCase]
     public void NewSave_0_7_WithoutEconomyData_Passes()
     {
-        var save = ValidSave(new SaveVersion(0, 11));
+        var save = ValidSave(SaveVersion.Current);
 
         var r = SaveValidator.Validate(save);
 
@@ -445,7 +445,7 @@ public class SaveVersion011Tests
     [TestCase]
     public void NewSave_0_7_WithStallAndPurchaseKeys_Passes()
     {
-        var save = ValidSave(new SaveVersion(0, 11));
+        var save = ValidSave(SaveVersion.Current);
         save.Heroes[0].LastShoppingDay = 2;
         save.DailyShoppingLastRunDay = 2;
         save.AppliedPurchaseKeys = new List<string> { "saverun-1" };
@@ -478,11 +478,11 @@ public class SaveVersion011Tests
     [TestCase]
     public void VillageCutRemainder_OutOfRange_IsRejected()
     {
-        var negative = ValidSave(new SaveVersion(0, 11));
+        var negative = ValidSave(SaveVersion.Current);
         negative.Village.VillageCutRemainder = -1;
         Assertions.AssertThat(SaveValidator.Validate(negative).IsValid).IsFalse();
 
-        var tooBig = ValidSave(new SaveVersion(0, 11));
+        var tooBig = ValidSave(SaveVersion.Current);
         tooBig.Village.VillageCutRemainder = 100;
         Assertions.AssertThat(SaveValidator.Validate(tooBig).IsValid).IsFalse();
     }
@@ -490,11 +490,11 @@ public class SaveVersion011Tests
     [TestCase]
     public void VillageCutRemainder_BoundaryValues_Pass()
     {
-        var zero = ValidSave(new SaveVersion(0, 11));
+        var zero = ValidSave(SaveVersion.Current);
         zero.Village.VillageCutRemainder = 0;
         Assertions.AssertThat(SaveValidator.Validate(zero).IsValid).IsTrue();
 
-        var max = ValidSave(new SaveVersion(0, 11));
+        var max = ValidSave(SaveVersion.Current);
         max.Village.VillageCutRemainder = 99;
         Assertions.AssertThat(SaveValidator.Validate(max).IsValid).IsTrue();
     }
@@ -511,11 +511,11 @@ public class SaveVersion011Tests
     [TestCase]
     public void HeroGoldCarry_OutOfRange_IsRejected()
     {
-        var negative = ValidSave(new SaveVersion(0, 11));
+        var negative = ValidSave(SaveVersion.Current);
         negative.Heroes[0].GoldCarry = -1;
         Assertions.AssertThat(SaveValidator.Validate(negative).IsValid).IsFalse();
 
-        var tooBig = ValidSave(new SaveVersion(0, 11));
+        var tooBig = ValidSave(SaveVersion.Current);
         tooBig.Heroes[0].GoldCarry = 100;
         Assertions.AssertThat(SaveValidator.Validate(tooBig).IsValid).IsFalse();
     }
@@ -523,11 +523,11 @@ public class SaveVersion011Tests
     [TestCase]
     public void HeroGoldCarry_BoundaryValues_Pass()
     {
-        var zero = ValidSave(new SaveVersion(0, 11));
+        var zero = ValidSave(SaveVersion.Current);
         zero.Heroes[0].GoldCarry = 0;
         Assertions.AssertThat(SaveValidator.Validate(zero).IsValid).IsTrue();
 
-        var max = ValidSave(new SaveVersion(0, 11));
+        var max = ValidSave(SaveVersion.Current);
         max.Heroes[0].GoldCarry = 99;
         Assertions.AssertThat(SaveValidator.Validate(max).IsValid).IsTrue();
     }
@@ -542,15 +542,15 @@ public class SaveVersion011Tests
     [TestCase]
     public void EconomyTotals_Negative_IsRejected()
     {
-        var granted = ValidSave(new SaveVersion(0, 11));
+        var granted = ValidSave(SaveVersion.Current);
         granted.GoldGrantedTotal = -1;
         Assertions.AssertThat(SaveValidator.Validate(granted).IsValid).IsFalse();
 
-        var spent = ValidSave(new SaveVersion(0, 11));
+        var spent = ValidSave(SaveVersion.Current);
         spent.GoldSpentTotal = -1;
         Assertions.AssertThat(SaveValidator.Validate(spent).IsValid).IsFalse();
 
-        var upgrades = ValidSave(new SaveVersion(0, 11));
+        var upgrades = ValidSave(SaveVersion.Current);
         upgrades.VillageUpgrades = -1;
         Assertions.AssertThat(SaveValidator.Validate(upgrades).IsValid).IsFalse();
     }
@@ -566,11 +566,11 @@ public class SaveVersion011Tests
     [TestCase]
     public void VillageUpgrades_OutOfRange_IsRejected()
     {
-        var negative = ValidSave(new SaveVersion(0, 11));
+        var negative = ValidSave(SaveVersion.Current);
         negative.VillageUpgrades = -1;
         Assertions.AssertThat(SaveValidator.Validate(negative).IsValid).IsFalse();
 
-        var tooBig = ValidSave(new SaveVersion(0, 11));
+        var tooBig = ValidSave(SaveVersion.Current);
         tooBig.VillageUpgrades = ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier + 1;
         Assertions.AssertThat(SaveValidator.Validate(tooBig).IsValid).IsFalse();
     }
@@ -578,11 +578,11 @@ public class SaveVersion011Tests
     [TestCase]
     public void VillageTier_OutOfRange_IsRejected()
     {
-        var negative = ValidSave(new SaveVersion(0, 11));
+        var negative = ValidSave(SaveVersion.Current);
         negative.VillageTier = -1;
         Assertions.AssertThat(SaveValidator.Validate(negative).IsValid).IsFalse();
 
-        var tooBig = ValidSave(new SaveVersion(0, 11));
+        var tooBig = ValidSave(SaveVersion.Current);
         tooBig.VillageTier = ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier + 1;
         Assertions.AssertThat(SaveValidator.Validate(tooBig).IsValid).IsFalse();
     }
@@ -590,11 +590,11 @@ public class SaveVersion011Tests
     [TestCase]
     public void VillageTier_BoundaryValues_Pass()
     {
-        var zero = ValidSave(new SaveVersion(0, 11));
+        var zero = ValidSave(SaveVersion.Current);
         zero.VillageTier = 0;
         Assertions.AssertThat(SaveValidator.Validate(zero).IsValid).IsTrue();
 
-        var max = ValidSave(new SaveVersion(0, 11));
+        var max = ValidSave(SaveVersion.Current);
         max.VillageTier = ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier;
         Assertions.AssertThat(SaveValidator.Validate(max).IsValid).IsTrue();
     }
@@ -650,7 +650,7 @@ public class SaveVersion011Tests
     [TestCase]
     public void WorldEvents_WithLegalInstance_Passes()
     {
-        var save = ValidSave(new SaveVersion(0, 11));
+        var save = ValidSave(SaveVersion.Current);
         save.WorldEvents = new List<WorldEventSave>
         {
             new()
@@ -672,7 +672,7 @@ public class SaveVersion011Tests
     [TestCase]
     public void WorldEvents_PhaseOutOfRange_IsRejected()
     {
-        var save = ValidSave(new SaveVersion(0, 11));
+        var save = ValidSave(SaveVersion.Current);
         save.WorldEvents = new List<WorldEventSave>
         {
             new() { Id = "inst-x", TemplateId = "beast-tide", Phase = 99 },
@@ -685,7 +685,7 @@ public class SaveVersion011Tests
     [TestCase]
     public void WorldEvents_DuplicateId_IsRejected()
     {
-        var save = ValidSave(new SaveVersion(0, 11));
+        var save = ValidSave(SaveVersion.Current);
         save.WorldEvents = new List<WorldEventSave>
         {
             new() { Id = "inst-x", TemplateId = "beast-tide", Phase = 1 },
@@ -699,7 +699,7 @@ public class SaveVersion011Tests
     [TestCase]
     public void WorldEvents_BrokenParticipantReference_IsRejected()
     {
-        var save = ValidSave(new SaveVersion(0, 11));
+        var save = ValidSave(SaveVersion.Current);
         save.WorldEvents = new List<WorldEventSave>
         {
             new()
@@ -716,7 +716,7 @@ public class SaveVersion011Tests
     [TestCase]
     public void WorldEvents_EmptyConsequenceKey_IsRejected()
     {
-        var save = ValidSave(new SaveVersion(0, 11));
+        var save = ValidSave(SaveVersion.Current);
         save.WorldEvents = new List<WorldEventSave>
         {
             new()
@@ -733,11 +733,11 @@ public class SaveVersion011Tests
     [TestCase]
     public void WorldEvents_EmptyIdOrTemplateId_IsRejected()
     {
-        var noId = ValidSave(new SaveVersion(0, 11));
+        var noId = ValidSave(SaveVersion.Current);
         noId.WorldEvents = new List<WorldEventSave> { new() { Id = "", TemplateId = "beast-tide" } };
         Assertions.AssertThat(SaveValidator.Validate(noId).IsValid).IsFalse();
 
-        var noTemplate = ValidSave(new SaveVersion(0, 11));
+        var noTemplate = ValidSave(SaveVersion.Current);
         noTemplate.WorldEvents = new List<WorldEventSave> { new() { Id = "inst-x", TemplateId = "" } };
         Assertions.AssertThat(SaveValidator.Validate(noTemplate).IsValid).IsFalse();
     }
@@ -760,7 +760,7 @@ public class SaveVersion011Tests
     [TestCase]
     public void WorldEventState_WithLegalState_Passes()
     {
-        var save = ValidSave(new SaveVersion(0, 11));
+        var save = ValidSave(SaveVersion.Current);
         save.WorldEvents = new List<WorldEventSave>
         {
             new()
@@ -777,7 +777,7 @@ public class SaveVersion011Tests
     [TestCase]
     public void WorldEventState_Null_IsRejected()
     {
-        var save = ValidSave(new SaveVersion(0, 11));
+        var save = ValidSave(SaveVersion.Current);
         save.WorldEvents = new List<WorldEventSave>
         {
             new() { Id = "inst-x", TemplateId = "caravan", Phase = 3, State = null! },
@@ -795,7 +795,7 @@ public class SaveVersion011Tests
     [TestCase]
     public void WorldEventState_EmptyKeyOrValue_IsRejected()
     {
-        var emptyKey = ValidSave(new SaveVersion(0, 11));
+        var emptyKey = ValidSave(SaveVersion.Current);
         emptyKey.WorldEvents = new List<WorldEventSave>
         {
             new()
@@ -806,7 +806,7 @@ public class SaveVersion011Tests
         };
         Assertions.AssertThat(SaveValidator.Validate(emptyKey).IsValid).IsFalse();
 
-        var emptyValue = ValidSave(new SaveVersion(0, 11));
+        var emptyValue = ValidSave(SaveVersion.Current);
         emptyValue.WorldEvents = new List<WorldEventSave>
         {
             new()

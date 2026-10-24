@@ -107,6 +107,13 @@ public partial class Main : Node2D
         var hero = _heroes.FirstOrDefault(h => h.Id.Value == actorId);
         string name = hero?.Name ?? actorId;
 
+        // ⚠️ **D-119：打过的仗会让装备磨损**（-1 点耐久；打输也扣）。
+        // ⚠️ 只在**真的打了一场**时扣（野外没野兽 ⇒ 白跑一趟 ⇒ 没打过 ⇒ 不扣）。
+        if (hero is not null)
+        {
+            hero.Equipment = ClaudeCodeGameStudios.Application.EquipmentService.WearDown(hero.Equipment);
+        }
+
         if (!outcome.Won)
         {
             GD.Print($"HUNT {name} 没能拿下 {outcome.Beast.Kind}（空手而归）。");

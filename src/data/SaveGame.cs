@@ -95,8 +95,25 @@ public readonly record struct SaveVersion(int Major, int Minor)
     /// <b>村庄层级本来就不入档</b>（既有缺陷）：读档后村庄回到 0 级，
     /// 而升级花掉的金币已经记下了 → <b>账实不符</b>。这次一并补上。
     /// </para>
+    /// <para>
+    /// <b>0,11 → 0,12</b>（`07` **D-119** 拍板）：存档里增
+    /// <list type="bullet">
+    /// <item><see cref="HeroSave.EquippedWeaponId"/> / <see cref="HeroSave.WeaponDurability"/>
+    /// / <see cref="HeroSave.EquippedArmorId"/> / <see cref="HeroSave.ArmorDurability"/>
+    /// （每人身上穿的装备 + 耐久）</item>
+    /// <item><see cref="VillageSave.Shops"/>（商店的货架库存）</item>
+    /// </list>
+    /// <para>
+    /// <b>为什么必须存</b>：基线 §15 明列「加载时要避免<b>装备丢失或重复</b>」
+    /// ⇒ 不存 ⇒ 读档后装备与耐久**凭空消失**，而游戏**不报任何错**
+    /// （这个人只是「忽然变弱了」）—— 与 D-104「永久加成不入档」是**同一族**的缺陷。
+    /// 库存同理：不存 ⇒ 读档后货架空了 ⇒ 刚买到的装备「凭空买不到」。
+    /// </para>
+    /// <para>
+    /// 旧档<b>整份拒绝</b>（I11 + D-021/D-029/D-036 先例），<b>不</b>写迁移器。
+    /// </para>
     /// </remarks>
-    public static SaveVersion Current => new(0, 11);
+    public static SaveVersion Current => new(0, 12);
 
     /// <inheritdoc />
     public override string ToString() => $"{Major}.{Minor}";
@@ -245,6 +262,14 @@ public sealed class VillageSave
 
     /// <summary>建筑列表。</summary>
     public List<BuildingSave> Buildings { get; set; } = new();
+
+    /// <summary>
+    /// 商店的货架库存（每家店一条）。<b>0.12 新增</b>（D-119）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>为什么库存也要入档</b>：它是村庄的状态 ⇒ 不存 ⇒ 读档后货架空了
+    /// ⇒ 玩家刚买到的装备「凭空买不到」（基线 §15「装备丢失或重复」那一族）。</remarks>
+    public List<ShopStockSave> Shops { get; set; } = new();
 }
 
 /// <summary>存档里的一个建筑。</summary>
@@ -533,7 +558,7 @@ public sealed class WorldEventSave
 /// <b>唯一职责：判定这份存档能不能加载。</b>它不负责恢复状态，
 /// 恢复是加载器的事；而加载器<b>只有在校验通过之后才被调用</b>。
 /// </remarks>
-public static class SaveValidator
+public static partial class SaveValidator
 {
     /// <summary>
     /// 校验一份存档。
@@ -735,6 +760,15 @@ public static class SaveValidator
                     $"{path}.lastTrialDay",
                     $"上次试炼的日号 {h.LastTrialDay} 为负（0 = 从未试过）。"));
             }
+
+            // ── 装备（0.12 新增，D-119）──
+            // ⚠️ **规则在 `SaveGameEquipment.cs`**（该文件已顶到行数上限 ⇒ 拆出去）；
+            // 这里只负责**调用**：四条规则各有各的报错路径
+            // （未登记 / 槽位不对 / 耐久越界 / 没穿却有耐久）。
+            ValidateEquipment(errors, path, h.EquippedWeaponId, h.WeaponDurability,
+                ClaudeCodeGameStudios.Domain.Items.EquipmentSlot.Weapon, "equippedWeaponId", "weaponDurability");
+            ValidateEquipment(errors, path, h.EquippedArmorId, h.ArmorDurability,
+                ClaudeCodeGameStudios.Domain.Items.EquipmentSlot.Armor, "equippedArmorId", "armorDurability");
 
             // 随队的人不应同时挂着日常行动（SetOnMission 会释放行动）。
             if (h.Presence == "OnMission" && !string.IsNullOrEmpty(h.CurrentActivity))
@@ -1032,6 +1066,9 @@ public static class SaveValidator
                 errors.Add(new SaveError($"{path}.affectsArea", "建筑影响区半径为负。"));
             }
         }
+
+        // 商店货架（0.12 新增 · D-119）：规则在 `SaveGameEquipment.cs`（拆出去）。
+        ValidateShopStock(errors, save.Village.Shops);
 
         // 0.6 新增（D-054 阶段 4）：累计发放 / 累计销毁 / 村庄层级
         if (save.GoldGrantedTotal < 0)

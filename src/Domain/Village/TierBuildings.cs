@@ -47,7 +47,20 @@ public readonly record struct TierBuilding(
     int FootprintH,
     int AffectsAreaW,
     int AffectsAreaH,
-    BuildingEffect Effect);
+    BuildingEffect Effect)
+{
+    /// <summary>
+    /// <b>第二个效果</b>（D-119）—— 默认无。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>为什么需要它</b>：<see cref="BuildingEffect"/> 是<b>单值</b>枚举
+    /// ⇒ 一栋建筑只能有一种效果；而<b>铁匠铺</b>已经占了「采集点」（D-107），
+    /// D-119 又给它加了「修理」⇒ 需要第二个位置。
+    /// <br>⇒ 层级附带建筑用这个字段承载第二效果，<b>可建建筑仍是一效果一栋</b>
+    /// （它们是两张表，混在一起就会出现「一个效果两个来源」的自相矛盾）。</remarks>
+    /// </remarks>
+    public BuildingEffect SecondaryEffect { get; init; } = BuildingEffect.None;
+}
 
 /// <summary>
 /// <b>层级附带建筑</b>的目录（D-099）。
@@ -114,7 +127,12 @@ public static class TierBuildings
         AffectsAreaW: 0,
         AffectsAreaH: 0,
         // D-107：开发者拍板「采集 +1」⇒ 它也是一个采集点（与井叠加）。
-        Effect: BuildingEffect.Gathering);
+        Effect: BuildingEffect.Gathering)
+    {
+        // ⚠️ **D-119：开发者拍板「耐久损耗 ⇒ 要有人修」⇒ 铁匠铺 = 修理工坊**
+        // （它的第二个效果；第一个效果仍是采集点 ⇒ 两者叠加，各管各的）。
+        SecondaryEffect = BuildingEffect.Repair,
+    };
 
     /// <summary>全部层级附带建筑。</summary>
     public static IReadOnlyList<TierBuilding> All { get; } = new[] { Well, Blacksmith };

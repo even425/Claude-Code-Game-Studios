@@ -409,13 +409,12 @@ public partial class Main : Node2D
     /// <returns>战斗属性（攻 / 防 / 命）。</returns>
     private static ClaudeCodeGameStudios.Domain.Combat.CombatStats CombatStatsFor(HeroAgent agent)
     {
-        var baseStats = ClaudeCodeGameStudios.Domain.Combat.CombatParameters.ForHero(
-            agent.Personality, agent.Diligence);
-
-        int bonus = agent.TrialTowerHealthBonus;
-        if (bonus == 0) return baseStats;
-
-        return baseStats with { Health = baseStats.Health + bonus };
+        // ⚠️ **D-119：属性只有一处算法**（`HeroCombatStats.For`）。
+        // 原来这里与 `BuildingCoordinator.TryTrial` 各抄了一遍
+        // 「性格 × 投入度 + 试炼塔加成」⇒ 装备线再加一条就会变成第三处，
+        // 而三处不同步的症状是「数字对不上、却不报错」。
+        return ClaudeCodeGameStudios.Application.HeroCombatStats.For(
+            agent, ClaudeCodeGameStudios.Domain.Items.EquipmentCatalog.Default);
     }
 
     /// <summary>
@@ -607,6 +606,14 @@ public partial class Main : Node2D
         if (granted && outcome.Succeeded)
         {
             foreach (var h in crew) h.DoneCount++;
+
+            // ⚠️ **D-119：打过的仗会让装备磨损**（每人 -1 点耐久）。
+            // ⇒ 「打输」也扣（它同样是一场仗）⇒ 扣在**结算之外**，
+            // 因为结算可能被拒（那局等于没打成，不该磨损）。
+            foreach (var h in crew)
+            {
+                h.Equipment = ClaudeCodeGameStudios.Application.EquipmentService.WearDown(h.Equipment);
+            }
 
             // 运行闭环验证与经济数据采集准备：把「这次副本产出了什么、分给了谁」
             // 记成一条**可落盘**的事件。

@@ -78,6 +78,13 @@ public sealed class ItemCatalog
         // ⚠️ **D-118：狩猎的战利品**（与 `PriceBook.Default` 一一对应）
         new ItemDefinition(new ItemId("兽皮"), "兽皮", ItemRarity.Common),
         new ItemDefinition(new ItemId("兽肉"), "兽肉", ItemRarity.Common),
+        // ⚠️ **D-119：装备**（武器店 / 服装店卖的东西）
+        // ⇒ 它们也要登记进物品表（发奖 / 摆摊那套按物品走）
+        // ⇒ 但「能不能穿、加什么、耐久多少」在 `EquipmentCatalog` 里（不塞进这张表）。
+        new ItemDefinition(new ItemId("石剑"), "石剑", ItemRarity.Common),
+        new ItemDefinition(new ItemId("猎弓"), "猎弓", ItemRarity.Uncommon),
+        new ItemDefinition(new ItemId("皮甲"), "皮甲", ItemRarity.Common),
+        new ItemDefinition(new ItemId("锁甲"), "锁甲", ItemRarity.Uncommon),
     });
 
     /// <summary>全部定义（按 Id 排序，稳定顺序便于比对）。</summary>

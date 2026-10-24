@@ -449,33 +449,6 @@ public partial class Main : Node2D
         return n;
     }
 
-    /// <summary>
-    /// 解析命令行 <c>--goldreward=X</c>（X 可为分数，单位金）。
-    /// </summary>
-    /// <returns>报酬率（单位 1/100 金）；参数非法时返回 <c>null</c>。</returns>
-    /// <remarks>
-    /// ⚠️ **参数非法必须明确报错并中止采集** —— 静默取整会产出
-    /// 「看着像 X=1 其实不是」的样本，那比没有数据更坏（2026-10-21 实测踩过：
-    /// <c>--goldreward=0.5</c> 被 <c>long</c> 解析静默丢弃，两轮采集都跑的 X=1）。
-    /// </remarks>
-    private static long? ParseGoldRewardUnits()
-    {
-        var arg = OS.GetCmdlineUserArgs()
-            .FirstOrDefault(a => a.StartsWith("--goldreward=", StringComparison.Ordinal));
-        if (arg is null) return DefaultGoldRewardUnits;
-
-        var raw = arg.Substring("--goldreward=".Length);
-        if (!decimal.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
-            || value < 0m || value > 1000m)
-        {
-            GD.Print($"GOLDREWARD 参数无效：「{raw}」。"
-                     + "X 必须是 0 ~ 1000 之间的非负数（金），且**可以是分数**（如 0.5）。"
-                     + "本次采集中止 —— 不产出数据，免得留下「看着像另一个 X」的误导样本。");
-            return null;
-        }
-
-        return (long)Math.Round(value * 100m, MidpointRounding.AwayFromZero);
-    }
 
     /// <summary>
     /// 村金库余额（M3 起由摆摊抽成建立）。<b>只读</b> —— 唯一写者是
@@ -691,7 +664,11 @@ public partial class Main : Node2D
             () => _heroes);
         _trialTower = new ClaudeCodeGameStudios.Application.TrialTowerService(_combat, _combat);
         _buildingCoordinator = new ClaudeCodeGameStudios.Application.BuildingCoordinator(
-            _buildingService, _trialTower, id => _heroes.FirstOrDefault(h => h.Id.Value == id.Value));
+            _buildingService, _trialTower, id => _heroes.FirstOrDefault(h => h.Id.Value == id.Value),
+            ClaudeCodeGameStudios.Domain.Items.EquipmentCatalog.Default);
+
+        // D-119：装备商店（补货 / 库存 / 买卖）+ 英雄的自主装备行为（构造在 `Main.Equipment.cs`）。
+        InitEquipmentServices();
 
         // D-077：召唤要花 100 金（从村金库扣）。
         _summonService = new ClaudeCodeGameStudios.Application.SummonService(
@@ -821,6 +798,9 @@ public partial class Main : Node2D
             //     钱从村库出（预算 = 村库余额 − 下一级村庄升级所需金币）。
             VillagePurchaseRound();
 
+            // 4c-0b. 装备（D-119）：补货 + 自主购买 / 修理（**必须在摆摊之前**）。
+            EquipmentRound();
+
             // 4c-0. 放置模式的预览跟随鼠标（D-093）。
             //     ⚠️ **已建建筑的标记不在这里更新** —— 那要**每帧**更新
             //     （建筑是玩家当场放下的 ⇒ 只在日切更新就晚了一整天）。
@@ -917,6 +897,7 @@ public partial class Main : Node2D
         if (OS.GetCmdlineUserArgs().Contains("--caravan") && !_caravanTestDone) RunCaravanSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--bandit") && !_banditTestDone) RunBanditSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--tier") && !_tierTestDone) RunTierSelfTest();
+        if (OS.GetCmdlineUserArgs().Contains("--equip") && !_equipTestDone) RunEquipSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--event") && !_eventTestDone) RunEventSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--shop") && !_shopTestDone) RunShoppingSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a is "--save" or "--load") && !_saveTestDone)

@@ -21,19 +21,23 @@ public sealed class BuildingCoordinator
     private readonly BuildingService _buildings;
     private readonly TrialTowerService _trialTower;
     private readonly Func<HeroId, HeroAgent?> _heroLookup;
+    private readonly ClaudeCodeGameStudios.Domain.Items.EquipmentCatalog _equipment;
 
     /// <param name="buildings">建造流程。</param>
     /// <param name="trialTower">试炼塔挑战。</param>
     /// <param name="heroLookup">按标识找英雄（试炼塔要知道「这个人现在什么属性」）。</param>
+    /// <param name="equipment">装备注册表（D-119：属性要算上身上的装备）。</param>
     /// <exception cref="ArgumentNullException">任一参数为 null。</exception>
     public BuildingCoordinator(
         BuildingService buildings,
         TrialTowerService trialTower,
-        Func<HeroId, HeroAgent?> heroLookup)
+        Func<HeroId, HeroAgent?> heroLookup,
+        ClaudeCodeGameStudios.Domain.Items.EquipmentCatalog equipment)
     {
         _buildings = buildings ?? throw new ArgumentNullException(nameof(buildings));
         _trialTower = trialTower ?? throw new ArgumentNullException(nameof(trialTower));
         _heroLookup = heroLookup ?? throw new ArgumentNullException(nameof(heroLookup));
+        _equipment = equipment ?? throw new ArgumentNullException(nameof(equipment));
     }
 
     /// <summary>开工一栋建筑。</summary>
@@ -66,13 +70,11 @@ public sealed class BuildingCoordinator
         var agent = _heroLookup(heroId);
         if (agent is null) return null;
 
-        var stats = ClaudeCodeGameStudios.Domain.Combat.CombatParameters.ForHero(
-            agent.Personality, agent.Diligence);
-
-        // ⚠️ **已得的加成要算进去**（D-074：永久）——
-        // 否则第二次进塔时，战斗看到的属性是「没加成的」⇒ 加成看起来没生效。
-        int bonus = agent.TrialTowerHealthBonus;
-        if (bonus != 0) stats = stats with { Health = stats.Health + bonus };
+        // ⚠️ **D-119：属性只有一处算法**（`HeroCombatStats.For`）——
+        // 基础属性 + 试炼塔的永久生命加成 + 身上的装备。
+        // ⚠️ 原来这里是**手抄的第二份**（与 `Main.Expedition.CombatStatsFor` 各一份）
+        // ⇒ 装备线再加一条就会变成第三处 ⇒ 症状是「数字对不上、却不报错」。
+        var stats = HeroCombatStats.For(agent, _equipment);
 
         // ⚠️ `Try` **从不失败**（它要失败会抛）⇒ 这里拿到的一定是有效结果。
         var outcome = _trialTower.Try(heroId, agent.Name, stats, todayDay, agent.LastTrialDay);
@@ -82,6 +84,9 @@ public sealed class BuildingCoordinator
         {
             return outcome;
         }
+
+        // ⚠️ **D-119：打过的仗会让装备磨损**（-1 点耐久；打输也扣）。
+        agent.Equipment = EquipmentService.WearDown(agent.Equipment);
 
         if (outcome.Won)
         {

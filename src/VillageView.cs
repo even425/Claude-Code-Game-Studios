@@ -208,6 +208,18 @@ public partial class VillageView : Node2D
     }
 
     /// <summary>
+    /// 当前模拟时刻（秒）—— 野兽「走到一半」的位置要用它算（D-120）。
+    /// </summary>
+    private double _simTime;
+
+    /// <summary>喂入当前模拟时刻（每帧；表现层只负责「照着画」）。</summary>
+    /// <param name="simTime">模拟时刻（秒）。</param>
+    public void SetSimulationTime(double simTime)
+    {
+        _simTime = simTime;
+    }
+
+    /// <summary>
     /// 把本节点的局部坐标换回格位（D-093）。
     /// </summary>
     /// <param name="local">本节点局部坐标。</param>
@@ -582,9 +594,11 @@ public partial class VillageView : Node2D
         };
 
         // 走路的起伏（相位 0..1 ⇒ 一个来回）。
-        float bob = (float)Math.Sin(beast.Phase * MathF.PI * 2f) * 2.5f;
-        float x = beast.X + 0.5f;
-        float y = beast.Y + 0.5f;
+        // ⚠️ **D-120：幅度调小**（2.5 → 1.5px）⇒ 是「轻轻晃」而不是「小跑」。
+        float bob = (float)Math.Sin(beast.Phase * MathF.PI * 2f) * 1.5f;
+        // ⚠️ **D-120：位置用「格间插值」** ⇒ 野兽在一格之间**慢慢走过去**，不是瞬间换格。
+        float x = beast.DisplayX(_simTime) + 0.5f;
+        float y = beast.DisplayY(_simTime) + 0.5f;
 
         // 身子：一个小菱形（等距投影的地面块）。
         var c00 = P(x - 0.34f, y - 0.24f, 12f + bob);
@@ -671,7 +685,7 @@ public partial class VillageView : Node2D
         foreach (var m in _buildingMarks) items.Add((m.GridX + m.GridY, () => DrawBuildingProp(m)));
         // ⚠️ **D-117：村外的野兽也参与深度排序** —— 否则它永远在最后面 ⇒
         // 走到树后面的野兽会被树挡住（而它本来该在树前面/后面按位置算）。
-        foreach (var b in _beasts) items.Add((b.X + b.Y, () => DrawBeast(b)));
+        foreach (var b in _beasts) items.Add((b.DisplayX(_simTime) + b.DisplayY(_simTime), () => DrawBeast(b)));
 
         items.Sort((a, b) => a.key.CompareTo(b.key));
         foreach (var it in items) it.draw();

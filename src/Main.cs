@@ -867,6 +867,8 @@ public partial class Main : Node2D
 
         // 4b-2. 村外的野兽（D-117）：**每帧**喂给视图（它们的位置每帧都在动）。
         _village.SetWildlife(_wildlife.Beasts);
+        // ⚠️ **D-120**：野兽「走到一半」的位置要按当前模拟时刻算 ⇒ 每帧喂一次。
+        _village.SetSimulationTime(_clock.Now);
         AdvanceWildlifePhase(dt);
 
         // 5. 出征回来了没有

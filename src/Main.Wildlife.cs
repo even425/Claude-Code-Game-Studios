@@ -37,7 +37,11 @@ public partial class Main : Node2D
     {
         if (_wildlife.Beasts.Count == 0) return;   // 还没长出来（读档后会被重新长）
 
-        _wildlife.WanderOneStep(() => (float)_rng.NextDouble(1.0));
+        // ⚠️ **D-120：一整天慢慢走过去**（不再瞬间换格 ⇒ 观感不再像「跑得飞快」）。
+        _wildlife.WanderOneStep(
+            () => (float)_rng.NextDouble(1.0),
+            _clock.Now,
+            _clock.SimSecondsPerDay);
 
         // ⚠️ **D-118：野外补货** —— 野兽被猎走之后，野外会**慢慢长回**新的
         // ⇒ 否则打几只就没了 ⇒ 玩家跑到后面就没东西可猎。
@@ -51,10 +55,17 @@ public partial class Main : Node2D
     /// <summary>野外每天长回一只野兽的概率（D-118：建议值）。</summary>
     private const double WildlifeRespawnChance = 0.35;
 
+    /// <summary>野兽的<b>步态速度</b>（D-120：调慢 ⇒ 不像在跑）。</summary>
+    private const float WildlifeGaitSpeed = 0.15f;
+
     /// <summary>野兽的步态相位（每帧推进 ⇒ 画面上它们在轻轻动）。</summary>
     /// <param name="delta">帧间隔（秒）。</param>
+    /// <remarks>
+    /// ⚠️ **D-120：频率与幅度都调慢了**（0.6 → 0.15，2.5px → 1.5px）
+    /// ⇒ 原来那一下像「小跑」⇒ 现在是「轻轻晃」。
+    /// </remarks>
     public void AdvanceWildlifePhase(float delta)
-        => _wildlife.AdvancePhase(delta * 0.6f);
+        => _wildlife.AdvancePhase(delta * WildlifeGaitSpeed);
 
     /// <summary>
     /// <b>狩猎服务</b>（D-118）—— 找野兽 → 打一场 → 发战利品。

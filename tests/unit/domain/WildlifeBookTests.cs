@@ -161,4 +161,75 @@ public class WildlifeBookTests
         Assertions.AssertThat(book.CountOf(BeastKind.Wolf)).IsEqual(2);
         Assertions.AssertThat(book.CountOf(BeastKind.Deer)).IsEqual(2);
     }
+
+    // ── D-120：野兽在格与格之间**慢慢走过去**（不再瞬移）──────────────────
+
+    /// <summary>
+    /// 走一步之后：<b>刚出发时</b>显示位置还**在起点**，不是直接跳到终点。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ 这条守的是「<b>不许瞬移</b>」：原来「每天走一步」是瞬间换格
+    /// ⇒ 画面上野兽像被瞬移 ⇒ 开发者反馈「移动得也太快了吧」。
+    /// </remarks>
+    [TestCase]
+    public void AfterOneStep_TheBeast_StillStandsAtTheStart()
+    {
+        // ⚠️ 直接给一只**村外**的野兽安排一步（不依赖随机方向 ⇒ 一定能动）。
+        var beast = new WildBeast("b-walker", BeastKind.Boar, -7, -5);
+        beast.BeginWalkTo(-6, -4, simTime: 0.0, daySeconds: 100.0);
+
+        Assertions.AssertThat(beast.DisplayX(0.0)).IsEqual(-7f);
+        Assertions.AssertThat(beast.DisplayY(0.0)).IsEqual(-5f);
+    }
+
+    /// <summary>
+    /// 走一整天 ⇒ 显示位置**到达目标格**（且是渐进的，不是一步跳）。
+    /// </summary>
+    [TestCase]
+    public void AfterAWholeDay_TheBeast_ArrivesAtItsTarget()
+    {
+        var beast = new WildBeast("b-walker", BeastKind.Boar, -7, -5);
+        beast.BeginWalkTo(-6, -4, simTime: 0.0, daySeconds: 100.0);
+
+        int targetX = beast.X;
+        int targetY = beast.Y;
+
+        // 四分之一天 ⇒ 已经走了一小段（离起点比离终点近）。
+        float halfX = beast.DisplayX(25.0);
+        float halfY = beast.DisplayY(25.0);
+        float midDistance = Math.Abs(halfX - targetX) + Math.Abs(halfY - targetY);
+        float startDistance = Math.Abs((float)beast.FromX - targetX) + Math.Abs((float)beast.FromY - targetY);
+        // ⚠️ GdUnit4 没有 IsLess ⇒ 用布尔断言（比的是「离目标更近了」这个性质）。
+        Assertions.AssertThat(midDistance < startDistance).IsTrue();
+
+        // 一整天 ⇒ 到达目标。
+        Assertions.AssertThat(beast.DisplayX(100.0)).IsEqual((float)targetX);
+        Assertions.AssertThat(beast.DisplayY(100.0)).IsEqual((float)targetY);
+    }
+
+    /// <summary>显示位置**始终在地图内**（插值不会把它带出边界）。</summary>
+    [TestCase]
+    public void DisplayPosition_StaysInsideTheMap()
+    {
+        var book = new WildlifeBook();
+        book.Seed(8, Constant(0.95f), i => (BeastKind)(i % 3));
+
+        for (int day = 0; day < 20; day++)
+        {
+            book.WanderOneStep(Constant(0.5f), simTime: day * 100.0, daySeconds: 100.0);
+
+            for (double t = day * 100.0; t <= day * 100.0 + 100.0; t += 25.0)
+            {
+                foreach (var beast in book.Beasts)
+                {
+                    float dx = beast.DisplayX(t);
+                    float dy = beast.DisplayY(t);
+                    Assertions.AssertThat(dx >= WorldMap.OriginX - 1).IsTrue();
+                    Assertions.AssertThat(dy >= WorldMap.OriginY - 1).IsTrue();
+                    Assertions.AssertThat(dx <= WorldMap.OriginX + WorldMap.Width).IsTrue();
+                    Assertions.AssertThat(dy <= WorldMap.OriginY + WorldMap.Height).IsTrue();
+                }
+            }
+        }
+    }
 }

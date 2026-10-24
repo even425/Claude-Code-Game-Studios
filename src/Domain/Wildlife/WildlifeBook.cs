@@ -45,6 +45,26 @@ public sealed class WildBeast
     /// <summary>朝向/步态相位（0..1，循环）—— 用来让画面上的野兽「在动」。</summary>
     public float Phase { get; private set; }
 
+    // ── D-120：在两格之间**慢慢走过去**（不再瞬移）────────────────────────
+
+    /// <summary>这一步的<b>起点</b>格位 X。</summary>
+    public int FromX { get; private set; }
+
+    /// <summary>这一步的<b>起点</summary>格位 Y。</summary>
+    public int FromY { get; private set; }
+
+    /// <summary>这一步的<b>目标</b>格位 X。</summary>
+    public int TargetX { get; private set; }
+
+    /// <summary>这一步的<b>目标</b>格位 Y。</summary>
+    public int TargetY { get; private set; }
+
+    /// <summary>这一步开始时的模拟时刻（秒）。</summary>
+    public double StepStartTime { get; private set; }
+
+    /// <summary>一个模拟日有多少秒（用来把「时间」换算成「走了百分之几」）。</summary>
+    public double DaySeconds { get; private set; } = 1.0;
+
     /// <summary>造一只野兽。</summary>
     /// <param name="id">标识。</param>
     /// <param name="kind">种类。</param>
@@ -57,7 +77,59 @@ public sealed class WildBeast
         Kind = kind;
         X = x;
         Y = y;
+        FromX = x;
+        FromY = y;
+        TargetX = x;
+        TargetY = y;
     }
+
+    /// <summary>
+    /// 开始「往某一格走过去」（<b>一整天走一格</b> ⇒ 观感是慢悠悠地溜达）。
+    /// </summary>
+    /// <param name="x">目标格位 X。</param>
+    /// <param name="y">目标格位 Y。</param>
+    /// <param name="simTime">现在的模拟时刻（秒）。</param>
+    /// <param name="daySeconds">一个模拟日的秒数。</param>
+    /// <remarks>
+    /// ⚠️ <b>为什么不再瞬移</b>（D-120）：原来「每天走一步」是<b>瞬间换格</b>
+    /// ⇒ 画面上野兽像被瞬移 ⇒ 观感是「跑得飞快」；改成在一格之间<b>慢慢挪</b>
+    /// ⇒ 一天走一格 ⇒ 慢得合理。
+    /// <br>⚠️ <b>逻辑位置（<see cref="X"/> / <see cref="Y"/>）立刻更新</b>
+    /// ⇒ 「它现在在哪一格」这件事仍然只有一份答案（不与显示位置分叉）。
+    /// </remarks>
+    public void BeginWalkTo(int x, int y, double simTime, double daySeconds)
+    {
+        FromX = X;
+        FromY = Y;
+        TargetX = x;
+        TargetY = y;
+        StepStartTime = simTime;
+        DaySeconds = daySeconds <= 0.0 ? 1.0 : daySeconds;
+        X = x;
+        Y = y;
+    }
+
+    /// <summary>这一步走了百分之几（0..1）。</summary>
+    /// <param name="simTime">现在的模拟时刻（秒）。</param>
+    public float WalkProgress(double simTime)
+    {
+        if (DaySeconds <= 0.0) return 1f;
+        double t = (simTime - StepStartTime) / DaySeconds;
+        if (t < 0.0) t = 0.0;
+        if (t > 1.0) t = 1.0;
+        return (float)t;
+    }
+
+    /// <summary>画面上该画在哪（格位浮点坐标，含格间插值）。</summary>
+    /// <param name="simTime">现在的模拟时刻（秒）。</param>
+    public float DisplayX(double simTime) => FromX + (TargetX - FromX) * Ease(WalkProgress(simTime));
+
+    /// <summary>画面上该画在哪（格位浮点坐标，含格间插值）。</summary>
+    /// <param name="simTime">现在的模拟时刻（秒）。</param>
+    public float DisplayY(double simTime) => FromY + (TargetY - FromY) * Ease(WalkProgress(simTime));
+
+    /// <summary>缓动（起步与停步都慢 ⇒ 不像瞬移）。</summary>
+    private static float Ease(float t) => t * t * (3f - 2f * t);
 
     /// <summary>把它挪到某一格（**只允许落在村外**）。</summary>
     /// <param name="x">格位 X。</param>
@@ -151,6 +223,42 @@ public sealed class WildlifeBook
             int dy = dir == 1 || dir == 2 ? 1 : -1;
 
             if (beast.TryMoveTo(beast.X + dx, beast.Y + dy)) moved++;
+        }
+
+        return moved;
+    }
+
+    /// <summary>
+    /// 让所有野兽**走一步**（每天一次）—— <b>并且是一整天慢慢走过去</b>（D-120）。
+    /// </summary>
+    /// <param name="roll">取方向用的随机数（0..1）。</param>
+    /// <param name="simTime">现在的模拟时刻（秒）。</param>
+    /// <param name="daySeconds">一个模拟日的秒数。</param>
+    /// <returns>这次真正挪动了多少只（挪不动就原地不动）。</returns>
+    /// <remarks>
+    /// ⚠️ **野兽不会跑进村子** ⇒ 走向里若落进村子 ⇒ 那一步**不走**
+    /// （宁可原地踏步，也不要让野兽出现在村口）。
+    /// <br>⚠️ <b>走的过程是一整天</b> ⇒ 画面上它是在**格与格之间挪**，
+    /// 不是瞬间换格（D-120：原来那一下看起来像「跑得飞快」）。
+    /// </remarks>
+    public int WanderOneStep(Func<float> roll, double simTime, double daySeconds)
+    {
+        if (roll is null) throw new ArgumentNullException(nameof(roll));
+
+        int moved = 0;
+        foreach (var beast in _beasts)
+        {
+            int dir = (int)(roll() * 4f) % 4;
+            int dx = dir == 0 || dir == 1 ? 1 : -1;
+            int dy = dir == 1 || dir == 2 ? 1 : -1;
+
+            int tx = beast.X + dx;
+            int ty = beast.Y + dy;
+            if (!WorldMap.InBounds(tx, ty)) continue;
+            if (!WorldMap.IsWilderness(tx, ty)) continue;   // ⚠️ 野兽不进村
+
+            beast.BeginWalkTo(tx, ty, simTime, daySeconds);
+            moved++;
         }
 
         return moved;

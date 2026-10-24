@@ -44,11 +44,20 @@ public static class TestPrices
     /// <summary>布匹单价（夹具值，<b>不是</b>产品价）。</summary>
     public const long Cloth = 8L;
 
-    /// <summary>测试用的价格表（三个可售物品，各有一个明确的价格）。</summary>
+    /// <summary>兽皮单价（夹具值，<b>不是</b>产品价；D-118 狩猎战利品）。</summary>
+    public const long Hide = 6L;
+
+    /// <summary>兽肉单价（夹具值，<b>不是</b>产品价；D-118 狩猎战利品）。</summary>
+    public const long Meat = 3L;
+
+    /// <summary>测试用的价格表（可售物品，各有一个明确的价格）。</summary>
     public static readonly PriceBook Book = new(new[]
     {
         new KeyValuePair<ItemId, long>(new ItemId("石料"), Stone),
         new KeyValuePair<ItemId, long>(new ItemId("木料"), Wood),
         new KeyValuePair<ItemId, long>(new ItemId("布匹"), Cloth),
+        // ⚠️ **D-118**：狩猎的战利品也得能卖（否则「狩猎」在测试里根本没法卖东西）。
+        new KeyValuePair<ItemId, long>(new ItemId("兽皮"), Hide),
+        new KeyValuePair<ItemId, long>(new ItemId("兽肉"), Meat),
     });
 }

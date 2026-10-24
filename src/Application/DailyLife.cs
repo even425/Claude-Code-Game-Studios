@@ -73,6 +73,12 @@ public sealed class DailyLife
     /// 返回列表 = 需要目标；空列表 = 本步没有合法目标（按 S5 失败处理）。
     /// </param>
     /// <param name="targetWeight">可选目标权重（关系越好越可能被选中）。</param>
+    /// <param name="activities">
+    /// 可选：<b>只用这几项活动</b>（传 null = 用默认活动集）。
+    /// ⚠️ **为什么要有它**：活动集里加了「狩猎」（D-118）之后，
+    /// 「测社交」的用例就**不再确定**了（英雄可能去狩猎）⇒
+    /// ⇒ 用例要能**只留它关心的那项活动** ⇒ 才有确定性的断言。
+    /// </param>
     /// <exception cref="ArgumentException">存在没有对应效果的活动。</exception>
     public DailyLife(
         ClaudeCodeGameStudios.Domain.Heroes.IRandomSource? random,
@@ -80,7 +86,8 @@ public sealed class DailyLife
         double activityDurationSeconds,
         Func<HeroState, ActivityDefinition, bool>? precondition = null,
         Func<HeroState, ActivityDefinition, IReadOnlyList<HeroId>?>? targetCandidates = null,
-        Func<HeroState, HeroId, double>? targetWeight = null)
+        Func<HeroState, HeroId, double>? targetWeight = null,
+        IReadOnlyList<ActivityDefinition>? activities = null)
     {
         _effects = new Dictionary<ActivityId, ActivityEffect>(effects);
         foreach (var (activityId, _) in _effects)
@@ -96,7 +103,7 @@ public sealed class DailyLife
 
         // 活动集里的每一项都必须有效果 —— 包括新增的「社交」。
         // 漏注册会在构造期炸掉，而不是等到第一次完成时才无声跑过。
-        _catalog = BuildCatalog(activityDurationSeconds);
+        _catalog = activities ?? BuildCatalog(activityDurationSeconds);
         var known = new HashSet<string>(StringComparer.Ordinal);
         foreach (var activity in _catalog) known.Add(activity.Id.Value);
 
@@ -144,6 +151,7 @@ public sealed class DailyLife
         const string collect = "采集";
         const string build = "建屋";
         const string social = "社交";
+        const string hunt = "狩猎";
 
         return new List<ActivityDefinition>
         {
@@ -152,6 +160,11 @@ public sealed class DailyLife
             new(new ActivityId(build), new PreferenceCategory("营造"), "勤快", durationSeconds),
             // 社交读「社交」偏好类别（P3-D05）；特质键留空 = 恒等修正。
             new(new ActivityId(social), new PreferenceCategory("社交"), "", durationSeconds),
+            // ⚠️ **D-118：狩猎**（出村打野兽）——
+            //   分类 = 「狩猎」：**没被任何英雄显式偏好覆盖 ⇒ 权重取默认 1**
+            //   ⇒ 它和「社交」一样是**人人都会考虑**的一项（不是某个性格的专利）。
+            //   时长 = 采集的 **2 倍**（要出村 + 打一场 ⇒ 不能和采一把时间当成同一件事）。
+            new(new ActivityId(hunt), new PreferenceCategory("狩猎"), "", durationSeconds * 2),
         };
     }
 
@@ -244,24 +257,31 @@ public sealed class DailyLife
     /// </param>
     /// <param name="advanceBuild">推进工地进度。参数为推进的比例。</param>
     /// <param name="onSocial">社交完成时的处理（写关系 + 发事件）；参数为发起者与目标。</param>
+    /// <param name="onHunt">狩猎完成时的处理（打一场 + 发战利品，D-118）；参数为猎人的英雄标识。</param>
     /// <returns>活动标识 → 效果。</returns>
     /// <remarks>
     /// 【待定】两者的<b>数量</b>属 <c>07</c> 的 <b>P-08</b>（产出）与 T-002（耗时）。
     /// 本方法只声明<b>做什么</b>，不决定<b>多少</b>——份数由调用方决定。
     /// <para><b>社交是必填的</b>：活动集里已有「社交」，漏给效果会在构造期被拒绝 ——
     /// 让它编译期就暴露，而不是等到某个英雄第一次社交时炸掉。</para>
+    /// <para>⚠️ <b>狩猎（D-118）也是必填的</b>：活动集里已有「狩猎」，
+    /// 漏给效果 ⇒ 英雄打完猎**什么也没发生**（连战利品都没有）⇒
+    /// 「出村狩猎」看起来像在演哑剧。</para>
     /// </remarks>
     public static Dictionary<ActivityId, ActivityEffect> DefaultEffects(
         Action<string, int> addMaterials, Action<double> advanceBuild,
-        Action<string, HeroId> onSocial)
+        Action<string, HeroId> onSocial,
+        Action<string> onHunt)
     {
         if (onSocial is null) throw new ArgumentNullException(nameof(onSocial));
+        if (onHunt is null) throw new ArgumentNullException(nameof(onHunt));
 
         return new Dictionary<ActivityId, ActivityEffect>
         {
             [new ActivityId("采集")] = (_, actor, _) => addMaterials(actor, 1),
             [new ActivityId("建屋")] = (_, _, _) => advanceBuild(PlaceholderBuildProgressPerAction),
             [new ActivityId("社交")] = (_, actor, target) => onSocial(actor, target),
+            [new ActivityId("狩猎")] = (_, actor, _) => onHunt(actor),
         };
     }
 

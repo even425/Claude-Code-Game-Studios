@@ -32,21 +32,61 @@ public class DailyLifeTests
         => new(new HeroDefinition(new HeroId(id), id, "测试"));
 
     /// <summary>一份覆盖全部活动的最小效果表；社交效果被记录下来供断言。</summary>
+    /// <param name="socialCalls">社交完成时的记录。</param>
+    /// <param name="completed">完成的活动。</param>
+    /// <param name="activities">只保留这些活动（默认全部）。</param>
     private static Dictionary<ActivityId, DailyLife.ActivityEffect> Effects(
         List<(string Actor, HeroId Target)> socialCalls,
-        List<ActivityId> completed)
+        List<ActivityId> completed,
+        params string[] activities)
     {
-        return new Dictionary<ActivityId, DailyLife.ActivityEffect>
+        bool wanted(string id)
+            => activities.Length == 0 || System.Array.IndexOf(activities, id) >= 0;
+
+        var effects = new Dictionary<ActivityId, DailyLife.ActivityEffect>();
+
+        if (wanted("采集"))
         {
-            [new ActivityId("采集")] = (activity, _, target) => completed.Add(activity),
-            [new ActivityId("建屋")] = (activity, _, target) => completed.Add(activity),
-            [new ActivityId("社交")] = (activity, actor, target) =>
+            effects[new ActivityId("采集")] = (activity, _, target) => completed.Add(activity);
+        }
+
+        if (wanted("建屋"))
+        {
+            effects[new ActivityId("建屋")] = (activity, _, target) => completed.Add(activity);
+        }
+
+        if (wanted("社交"))
+        {
+            effects[new ActivityId("社交")] = (activity, actor, target) =>
             {
                 completed.Add(activity);
                 socialCalls.Add((actor, target));
-            },
-        };
+            };
+        }
+
+        // ⚠️ **D-118：狩猎也要有效果**（漏了 ⇒ 构造期就拒绝）。
+        if (wanted("狩猎"))
+        {
+            effects[new ActivityId("狩猎")] = (activity, _, target) => completed.Add(activity);
+        }
+
+        return effects;
     }
+
+    /// <summary>
+    /// <b>只留一项活动</b>的活动集（让「这一项的行为」用例是确定的）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **D-118 之后必需**：活动集里多了「狩猎」⇒ 英雄可能去狩猎
+    /// ⇒ 「测社交」的用例不再确定 ⇒ 用例要能**只留它关心的那项**。
+    /// </remarks>
+    private static System.Collections.Generic.IReadOnlyList<ActivityDefinition> OnlyActivity(
+        string id, string category, double durationSeconds = 1.0)
+        => new[]
+        {
+            new ActivityDefinition(
+                new ActivityId(id), new PreferenceCategory(category), "", durationSeconds),
+        };
 
     // ── 构造期：活动集与效果表必须对齐 ────────────────────────────────────
 
@@ -58,6 +98,8 @@ public class DailyLifeTests
         {
             [new ActivityId("采集")] = (_, _, _) => { },
             [new ActivityId("建屋")] = (_, _, _) => { },
+            // ⚠️ **D-118**：狩猎的效果**有**（这条用例要的就是「只漏了社交」）。
+            [new ActivityId("狩猎")] = (_, _, _) => { },
         };
 
         bool threw = false;
@@ -93,8 +135,9 @@ public class DailyLifeTests
         var completed = new List<ActivityId>();
         var targetId = new HeroId("h-1");
         var life = new DailyLife(
-            new FractionRandom(0.99), Effects(socialCalls, completed), activityDurationSeconds: 1.0,
-            targetCandidates: (_, _) => new[] { targetId });
+            new FractionRandom(0.99), Effects(socialCalls, completed, "社交"), activityDurationSeconds: 1.0,
+            targetCandidates: (_, _) => new[] { targetId },
+            activities: OnlyActivity("社交", "社交"));
 
         var hero = Hero("h-0");
         var started = life.Step(new[] { hero }, 0.0);
@@ -121,7 +164,8 @@ public class DailyLifeTests
         var socialCalls = new List<(string Actor, HeroId Target)>();
         var completed = new List<ActivityId>();
         var life = new DailyLife(
-            new FractionRandom(0.0), Effects(socialCalls, completed), activityDurationSeconds: 1.0);
+            new FractionRandom(0.0), Effects(socialCalls, completed, "采集"), activityDurationSeconds: 1.0,
+            activities: OnlyActivity("采集", "劳作"));
 
         var hero = Hero("h-0");
         life.Step(new[] { hero }, 0.0);       // 抽到「采集」
@@ -140,8 +184,9 @@ public class DailyLifeTests
         var socialCalls = new List<(string Actor, HeroId Target)>();
         var completed = new List<ActivityId>();
         var life = new DailyLife(
-            new FractionRandom(0.99), Effects(socialCalls, completed), activityDurationSeconds: 1.0,
-            targetCandidates: (_, _) => Array.Empty<HeroId>());
+            new FractionRandom(0.99), Effects(socialCalls, completed, "社交"), activityDurationSeconds: 1.0,
+            targetCandidates: (_, _) => Array.Empty<HeroId>(),
+            activities: OnlyActivity("社交", "社交"));
 
         var hero = Hero("h-0");
         var events = life.Step(new[] { hero }, 0.0);

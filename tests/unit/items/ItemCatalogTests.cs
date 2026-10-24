@@ -104,7 +104,7 @@ public class ItemCatalogTests
             Assertions.AssertThat(prices.IsSellable(item.Id)).IsTrue();
         }
 
-        Assertions.AssertThat(catalog.Count).IsEqual(3);
+        Assertions.AssertThat(catalog.Count).IsEqual(5);
     }
 
     [TestCase]
@@ -112,6 +112,7 @@ public class ItemCatalogTests
     {
         var ids = ItemCatalog.Default.All.Select(d => d.Id.Value).ToArray();
 
-        Assertions.AssertThat(ids).IsEqual(new[] { "布匹", "木料", "石料" });
+        // ⚠️ **D-118**：多了两样狩猎战利品（兽皮 / 兽肉）⇒ 五个。
+        Assertions.AssertThat(ids).IsEqual(new[] { "兽皮", "兽肉", "布匹", "木料", "石料" });
     }
 }

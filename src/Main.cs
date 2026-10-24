@@ -722,10 +722,13 @@ public partial class Main : Node2D
             MaterialsId,
             _upgradeService,
             () => _tier);
+        // ⚠️ **D-118：狩猎服务要在 DailyLife 之前建好**（效果表要用它）。
+        BuildHuntService();
         _life = new DailyLife(_rng, DailyLife.DefaultEffects(
             (actorId, n) => GatherFor(actorId, n),
             d => _buildProgress = MathF.Min(1f, _buildProgress + (float)d),
-            onSocial: OnSocialCompleted),
+            onSocial: OnSocialCompleted,
+            onHunt: OnHuntCompleted),
             activityDurationSeconds: _clock.SimSecondsPerDay * DailyLife.PlaceholderActionFractionOfDay,
             targetCandidates: SocialTargetCandidates,
             targetWeight: (hero, targetId) => RelationshipRules.TargetWeight(

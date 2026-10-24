@@ -119,6 +119,27 @@ public partial class HeroAgent
     /// <summary>他会不会出现在地图上。</summary>
     public bool Present => !Away;
 
+    /// <summary>
+    /// 一次性目的地（D-118：狩猎时走到村外的野兽那儿）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **为什么要有它**：狩猎是「**出村**」的行为 ⇒ 画面上英雄得**走到村外**
+    /// ⇒ 而平时他在村子里乱走（<see cref="PickSpot"/>）。
+    /// ⇒ 用一个**一次性目的地**覆盖它 ⇒ 走到就停在那儿（打完猎再由调用方清掉）。
+    /// </remarks>
+    public void SetDestination(float x, float y)
+    {
+        _tx = x;
+        _ty = y;
+        _destinationSet = true;
+    }
+
+    /// <summary>清掉一次性目的地（回到「自己在村里乱走」）。</summary>
+    public void ClearDestination() => _destinationSet = false;
+
+    /// <summary>是否有一次性目的地（走到就不再乱走）。</summary>
+    private bool _destinationSet;
+
     /// <summary>出发时离村，回来才重新出现在地图上。</summary>
     public bool Away { get; set; }
 
@@ -178,6 +199,9 @@ public partial class HeroAgent
 
     private void PickSpot()
     {
+        // ⚠️ **D-118：有一次性目的地时不乱走**（狩猎时他得**待在**野兽旁边）。
+        if (_destinationSet) return;
+
         // 傲的懒得挪窝，去的地方少；莽的到处跑
         if (Personality == "傲")
         {

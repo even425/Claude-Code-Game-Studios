@@ -47,6 +47,8 @@ public class MainStructureTests
             "HasZeroFlag",
             // D-117：村外的野兽（生成 / 每天走一步 / 步态相位）。
             "SeedWildlife", "TickWildlife", "AdvanceWildlifePhase",
+            // D-118：狩猎（服务 / 完成 / 开始时把猎人送到村外）。
+            "BuildHuntService", "OnHuntCompleted", "OnHuntStarted",
             // D-110：把「村庄可花却没花的钱」单独记一笔（采集器不召唤 ⇒ 钱会囤）。
             "UnspentVillageGold",
         }),

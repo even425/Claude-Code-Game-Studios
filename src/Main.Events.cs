@@ -31,6 +31,17 @@ public partial class Main : Node2D
     /// </remarks>
     private void PublishEvent(ClaudeCodeGameStudios.Domain.Events.DomainEvent ev)
     {
+        // ⚠️ **D-118：狩猎「开始」⇒ 把猎人送到野兽那儿**（他要**出村**）。
+        //   这一步必须在「过程性事件不进杂谈」的早退**之前** ⇒
+        //   否则「开始」事件被丢掉 ⇒ 英雄永远待在村里 ⇒ 「出村狩猎」只是文字游戏。
+        if (ev.Type.Value == "HeroActionStarted"
+            && ev.Payload.TryGetValue("activity", out var startedActivity)
+            && startedActivity == "狩猎")
+        {
+            OnHuntStarted(ev.Actor);
+            return;
+        }
+
         // 过程性事件不进杂谈（见上文）
         if (ev.Type.Value != "HeroActionCompleted") return;
 

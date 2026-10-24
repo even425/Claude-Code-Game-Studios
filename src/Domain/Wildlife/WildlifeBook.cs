@@ -163,6 +163,65 @@ public sealed class WildlifeBook
         foreach (var beast in _beasts) beast.Advance(delta);
     }
 
+    /// <summary>
+    /// 放一只野兽进野外（测试夹具 / 读档后重新长出来时用）。
+    /// </summary>
+    /// <param name="beast">要放的那只。</param>
+    /// <remarks>
+    /// ⚠️ <b>不检查它在不在村外</b>（放进去就是放进去）⇒
+    /// 想验「野兽不进村」请用 <see cref="WildBeast.TryMoveTo"/> 与 <see cref="Seed"/>。
+    /// </remarks>
+    public void Add(WildBeast beast)
+    {
+        if (beast is null) throw new ArgumentNullException(nameof(beast));
+        _beasts.Add(beast);
+    }
+
     /// <summary>清空（开局 / 读档后重新长出来）。</summary>
     public void Clear() => _beasts.Clear();
+
+    /// <summary>
+    /// 移走一只野兽（它被猎到了，D-118）。
+    /// </summary>
+    /// <param name="beast">要移走的那只。</param>
+    /// <returns>真的移走了为 true（本来就不在簿子里 ⇒ false）。</returns>
+    public bool Remove(WildBeast beast)
+    {
+        if (beast is null) return false;
+        return _beasts.Remove(beast);
+    }
+
+    /// <summary>
+    /// 野外补货：野兽被猎走之后，<b>过一阵子会有新的来</b>（D-118）。
+    /// </summary>
+    /// <param name="maxCount">野外最多几只。</param>
+    /// <param name="rollChance">这次「来新兽」的概率（0..1）。</param>
+    /// <param name="roll">取格位用的随机数（0..1）。</param>
+    /// <param name="kindOf">新兽的种类。</param>
+    /// <returns>新长出来几只。</returns>
+    /// <remarks>
+    /// ⚠️ **为什么要补货**：否则猎几只就没了 ⇒ 野外会**越打越空**
+    /// ⇒ 玩家跑到后面就没东西可猎。
+    /// </remarks>
+    public int Respawn(int maxCount, double rollChance, Func<float> roll, Func<int, BeastKind> kindOf)
+    {
+        if (roll is null) throw new ArgumentNullException(nameof(roll));
+        if (kindOf is null) throw new ArgumentNullException(nameof(kindOf));
+        if (_beasts.Count >= maxCount) return 0;
+        if (roll() >= rollChance) return 0;
+
+        int before = _beasts.Count;
+        int id = _beasts.Count;
+        for (int attempt = 0; attempt < 64; attempt++)
+        {
+            int x = WorldMap.OriginX + (int)(roll() * WorldMap.Width);
+            int y = WorldMap.OriginY + (int)(roll() * WorldMap.Height);
+            if (!WorldMap.IsWilderness(x, y)) continue;
+
+            _beasts.Add(new WildBeast($"beast-r{id}", kindOf(id), x, y));
+            break;
+        }
+
+        return _beasts.Count - before;
+    }
 }

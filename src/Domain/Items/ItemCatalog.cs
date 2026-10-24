@@ -75,6 +75,9 @@ public sealed class ItemCatalog
         new ItemDefinition(new ItemId("石料"), "石料", ItemRarity.Common),
         new ItemDefinition(new ItemId("木料"), "木料", ItemRarity.Common),
         new ItemDefinition(new ItemId("布匹"), "布匹", ItemRarity.Uncommon),
+        // ⚠️ **D-118：狩猎的战利品**（与 `PriceBook.Default` 一一对应）
+        new ItemDefinition(new ItemId("兽皮"), "兽皮", ItemRarity.Common),
+        new ItemDefinition(new ItemId("兽肉"), "兽肉", ItemRarity.Common),
     });
 
     /// <summary>全部定义（按 Id 排序，稳定顺序便于比对）。</summary>

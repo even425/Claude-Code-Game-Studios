@@ -129,18 +129,18 @@
   <div class="stats">
     <div class="stat">
       <div class="k">单元测试</div>
-      <div class="v">802 <em>→</em> 1083</div>
-      <div class="d">全绿 · 新增 281 条</div>
+      <div class="v">802 <em>→</em> 1089</div>
+      <div class="d">全绿 · 新增 287 条</div>
     </div>
     <div class="stat">
       <div class="k">变异看红</div>
-      <div class="v">165 <em>档</em></div>
+      <div class="v">169 <em>档</em></div>
       <div class="d">每档改坏一处 · 守卫必红</div>
     </div>
     <div class="stat">
       <div class="k">关闭的决策</div>
-      <div class="v">55 <em>条</em></div>
-      <div class="d">D-057 … D-117</div>
+      <div class="v">56 <em>条</em></div>
+      <div class="d">D-057 … D-118</div>
     </div>
     <div class="stat">
       <div class="k">§7.2 事件覆盖</div>
@@ -874,6 +874,31 @@
           <div class="cap">
             实机截图（D-117）：地面铺满窗口 ⇒ <b>暗绿的是野外</b>（左上有狼、中下有鹿、右边有野猪），
             <b>亮绿棋盘格的是村子</b> —— 村外一眼可分，而且<b>野兽不会进村</b>。
+          </div>
+        </div>
+      </li>
+      <li>
+        <div class="when">凌晨</div>
+        <h3>村里的人真的出村打猎了</h3>
+        <p>你说「村里的人会跑出去狩猎」的后半截 ⇒ 现在<b>狩猎是日常活动之一</b>：
+        <b>人人可选、不用你点</b>（沿用摆摊那套自主行为），<b>时长是采集的两倍</b>（出村打猎更费时间）。</p>
+        <p>⇒ 战斗<b>完全复用同一个解算器</b>（副本、试炼塔、狩猎共用一份规则）⇒
+        <b>狼是精英档</b>（只有强的人打得过）、野猪和鹿是普通档 ⇒ 实机里真的有人打不动狼
+        （日志：<code>HUNT 澄航 没能拿下 Wolf（空手而归）</code>）。<br>
+        ⇒ <b>打赢</b>：野兽被移走 + 拿到战利品（新物品 <b>兽皮</b> / <b>兽肉</b>，进<b>英雄自己的背包</b>
+        ⇒ 能摆摊、也能被收购站收走 ⇒ <b>不是凭空生成的钱</b>）；<b>打输</b>：野兽跑了、明天还能再猎；
+        野外没兽就<b>白跑一趟</b>；每天 <b>35%</b> 补一只 ⇒ 不会打空。</p>
+        <p>⇒ 画面上：给英雄加了<b>一次性目的地</b> ⇒ 猎人<b>真的走到野兽那边</b>再打
+        （⚠️ 钩子必须放在「过程事件不进杂谈」的早退<b>之前</b>，放后面就永远走不出村口）。</p>
+        <p>⚠️ <b>如实说明</b>：狩猎现在只是<b>另一条收入链</b>，<b>不是成长线</b> ——
+        英雄不会为了狩猎去强化装备，成长仍靠试炼塔的 +20 生命 ⇒ <b>下一步是装备线</b>
+        （武器店 / 服装店 + 给铁匠铺真正的用途）。</p>
+        <div class="tags"><span class="tag">D-118</span><span class="tag">变异 4/4</span><span class="tag">1089/1089</span><span class="tag">守卫 6/6</span></div>
+        <div class="shot" style="margin-top:12px">
+          <img src="qa/evidence/d118-hunting.png" alt="实机画面：村外有野兽在走，左栏可见兽皮与兽肉已被村民摆摊出售" />
+          <div class="cap">
+            实机截图（D-118）：<b>暗绿的野外</b>里有野兽在游走；左栏的货架上已经出现了
+            <b>兽皮</b>与<b>兽肉</b>（有人猎到了、摆摊卖、别人买走）⇒ 狩猎这条链真的闭合了。
           </div>
         </div>
       </li>

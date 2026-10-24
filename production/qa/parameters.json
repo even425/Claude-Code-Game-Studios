@@ -472,6 +472,14 @@
       "status": "【建议值】D-117（待开发者确认）",
       "note": "村外野兽的只数（D-117：够让「村外有活物」一眼可见，又不至于满地都是）",
       "value": "8"
+    },
+    {
+      "file": "Main.Wildlife.cs",
+      "name": "WildlifeRespawnChance",
+      "kind": "参数",
+      "status": "【建议值】D-118（待开发者确认）",
+      "note": "野外每天长回一只野兽的概率（D-118：否则打几只就没了 ⇒ 野外越打越空）",
+      "value": "0.35"
     }
   ],
   "nonParameters": [
@@ -798,7 +806,9 @@
       "expected": [
         "石料=Common",
         "木料=Common",
-        "布匹=Uncommon"
+        "布匹=Uncommon",
+        "兽皮=Common",
+        "兽肉=Common"
       ]
     },
     {
@@ -808,6 +818,8 @@
       "note": "物品单价（石料 3 / 木料 2 / 布匹 5）—— 2026-10-21 开发者拍板（P-14），**不再是占位值**。**登记的是外部配置那一份**（运行时真正生效的那份），内置兜底 `PriceBook.Default` 由 `PriceBookConfigConsistencyTests` 比对，两份不许分叉",
       "extractor": "price-json",
       "expected": [
+        "兽皮=4",
+        "兽肉=2",
         "布匹=5",
         "木料=2",
         "石料=3"

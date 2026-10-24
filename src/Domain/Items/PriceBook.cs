@@ -118,6 +118,10 @@ public sealed class PriceBook
         new KeyValuePair<ItemId, long>(new ItemId("石料"), 3L),
         new KeyValuePair<ItemId, long>(new ItemId("木料"), 2L),
         new KeyValuePair<ItemId, long>(new ItemId("布匹"), 5L),
+        // ⚠️ **D-118：狩猎的两种战利品**（建议值：兽皮比石料贵、兽肉比石料便宜）
+        // ⇒ 它们**可卖** ⇒ 猎人能靠狩猎挣钱 ⇒ 「出村狩猎」这件事在经济上成立。
+        new KeyValuePair<ItemId, long>(new ItemId("兽皮"), 4L),
+        new KeyValuePair<ItemId, long>(new ItemId("兽肉"), 2L),
     });
 
     /// <summary>

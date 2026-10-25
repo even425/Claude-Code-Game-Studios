@@ -155,26 +155,33 @@ public sealed class EquipmentCatalog
     public static EquipmentCatalog Empty { get; } = new(Array.Empty<EquipmentDefinition>());
 
     /// <summary>
-    /// 默认注册表（D-119 的四件装备）。
+    /// 默认注册表（D-119 的四件装备；**D-124 改过加成**）。
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>数值全是建议值</b>（开发者拍板的是「武器店 + 服装店 + 自主购买 + 耐久损耗 +
-    /// 铁匠铺修理」这套<b>结构</b>，数值允许调）。
-    /// <br>⚠️ <b>加成的量级对着战斗基准定的</b>：首领档两人队胜率 86.7%（D-072）
-    /// ⇒ +5 攻击约等于多打一刀，<b>不会</b>把难度掀翻；重测交给你拍板。
+    /// ⚠️ <b>数值全是建议值</b>（开发者拍板「装备 = 通关许可证」，具体数值允许调）。
+    /// <br>⚠️ **D-124：加成一律是「攻」** —— 因为实测（`--winrate`）证明
+    /// <b>当前战斗公式下防御与生命对胜负完全没有影响</b>（伤害 = 攻 − 防，
+    /// 但战斗是「30 回合内打死对方」的二元判定 ⇒ 加防只让已经能赢的队少挨几下，
+    /// 而「输出不足」的队加防也救不了）⇒ 皮甲 / 锁甲若还带防御就是**装饰**。
+    /// ⇒ 开发者拍板「把服装改成『活的』加成」⇒ 全部改成<b>加攻</b>。
+    /// <br>⇒ 防御 / 生命两个字段<b>保留</b>（值 0）⇒ 将来战斗公式一改，
+    /// 把它们填回去就自动生效（D-123 已在台账里记下这条）。
+    /// <br>⚠️ <b>加成的量级对着「难度表」定</b>（D-124）：
+    /// 弱装备 <b>+2 攻</b> ⇒ 首领档 43.6% → 66.7%（半许可证）；
+    /// 强装备 <b>+4 攻</b> ⇒ 87.2%（能过，但不是 100% ⇒ 留点风险）。
     /// </remarks>
     public static EquipmentCatalog Default { get; } = new(new[]
     {
         // 武器（攻击向）
         new EquipmentDefinition(new ItemId("石剑"), "石剑", EquipmentSlot.Weapon,
-            AttackBonus: 5, DefenseBonus: 0, DurabilityMax: 20, Price: 30L, RepairCost: 6L),
+            AttackBonus: 2, DefenseBonus: 0, DurabilityMax: 20, Price: 30L, RepairCost: 6L),
         new EquipmentDefinition(new ItemId("猎弓"), "猎弓", EquipmentSlot.Weapon,
-            AttackBonus: 8, DefenseBonus: 0, DurabilityMax: 14, Price: 45L, RepairCost: 9L),
-        // 服装（防御向）
+            AttackBonus: 4, DefenseBonus: 0, DurabilityMax: 14, Price: 45L, RepairCost: 9L),
+        // 服装（**D-124：改成加攻** —— 防御在当前战斗公式下无效）
         new EquipmentDefinition(new ItemId("皮甲"), "皮甲", EquipmentSlot.Armor,
-            AttackBonus: 0, DefenseBonus: 5, DurabilityMax: 18, Price: 25L, RepairCost: 5L),
+            AttackBonus: 2, DefenseBonus: 0, DurabilityMax: 18, Price: 25L, RepairCost: 5L),
         new EquipmentDefinition(new ItemId("锁甲"), "锁甲", EquipmentSlot.Armor,
-            AttackBonus: 0, DefenseBonus: 8, DurabilityMax: 22, Price: 40L, RepairCost: 8L),
+            AttackBonus: 4, DefenseBonus: 0, DurabilityMax: 22, Price: 40L, RepairCost: 8L),
     });
 
     /// <summary>全部定义（按 Id 排序，稳定顺序便于比对）。</summary>

@@ -257,6 +257,13 @@ public class ParameterLedgerTests
                 .Select(m => $"{m.Groups["n"].Value}={m.Groups["a"].Value},{m.Groups["d"].Value},{m.Groups["h"].Value}")
                 .ToList(),
 
+            // new CombatArchetype("普通", 6, 2, 60) → "普通=6,2,60"（**副本专用**难度表：D-124）
+            // ⚠️ 写法与上面那张表**故意不同**（显式写出类型名）⇒ 两个抽取器不会互相捡到对方的行。
+            ["dungeon-archetypes"] = text => Regex.Matches(
+                    text, @"new CombatArchetype\(""(?<n>[^""]+)""\s*,\s*(?<a>\d+)\s*,\s*(?<d>\d+)\s*,\s*(?<h>\d+)\)")
+                .Select(m => $"{m.Groups["n"].Value}={m.Groups["a"].Value},{m.Groups["d"].Value},{m.Groups["h"].Value}")
+                .ToList(),
+
             // config/prices.json： "石料": 5  → "石料=5"
             // ⚠️ **以 `_` 开头的键是注释**，它们的值是**字符串** ⇒ 正则只匹配数字值
             //    ⇒ 注释键天然被排除（不必在抽取器里特判）。

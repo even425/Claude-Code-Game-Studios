@@ -469,7 +469,7 @@ public partial class Main : Node2D
 
         var flow = ClaudeCodeGameStudios.Application.DungeonFlow.Begin(
             new ClaudeCodeGameStudios.Domain.Dungeon.DungeonRunId(NextDungeonRunId()),
-            DungeonName, ids, _combat, _combat, party: party);
+            DungeonName, ids, _dungeonCombat, _dungeonCombat, party: party);
 
         var outcome = flow.RunToCompletion();
 

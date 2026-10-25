@@ -653,6 +653,9 @@ public partial class Main : Node2D
         //    经济标定必须重跑（`production/qa/recalibrate.py`）。
         _combat = new ClaudeCodeGameStudios.Application.FormulaCombat();
 
+        // ⚠️ **D-124：副本用自己那张难度表**（构造在 `Main.Winrate.cs`）。
+        InitDungeonCombat();
+
         // D-074：独立建筑的建造流程 + 试炼塔挑战。
         // ⚠️ 试炼塔与副本**共用同一个战斗解算器** ⇒ 战斗规则只有一份
         // （D-062 不设命中 ⇒ 战斗完全确定 ⇒ 同一个英雄进塔结果永远一样）。

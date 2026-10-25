@@ -77,10 +77,11 @@ public partial class Main : Node2D
     /// 某个英雄身上的装备摘要（给花名册用）。
     /// </summary>
     /// <param name="hero">英雄。</param>
-    /// <returns>例如「石剑(18/20) 皮甲(6/18)」；没穿任何东西时返回空串。</returns>
+    /// <returns>例如「石剑(18/20) 攻+2」；没穿任何东西时返回空串。</returns>
     /// <remarks>
-    /// ⚠️ <b>纯展示</b>：这里不判定「这件装备好不好」，
-    /// 判定在 <c>EquipmentCatalog</c> / <c>EquipmentStats</c>。
+    /// ⚠️ <b>为什么连加成一起显示</b>（D-124）：装备的加成维度是「攻」
+    /// （防御在当前战斗公式下无效 ⇒ 皮甲 / 锁甲也给攻）⇒ 玩家若只看名字与耐久，
+    /// 根本看不出「这件东西加了什么」⇒ 等于让玩家**买盲盒**。
     /// </remarks>
     private static string GearSummary(HeroAgent hero)
     {
@@ -93,15 +94,26 @@ public partial class Main : Node2D
         if (gear.Weapon is { } weapon)
         {
             var def = catalog.Find(weapon);
-            if (def is not null) parts.Add($"{def.DisplayName}({gear.WeaponDurability}/{def.DurabilityMax})");
+            if (def is not null) parts.Add($"{def.DisplayName}({gear.WeaponDurability}/{def.DurabilityMax}){BonusText(def)}");
         }
 
         if (gear.Armor is { } armor)
         {
             var def = catalog.Find(armor);
-            if (def is not null) parts.Add($"{def.DisplayName}({gear.ArmorDurability}/{def.DurabilityMax})");
+            if (def is not null) parts.Add($"{def.DisplayName}({gear.ArmorDurability}/{def.DurabilityMax}){BonusText(def)}");
         }
 
         return string.Join(" ", parts);
+    }
+
+    /// <summary>一件装备的加成摘要（<c>攻+2</c> / <c>防+3</c> / 都没有则空串）。</summary>
+    /// <param name="def">装备定义。</param>
+    /// <returns>加成文本。</returns>
+    private static string BonusText(ClaudeCodeGameStudios.Domain.Items.EquipmentDefinition def)
+    {
+        var parts = new System.Collections.Generic.List<string>();
+        if (def.AttackBonus != 0) parts.Add($"攻+{def.AttackBonus}");
+        if (def.DefenseBonus != 0) parts.Add($"防+{def.DefenseBonus}");
+        return parts.Count > 0 ? " " + string.Join("/", parts) : "";
     }
 }

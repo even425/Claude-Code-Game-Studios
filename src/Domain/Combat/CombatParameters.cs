@@ -125,6 +125,29 @@ public static class CombatParameters
         new("首领", 8, 4, 120),
     };
 
+    /// <summary>
+    /// <b>副本专用</b>的三档怪物（D-124）—— 与 <see cref="MonsterTiers"/> <b>分开</b>。
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠️ <b>为什么要分开</b>：D-124 拍板「<b>装备 = 通关许可证</b>」⇒ 副本难度要抬上去
+    /// ⇒ 但**副本、试炼塔、狩猎、兽潮共用同一张表**（`FormulaCombat` 的默认怪物来源）
+    /// ⇒ 一起抬高会把**试炼塔守卫**（没人打得过）、**狼**（打不动）、**兽潮**（围栏翻不了盘）
+    /// 一起弄坏 ⇒ 那些遭遇的难度**不该跟着副本走**。</para>
+    ///
+    /// <para>⇒ **副本用这张表**（`FormulaCombat` 的 <c>monsterStats</c> 注入点），
+    /// 其余遭遇继续用 <see cref="MonsterTiers"/>（原值不变）。</para>
+    ///
+    /// <para>⚠️ <b>数值是实测挑出来的</b>（`--winrate`，口径：66 种两人队）：
+    /// 裸装 43.6% / +2 攻 66.7% / +4 攻 87.2%
+    /// ⇒ **弱装备是半许可证，强装备能过但不是 100%**（留点风险）。</para>
+    /// </remarks>
+    public static readonly CombatArchetype[] DungeonTiers =
+    {
+        new CombatArchetype("普通", 6, 2, 60),
+        new CombatArchetype("精英", 7, 3, 210),
+        new CombatArchetype("首领", 8, 4, 180),
+    };
+
     /// <summary>出手间隔（回合）—— 冷却 1 回合 ⇒ 每 2 回合出手一次。</summary>
     public const int RoundsPerAction = 2;
 
@@ -173,6 +196,24 @@ public static class CombatParameters
                 $"怪物只有 {MonsterTiers.Length} 档（普通 / 精英 / 首领），阶段 {tierIndex} 没有对应档位。");
         }
         var m = MonsterTiers[tierIndex];
+        return new CombatStats(m.Attack, m.Defense, m.Health);
+    }
+
+    /// <summary>
+    /// <b>副本</b>某一档怪物的属性（D-124：副本用<b>自己那张表</b>）。
+    /// </summary>
+    /// <param name="stageIndex">副本阶段序号（0 起）。</param>
+    /// <returns>副本怪物的战斗属性。</returns>
+    /// <exception cref="ArgumentOutOfRangeException">阶段序号超出三档。</exception>
+    public static CombatStats DungeonFor(int stageIndex)
+    {
+        if (stageIndex < 0 || stageIndex >= DungeonTiers.Length)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(stageIndex), stageIndex,
+                $"副本只有 {DungeonTiers.Length} 档，阶段 {stageIndex} 没有对应档位。");
+        }
+        var m = DungeonTiers[stageIndex];
         return new CombatStats(m.Attack, m.Defense, m.Health);
     }
 

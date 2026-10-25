@@ -91,6 +91,8 @@ public class MainStructureTests
         "RunEquipSelfTest",   // D-119：装备线真机自检
         "RunWinRateSelfTest",   // D-123：副本胜率扫描（裸装 vs 全装备）
         "MakeParty", "DidWin",   // D-123：胜率扫描的两个辅助方法（不是自检）
+        "InitDungeonCombat",   // D-124：副本专用解算器（接线）
+        "BonusText",   // D-124：装备加成摘要（纯展示）
         "SelfTestEnsurePresentAndIdle",   // 自检夹具：把英雄摆成「在场且空闲」
     };
 

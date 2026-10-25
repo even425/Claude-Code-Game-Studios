@@ -910,6 +910,18 @@
       "expected": [
         "3"
       ]
+    },
+    {
+      "id": "dungeon-archetypes",
+      "file": "src/Domain/Combat/CombatParameters.cs",
+      "status": "【建议值】D-124",
+      "note": "**副本专用**的三档怪物（普通 60 / 精英 210 / 首领 180）—— 与通用表 MonsterTiers（60 / 150 / 120）**分开**：副本、试炼塔、狩猎、兽潮原本共用一张表，一起抬高会把试炼塔守卫 / 狼 / 兽潮一起弄坏。D-124 拍板「装备 = 通关许可证」⇒ 副本难度抬高：裸装 43.6% / +2 攻 66.7% / +4 攻 87.2%",
+      "extractor": "dungeon-archetypes",
+      "expected": [
+        "普通=6,2,60",
+        "精英=7,3,210",
+        "首领=8,4,180"
+      ]
     }
   ]
 }

@@ -23,6 +23,26 @@ using ClaudeCodeGameStudios.Domain.Items;
 /// </remarks>
 public partial class Main : Node2D
 {
+    /// <summary>
+    /// <b>副本专用</b>的战斗解算器（D-124）—— 副本难度表与其它遭遇**分开**。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **为什么要分开**：副本、试炼塔、狩猎、兽潮**共用同一张怪物表**
+    /// ⇒ 把副本难度抬上去（装备 = 通关许可证）会**一起**把
+    /// 「试炼塔守卫 / 狼 / 兽潮」弄坏 ⇒ 那些遭遇的难度**不该跟着副本走**。
+    /// <br>⚠️ **为什么住在这个文件**：`Main.cs` 已经顶到 UT-01 的 1200 行上限。
+    /// </remarks>
+    private ClaudeCodeGameStudios.Application.FormulaCombat _dungeonCombat = null!;
+
+    /// <summary>
+    /// 造好副本专用的解算器（普通 60 / 精英 210 / 首领 180 —— D-124 实测挑出来的）。
+    /// </summary>
+    private void InitDungeonCombat()
+    {
+        _dungeonCombat = new ClaudeCodeGameStudios.Application.FormulaCombat(
+            monsterStats: stage => CombatParameters.DungeonFor(stage));
+    }
+
     /// <summary>是否已经跑过胜率扫描。</summary>
     private bool _winRateTestDone;
 
@@ -53,37 +73,34 @@ public partial class Main : Node2D
             }
         }
 
-        GD.Print("WINRATE 口径：12 种英雄属性（4 性格 × 3 投入度）× 两人队无序组合 × 三档怪物 × {裸装, 全装备}");
-        GD.Print("WINRATE 表头：阶段 | 裸装胜率 | 全装备胜率 | 差");
+        GD.Print("WINRATE 口径：12 种英雄属性（4 性格 × 3 投入度）× 两人队无序组合 × 三档怪物");
+        GD.Print("WINRATE 基准：**副本专用难度表**（D-124）· 加成为「攻」⇒ 裸装 / +2 / +4");
 
+        // ⚠️ 这里用**副本那张表**（`DungeonFor`）⇒ 数字就是玩家实际会遇到的那条曲线。
         for (int stage = 0; stage < 3; stage++)
         {
-            int bareWins = 0;
-            int gearedWins = 0;
-            int total = 0;
+            var stageCombat = new FormulaCombat(
+                monsterStats: s => CombatParameters.DungeonFor(s));
 
-            for (int i = 0; i < stats.Count; i++)
+            var cells = new List<string>();
+            foreach (int gear in new[] { 0, 2, 4 })
             {
-                for (int j = i; j < stats.Count; j++)
+                int wins = 0;
+                int total = 0;
+                for (int i = 0; i < stats.Count; i++)
                 {
-                    total++;
-
-                    var bareParty = MakeParty(stats[i].Stats, stats[j].Stats);
-                    if (combat != null && DidWin(combat, bareParty, stage)) bareWins++;
-
-                    var gearedParty = MakeParty(
-                        EquipmentStats.Resolve(
-                            stats[i].Stats, new EquippedGear(sword!.Id, sword.DurabilityMax, armor!.Id, armor.DurabilityMax), catalog),
-                        EquipmentStats.Resolve(
-                            stats[j].Stats, new EquippedGear(sword!.Id, sword.DurabilityMax, armor!.Id, armor.DurabilityMax), catalog));
-                    if (DidWin(combat, gearedParty, stage)) gearedWins++;
+                    for (int j = i; j < stats.Count; j++)
+                    {
+                        total++;
+                        var a = stats[i].Stats with { Attack = stats[i].Stats.Attack + gear };
+                        var b = stats[j].Stats with { Attack = stats[j].Stats.Attack + gear };
+                        if (DidWin(stageCombat, MakeParty(a, b), stage)) wins++;
+                    }
                 }
+                cells.Add($"{100.0 * wins / total:F1}%");
             }
 
-            string name = CombatParameters.MonsterNameFor(stage);
-            double bareRate = total > 0 ? 100.0 * bareWins / total : 0.0;
-            double gearedRate = total > 0 ? 100.0 * gearedWins / total : 0.0;
-            GD.Print($"WINRATE {name} | {bareRate:F1}% | {gearedRate:F1}% | {gearedRate - bareRate:+0.0;-0.0;0.0}");
+            GD.Print($"WINRATE {CombatParameters.MonsterNameFor(stage)} | 裸装 {cells[0]} | +2攻 {cells[1]} | +4攻 {cells[2]}");
         }
 
         // ── 加成档位扫描：装备加多少，难度才不会被推平 ──────────────────────
@@ -179,6 +196,50 @@ public partial class Main : Node2D
             }
 
             GD.Print($"WINRATE 单值 {v} | {100.0 * atkWins / total:F1}% | {100.0 * defWins / total:F1}% | {100.0 * hpWins / total:F1}%");
+        }
+
+        // ── 逐档扫描：怪物血量 × 装备加攻（D-124：装备 = 通关许可证）────────
+        // ⚠️ 开发者拍板：「装备 = 通关许可证」⇒ 目标是
+        //    **裸装难（40~60%）/ 弱装备半许可证（65~80%）/ 强装备能过（85~95%）**
+        // ⇒ 下面这张表用来**挑血量**（每个加成都要落在目标区间）。
+        int[][] healthCandidates =
+        {
+            new[] { 60, 140 },               // 普通档（练级档 ⇒ 保持必过）
+            new[] { 180, 190, 200, 210 },     // 精英档
+            new[] { 160, 170, 180, 190, 200 },// 首领档
+        };
+        int[] gearScan = { 0, 2, 3, 4, 5 };
+
+        for (int stage = 0; stage < 3; stage++)
+        {
+            string stageName = CombatParameters.MonsterNameFor(stage);
+            GD.Print($"WINRATE 逐档 {stageName}：血量 | " + string.Join(" | ", gearScan.Select(g => "+" + g)));
+
+            foreach (int hp in healthCandidates[stage])
+            {
+                var scanCombat = new FormulaCombat(
+                    monsterStats: s => CombatParameters.MonsterFor(s) with { Health = hp });
+
+                var cells = new List<string>();
+                foreach (int gear in gearScan)
+                {
+                    int wins = 0;
+                    int total = 0;
+                    for (int i = 0; i < stats.Count; i++)
+                    {
+                        for (int j = i; j < stats.Count; j++)
+                        {
+                            total++;
+                            var a = stats[i].Stats with { Attack = stats[i].Stats.Attack + gear };
+                            var b = stats[j].Stats with { Attack = stats[j].Stats.Attack + gear };
+                            if (DidWin(scanCombat, MakeParty(a, b), stage)) wins++;
+                        }
+                    }
+                    cells.Add($"{100.0 * wins / total:F1}%");
+                }
+
+                GD.Print($"WINRATE 逐档 {stageName} 血量{hp} | {string.Join(" | ", cells)}");
+            }
         }
 
         GD.Print("WINRATE DONE");

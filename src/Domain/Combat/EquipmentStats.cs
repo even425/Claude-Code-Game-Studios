@@ -33,16 +33,30 @@ public static class EquipmentStats
         int attack = 0;
         int defense = 0;
 
+        // ⚠️ **D-124：按「装备自己的定义」加自己的加成**（不再按槽位分派）。
+        // ⚠️ **为什么改**：原实现是「武器槽只加攻、衣服槽只加防」
+        // ⇒ D-124 把衣服改成**加攻**之后，衣服的加成**整个加不进去**
+        // ⇒ 买了装备却毫无变化（守卫 `Equipment_NeverLowersTheStats` 当场抓到）。
+        // ⇒ 现在：**每一件装备都按自己的 AttackBonus / DefenseBonus 加**
+        // ⇒ 将来战斗公式一改、防御重新有效 ⇒ 填回 DefenseBonus 就自动生效。
         if (gear.Weapon is { } weaponId && gear.WeaponDurability > 0)
         {
             var def = catalog.Find(weaponId);
-            if (def is not null) attack += def.AttackBonus;
+            if (def is not null)
+            {
+                attack += def.AttackBonus;
+                defense += def.DefenseBonus;
+            }
         }
 
         if (gear.Armor is { } armorId && gear.ArmorDurability > 0)
         {
             var def = catalog.Find(armorId);
-            if (def is not null) defense += def.DefenseBonus;
+            if (def is not null)
+            {
+                attack += def.AttackBonus;
+                defense += def.DefenseBonus;
+            }
         }
 
         if (attack == 0 && defense == 0) return baseStats;

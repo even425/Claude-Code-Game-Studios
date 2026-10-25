@@ -89,6 +89,8 @@ public class MainStructureTests
         "RunTierSelfTest",   // D-099：层级附带建筑真机自检
         "RunEventSelfTest",   // D-101：大事件真会结算吗
         "RunEquipSelfTest",   // D-119：装备线真机自检
+        "RunWinRateSelfTest",   // D-123：副本胜率扫描（裸装 vs 全装备）
+        "MakeParty", "DidWin",   // D-123：胜率扫描的两个辅助方法（不是自检）
         "SelfTestEnsurePresentAndIdle",   // 自检夹具：把英雄摆成「在场且空闲」
     };
 

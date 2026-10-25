@@ -900,6 +900,7 @@ public partial class Main : Node2D
         if (OS.GetCmdlineUserArgs().Contains("--bandit") && !_banditTestDone) RunBanditSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--tier") && !_tierTestDone) RunTierSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--equip") && !_equipTestDone) RunEquipSelfTest();
+        if (OS.GetCmdlineUserArgs().Contains("--winrate") && !_winRateTestDone) RunWinRateSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--event") && !_eventTestDone) RunEventSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--shop") && !_shopTestDone) RunShoppingSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a is "--save" or "--load") && !_saveTestDone)

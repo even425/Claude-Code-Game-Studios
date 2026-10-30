@@ -93,6 +93,7 @@ public class MainStructureTests
         "MakeParty", "DidWin",   // D-123：胜率扫描的两个辅助方法（不是自检）
         "InitDungeonCombat",   // D-124：副本专用解算器（接线）
         "BonusText",   // D-124：装备加成摘要（纯展示）
+        "ParseUpkeepPerDay", "VillageUpkeepRound",   // D-125：村庄日常开销（接线）
         "SelfTestEnsurePresentAndIdle",   // 自检夹具：把英雄摆成「在场且空闲」
     };
 

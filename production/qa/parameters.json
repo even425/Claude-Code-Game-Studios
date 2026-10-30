@@ -528,6 +528,14 @@
       "status": "【建议值】D-120",
       "note": "野兽步态（走路起伏）的速度：原来调得偏高，看起来像在小跑 ⇒ 开发者反馈「移动得也太快」⇒ 调慢（数值见本行的 value）",
       "value": "0.15"
+    },
+    {
+      "file": "Application/VillageUpkeepService.cs",
+      "name": "DefaultUpkeepPerDay",
+      "kind": "参数",
+      "status": "【待拍板】D-125",
+      "note": "村庄每天的日常开销（金）：默认 0 = 不扣（这条机制待开发者拍板 ⇒ 默认值必须等于「什么都不做」）。实测标定见 `07` 的 D-125：开销取 8 时，村庄的闲钱几乎被吃干净，市场照转、守恒律逐日成立。",
+      "value": "0"
     }
   ],
   "nonParameters": [

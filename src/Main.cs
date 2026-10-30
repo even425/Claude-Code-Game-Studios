@@ -632,6 +632,9 @@ public partial class Main : Node2D
         if (goldUnits is null) { GetTree().Quit(); return; }   // 参数非法：明确报错并中止
         _goldRewardUnits = goldUnits.Value;
 
+        // D-125：村庄日常开销（默认 0 = 不扣；`--upkeep=N` 可覆盖 ⇒ 用来跑标定实验）。
+        _upkeepPerDay = ParseUpkeepPerDay();
+
         _walletWriter = new ClaudeCodeGameStudios.Application.WalletGrantService(
             id => _heroes.FirstOrDefault(h => h.Id == id),
             ClaudeCodeGameStudios.Application.Stall.StallService.Gold,
@@ -803,6 +806,9 @@ public partial class Main : Node2D
 
             // 4c-0b. 装备（D-119）：补货 + 自主购买 / 修理（**必须在摆摊之前**）。
             EquipmentRound();
+
+            // 4c-0a. 村庄日常开销（D-125：只扣闲钱 ⇒ 不动升级储备）。
+            VillageUpkeepRound();
 
             // 4c-0. 放置模式的预览跟随鼠标（D-093）。
             //     ⚠️ **已建建筑的标记不在这里更新** —— 那要**每帧**更新

@@ -117,6 +117,8 @@ public partial class Main : Node2D
         // ⚠️ **D-086**：开摊走**游戏的那一份**（`OpenStallsForIdleHeroes`），
         // 不再是采集器自己的一套 ⇒ 「测到的」就是「玩到的」。
         OpenStallsForIdleHeroes();
+        // ⚠️ **D-125：村庄日常开销**（采集器与真实游戏**同一份**规则 ⇒ 账一致）。
+        VillageUpkeepRound();
         // ⚠️ **D-122：先盖店，再升级**（施工队是同一批人 ⇒ 一次只盖一样）。
         // ⇒ 商店盖完后（或在施工时）本轮**不升级** ⇒ 升级等商店建成再说。
         bool shopStarted = BuildShopsForCollection();
@@ -397,7 +399,10 @@ public partial class Main : Node2D
 
         // ⚠️ **累计销毁 = 商队销毁的**（D-090）：升级花掉的钱**不再是「销毁」**，
         // 而是变成**村庄资产**（另一项，仍在守恒律的左边）⇒ 这一项只留商队那 90%。
-        long destroyed = _caravanMarket.TotalDestroyedGold;
+        long destroyed = _caravanMarket.TotalDestroyedGold
+            // ⚠️ **D-125**：村庄日常开销也是「流出村庄的钱」⇒ 属于「已销毁」。
+            // ⇒ 不并进来的话，守恒律左边少一笔 ⇒ **钱凭空消失**（实测 0/200）。
+            + ClaudeCodeGameStudios.Application.VillageUpkeepService.TotalUpkeepSpent;
 
         _economyLog.AppendSnapshot(
             _clock.Now,

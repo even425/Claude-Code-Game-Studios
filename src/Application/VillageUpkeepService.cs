@@ -1,0 +1,93 @@
+using System;
+using ClaudeCodeGameStudios.Domain.Village;
+
+namespace ClaudeCodeGameStudios.Application;
+
+/// <summary>
+/// <b>村庄日常开销</b>（D-125）—— 每天从村库现金里扣一点，<b>只扣闲钱</b>。
+/// </summary>
+/// <remarks>
+/// <para><b>为什么需要它</b>：村库的收入里有一大块是<b>从外面进来的</b>
+/// （兽潮打赢 +18 金、盗匪 +10 金 —— D-101/D-096）⇒ 而支出侧只有
+/// 「村庄升级」（5 级共 750 金，**一次性**）⇒ 钱必然越囤越多
+/// ⇒ D-109 的第二条判据「<b>村庄花得出去</b>（可花未花的钱不一路囤）」**一直不绿**。</para>
+///
+/// <para>⚠️ <b>「只扣闲钱」是关键</b>：扣款<b>不许动升级储备</b>
+/// （<c>下一级村庄升级要留的钱</c>）⇒ 否则村庄会**永远升不上去**
+/// ⇒ 那比「钱囤着」更糟（层级附带建筑井 / 铁匠铺也就永远不出现）。</para>
+///
+/// <para>⚠️ <b>扣不动就不扣</b>（不欠账）⇒ 村庄不会变成负数；
+/// 且「村库现金 &lt; 维护费」时只扣到 0 为止。</para>
+///
+/// <para>⚠️ <b>数值是待拍板的建议值</b>（默认 <c>0</c> = 不扣 ⇒ 现状不变）；
+/// 见参数台账与 <c>07</c> 的 D-125。</para>
+/// </remarks>
+public static class VillageUpkeepService
+{
+    /// <summary>
+    /// 每天的村庄日常开销（<b>建议值，默认 0 = 不扣</b> ⇒ 现状不变；待开发者拍板）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **为什么默认 0**：这条机制是**新设计**（D-125 待拍板）⇒ 在拍板之前
+    /// **不能**悄悄改变玩家的钱 ⇒ 默认值必须等于「什么都不做」。
+    /// </remarks>
+    public const long DefaultUpkeepPerDay = 0L;
+
+    /// <summary>
+    /// 累计已收的日常开销（金）—— <b>那笔钱流出村庄</b> ⇒ 属于守恒律的「已销毁」。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **为什么单独记**：快照的「已销毁」原本只含**商队销毁**（D-090 之后升级那部分
+    /// 改记「村庄资产」）⇒ 维护费不并进去 ⇒ 守恒律左边少一笔 ⇒ **钱凭空消失**（实测 0/200）。
+    /// <br>⚠️ **读档要重置**（<see cref="ResetTotal"/>）—— 否则旧档会带着上一局的数。
+    /// </remarks>
+    public static long TotalUpkeepSpent { get; private set; }
+
+    /// <summary>记一笔已收的开销（累加进 <see cref="TotalUpkeepSpent"/>）。</summary>
+    /// <param name="amount">刚收的金额（≤ 0 = 不记）。</param>
+    public static void RecordSpent(long amount)
+    {
+        if (amount <= 0) return;
+        TotalUpkeepSpent += amount;
+    }
+
+    /// <summary>读档时把累计清零（存档里没有这一项 ⇒ 它从 0 开始）。</summary>
+    public static void ResetTotal() => TotalUpkeepSpent = 0L;
+
+    /// <summary>
+    /// 收一天的日常开销。
+    /// </summary>
+    /// <param name="village">村庄（金库现金的写者）。</param>
+    /// <param name="gold">金币的资源种类。</param>
+    /// <param name="reserveGold">必须留着的钱（下一级村庄升级要多少；0 = 不用留）。</param>
+    /// <param name="amountPerDay">每天要扣多少（≤ 0 = 不扣）。</param>
+    /// <returns>实际扣了多少（0 = 没扣）。</returns>
+    /// <remarks>
+    /// ⚠️ **只有一处扣款判定**（权威）⇒ 采集器与真实游戏都调它 ⇒ 两边账一致。
+    /// </remarks>
+    public static long Charge(
+        Village village,
+        ResourceId gold,
+        long reserveGold,
+        long amountPerDay)
+    {
+        if (village is null) throw new ArgumentNullException(nameof(village));
+        if (amountPerDay <= 0) return 0L;
+
+        long cash = village.Get(gold);
+        if (cash <= 0) return 0L;
+
+        // ⚠️ **闲钱 = 现金 − 升级储备**（储备不许动）。
+        long spare = cash - reserveGold;
+        if (spare <= 0) return 0L;
+
+        long charge = amountPerDay < spare ? amountPerDay : spare;
+        if (!village.TrySpend(gold, charge)) return 0L;
+
+        // ⚠️ **记账在服务内部做**（不是调用方）—— 调用方可能忘
+        // ⇒ 那笔钱就「凭空消失」（实测守恒律 0/200）⇒ 权威判定只有这一处。
+        RecordSpent(charge);
+
+        return charge;
+    }
+}

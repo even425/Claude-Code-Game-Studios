@@ -103,7 +103,7 @@ def build_and_test(skip: bool) -> None:
          "-c", "Release", "--nologo", "-v", "q"], cwd=ROOT)
 
 
-def collect(label, days, seed, goldreward, prices_path) -> Path:
+def collect(label, days, seed, goldreward, prices_path, upkeep: int = 0) -> Path:
     OUT.mkdir(parents=True, exist_ok=True)
     log = OUT / f"{label}.jsonl"
     if log.exists():
@@ -112,6 +112,7 @@ def collect(label, days, seed, goldreward, prices_path) -> Path:
         GODOT, "--headless", "--path", str(PROJECT), "--quit-after", "8000000", "--",
         "--daylen=0.15", f"--collect={days}", f"--seed={seed}",
         f"--goldreward={goldreward}", f"--econlog={log}",
+        f"--upkeep={upkeep}",
         f"--savepath={OUT / 'run-save.json'}",
     ]
     if prices_path:
@@ -159,6 +160,7 @@ def main() -> int:
     ap.add_argument("--x", type=float, nargs="+", default=[0.05, 0.1, 0.2, 0.4, 0.7, 1.0])
     ap.add_argument("--skip-build", action="store_true")
     ap.add_argument("--prices", default="", help="价格表路径（默认用 config/prices.json）")
+    ap.add_argument("--upkeep", type=int, default=0, help="村庄每天的日常开销（金，D-125；默认 0 = 不扣）")
     args = ap.parse_args()
 
     print("=" * 78)
@@ -185,7 +187,7 @@ def main() -> int:
     for x in args.x:
         for seed in args.seeds:
             label = f"rc-x{str(x).replace('.', 'p')}-s{seed}-{args.days}d"
-            log = collect(label, args.days, seed, x, prices_path)
+            log = collect(label, args.days, seed, x, prices_path, args.upkeep)
             info = analyze(log)
             rows.append((x, seed, info))
             print(f"   → X={x} seed={seed}: {info.get('health', '(无)')}", flush=True)

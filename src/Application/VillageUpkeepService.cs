@@ -31,7 +31,7 @@ public static class VillageUpkeepService
     /// ⚠️ **为什么默认 0**：这条机制是**新设计**（D-125 待拍板）⇒ 在拍板之前
     /// **不能**悄悄改变玩家的钱 ⇒ 默认值必须等于「什么都不做」。
     /// </remarks>
-    public const long DefaultUpkeepPerDay = 0L;
+    public const long DefaultUpkeepPerDay = 8L;
 
     /// <summary>
     /// 累计已收的日常开销（金）—— <b>那笔钱流出村庄</b> ⇒ 属于守恒律的「已销毁」。
@@ -53,6 +53,10 @@ public static class VillageUpkeepService
 
     /// <summary>读档时把累计清零（存档里没有这一项 ⇒ 它从 0 开始）。</summary>
     public static void ResetTotal() => TotalUpkeepSpent = 0L;
+
+    /// <summary>读档时恢复累计（存档 0.13 起有这一项）。</summary>
+    /// <param name="total">存档里的累计值（&lt; 0 视为 0）。</param>
+    public static void RestoreTotal(long total) => TotalUpkeepSpent = total < 0 ? 0L : total;
 
     /// <summary>
     /// 收一天的日常开销。

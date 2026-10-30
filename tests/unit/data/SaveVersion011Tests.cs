@@ -50,10 +50,10 @@ public class SaveVersion011Tests
     };
 
     [TestCase]
-    public void Current_Is_0_12_And_0_11_IsNowOld()
+    public void Current_Is_0_13_And_0_11_IsNowOld()
     {
         Assertions.AssertThat(SaveVersion.Current.Major).IsEqual(0);
-        Assertions.AssertThat(SaveVersion.Current.Minor).IsEqual(12);
+        Assertions.AssertThat(SaveVersion.Current.Minor).IsEqual(13);
     }
 
     /// <summary>

@@ -93,10 +93,10 @@ public class VillageUpkeepServiceTests
         Assertions.AssertThat(VillageUpkeepService.TotalUpkeepSpent).IsEqual(0L);
     }
 
-    /// <summary>⑥ <b>默认不扣</b>（这条机制待开发者拍板 ⇒ 默认值必须等于「什么都不做」）。</summary>
+    /// <summary>⑥ <b>默认值 = 8 金/天</b>（D-126 开发者拍板；采集器与真实游戏**两边都扣**）。</summary>
     [TestCase]
-    public void TheDefault_IsZero_MeaningNothingIsCharged()
+    public void TheDefault_IsEight_PerDay()
     {
-        Assertions.AssertThat(VillageUpkeepService.DefaultUpkeepPerDay).IsEqual(0L);
+        Assertions.AssertThat(VillageUpkeepService.DefaultUpkeepPerDay).IsEqual(8L);
     }
 }

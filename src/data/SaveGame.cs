@@ -113,7 +113,7 @@ public readonly record struct SaveVersion(int Major, int Minor)
     /// 旧档<b>整份拒绝</b>（I11 + D-021/D-029/D-036 先例），<b>不</b>写迁移器。
     /// </para>
     /// </remarks>
-    public static SaveVersion Current => new(0, 12);
+    public static SaveVersion Current => new(0, 13);
 
     /// <inheritdoc />
     public override string ToString() => $"{Major}.{Minor}";
@@ -385,6 +385,15 @@ public sealed class SaveGame
     /// 读档后村庄回到 0 级，而升级花掉的金币已经记下了 → <b>账实不符</b>。
     /// </remarks>
     public int VillageTier { get; set; }
+
+    /// <summary>
+    /// 累计已收的<b>村庄日常开销</b>（D-126；存档 0.13 新增）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>为什么必须存</b>：那笔钱<b>流出村庄</b> ⇒ 属于守恒律的「已销毁」
+    /// ⇒ 不存它，读档后守恒律左边会少一笔 ⇒ <b>钱凭空消失</b>（实测 0/200）。
+    /// </remarks>
+    public long VillageUpkeepSpentTotal { get; set; }
 
     /// <summary>
     /// 累计<b>已付款</b>的升级次数。<b>0,6 新增</b>（D-054 阶段 4）。

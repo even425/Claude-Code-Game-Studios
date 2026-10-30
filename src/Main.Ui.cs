@@ -779,7 +779,12 @@ public partial class Main : Node2D
         // ⚠️ **D-114：顶栏要同时显示「村庄资产」** ——
         // 村庄升级花掉的钱**变成资产**（D-090）⇒ 只显示现金 ⇒ 玩家看到「村金 0」，
         // 而钱其实在资产里 ⇒ **那是在骗玩家**。
-        string villageMoney = $"村金 {VillageGold} · 资产 {VillageAsset}";
+        // ⚠️ **D-126：日常开销要看得见** —— 玩家���的钱每天会少一点，
+        // 不说清楚就等于「偷偷扣钱」⇒ 顶栏直接标出来。
+        string upkeepText = ClaudeCodeGameStudios.Application.VillageUpkeepService.DefaultUpkeepPerDay > 0
+            ? $" · 开销 {ClaudeCodeGameStudios.Application.VillageUpkeepService.DefaultUpkeepPerDay}/天"
+            : "";
+        string villageMoney = $"村金 {VillageGold} · 资产 {VillageAsset}{upkeepText}";
 
         // ⚠️ **多栋同时施工时要能一眼看出**（D-082）：顶栏那行只放得下一个名字，
         // 所以把在施工的几栋连同进度**合成一句**（「围栏 40% · 试炼塔 20%」）。

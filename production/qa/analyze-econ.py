@@ -315,10 +315,28 @@ def analyze(path, label, verbose=True):
                 days = max(1, (b.get("Day") or 0) - (a.get("Day") or 0))
                 delta = (b.get("VillageUnspentGold") or 0) - (a.get("VillageUnspentGold") or 0)
                 now = b.get("VillageUnspentGold") or 0
-                # 「花得出去」= 未花的钱**没有一路涨**；能招几个人 = 还能召唤几次。
+                # ⚠️ **D-126：判据②改成「囤钱是否收敛」** ——
+                #   旧口径是「全程增长是否为负」⇒ 只要还在涨就 ⚠️ ⇒ 永远绿不了
+                #   （实测：开销到位后每天仍 +2.56 金，但**闲钱几乎被吃干净** ⇒ 那不是囤）。
+                #   新口径：**末段**（后 1/3）的日均增长 ≤ max(1 金/天, 前段增长的 1/4)
+                #   ⇒ 「匀速一路囤」仍 ⚠️；「前面囤、后来被持续消耗掉」⇒ ✅ 收敛。
+                third = max(1, len(unspent) // 3)
+                head, tail = unspent[:third], unspent[-third:]
+                def _rate(seg):
+                    if len(seg) < 2:
+                        return 0.0
+                    d = max(1, (seg[-1].get("Day") or 0) - (seg[0].get("Day") or 0))
+                    return ((seg[-1].get("VillageUnspentGold") or 0)
+                            - (seg[0].get("VillageUnspentGold") or 0)) / d
+                head_rate = _rate(head)
+                tail_rate = _rate(tail)
+                limit = max(1.0, head_rate * 0.25)
+                converged = tail_rate <= limit
                 print(f"②村庄花得出去: 可花未花 {now} 金（≈ 可召唤 {now // 100} 人）"
                       f"；全程每天 {(delta / days):+.2f} 金"
-                      f" → {'⚠️ 一路囤（越攒越多）' if delta > 0 else '✅ 花得出去（没有囤积）'}")
+                      f"；前段 {head_rate:+.2f}/天 · 末段 {tail_rate:+.2f}/天"
+                      f"（收敛线 ≤ {limit:.2f}/天）"
+                      f" → {'✅ 收敛（不再一路囤）' if converged else '⚠️ 一路囤（越攒越多）'}")
             # ⚠️ **D-111：第三条判据「市场还在转」** ——
             #   D-109 的两条判据**会绿得没有意义**：钱不流通 ⇒ 人人都在囤 ⇒ 分布当然均匀。
             #   实测（2000 天）：市场在第 100 天停摆 ⇒ 后 1900 天一笔没有

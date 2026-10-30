@@ -103,7 +103,7 @@ def build_and_test(skip: bool) -> None:
          "-c", "Release", "--nologo", "-v", "q"], cwd=ROOT)
 
 
-def collect(label, days, seed, goldreward, prices_path, upkeep: int = 0) -> Path:
+def collect(label, days, seed, goldreward, prices_path, upkeep: int = -1) -> Path:
     OUT.mkdir(parents=True, exist_ok=True)
     log = OUT / f"{label}.jsonl"
     if log.exists():
@@ -112,9 +112,11 @@ def collect(label, days, seed, goldreward, prices_path, upkeep: int = 0) -> Path
         GODOT, "--headless", "--path", str(PROJECT), "--quit-after", "8000000", "--",
         "--daylen=0.15", f"--collect={days}", f"--seed={seed}",
         f"--goldreward={goldreward}", f"--econlog={log}",
-        f"--upkeep={upkeep}",
+        # ⚠️ **upkeep < 0 ⇒ 不传这个参数** ⇒ 用游戏里的默认值（D-126：8 金/天）。
         f"--savepath={OUT / 'run-save.json'}",
     ]
+    if upkeep >= 0:
+        args.append(f"--upkeep={upkeep}")
     if prices_path:
         args.append(f"--prices={prices_path}")
     print(f">> 采集 {label}: {days} 天 · seed {seed} · X {goldreward}", flush=True)
@@ -160,7 +162,7 @@ def main() -> int:
     ap.add_argument("--x", type=float, nargs="+", default=[0.05, 0.1, 0.2, 0.4, 0.7, 1.0])
     ap.add_argument("--skip-build", action="store_true")
     ap.add_argument("--prices", default="", help="价格表路径（默认用 config/prices.json）")
-    ap.add_argument("--upkeep", type=int, default=0, help="村庄每天的日常开销（金，D-125；默认 0 = 不扣）")
+    ap.add_argument("--upkeep", type=int, default=-1, help="村庄每天的日常开销（金，D-126；默认 -1 = 用游戏默认值 8）")
     args = ap.parse_args()
 
     print("=" * 78)

@@ -48,6 +48,8 @@ public partial class Main : Node2D
         // 不存它们，读档后账就对不上。
         GoldGrantedTotal = _walletWriter.TotalGranted,
         GoldSpentTotal = _upgradeService.TotalGoldSpent,
+        // D-126（存档 0.13）：累计村庄日常开销 —— 不存它，读档后守恒律会少一笔。
+        VillageUpkeepSpentTotal = ClaudeCodeGameStudios.Application.VillageUpkeepService.TotalUpkeepSpent,
         VillageUpgrades = _upgradeService.UpgradesStarted,
         // 村庄层级（**顺带修既有缺陷**：本来不入档，读档后回到 0 级而钱已经花了）
         VillageTier = _tier,
@@ -394,6 +396,8 @@ public partial class Main : Node2D
         ClaudeCodeGameStudios.Application.WorldEventResourceApplier.RestoreTotals(
             save.EventGoldIn, save.EventGoldOut);
         _upgradeService.RestoreTotals(save.GoldSpentTotal, save.VillageUpgrades);
+        // D-126（存档 0.13）：恢复累计日常开销（否则读档后守恒律左边少一笔）。
+        ClaudeCodeGameStudios.Application.VillageUpkeepService.RestoreTotal(save.VillageUpkeepSpentTotal);
         // ② 村庄层级（**顺带修既有缺陷**：本来不入档 → 读档后回到 0 级，而钱已经花了）
         _tier = save.VillageTier;
         _village.SetTier(_tier);

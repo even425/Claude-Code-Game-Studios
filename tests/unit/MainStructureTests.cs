@@ -90,10 +90,12 @@ public class MainStructureTests
         "RunEventSelfTest",   // D-101：大事件真会结算吗
         "RunEquipSelfTest",   // D-119：装备线真机自检
         "RunWinRateSelfTest",   // D-123：副本胜率扫描（裸装 vs 全装备）
+        "RunEquipShopSelfTest",   // D-127：装备店面板真机自检
         "MakeParty", "DidWin",   // D-123：胜率扫描的两个辅助方法（不是自检）
         "InitDungeonCombat",   // D-124：副本专用解算器（接线）
         "BonusText",   // D-124：装备加成摘要（纯展示）
         "ParseUpkeepPerDay", "VillageUpkeepRound",   // D-125：村庄日常开销（接线）
+        "InitEquipmentPanel", "OnEquipShop",   // D-127：装备店界面（接线）
         "SelfTestEnsurePresentAndIdle",   // 自检夹具：把英雄摆成「在场且空闲」
     };
 
@@ -431,5 +433,38 @@ public class MainStructureTests
         int root = File.ReadAllLines(Path.Combine(dir, "Main.cs")).Length;
         Assertions.AssertThat(root).IsLessEqual(MaxFileLines);
         Assertions.AssertThat(root).IsLess(1200);
+    
+
     }
+
+    /// <summary>
+    /// <b>Main 的 partial 文件不得带 namespace 声明</b>（D-127 踩坑三次后加的）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>为什么这条值得守</b>：<c>Main</c> 在<b>全局命名空间</b>里
+    /// （<c>Main.cs</c> / <c>Main.Ui.cs</c> 都没有 namespace）
+    /// ⇒ 新写的 partial 文件若带 <c>namespace ClaudeCodeGameStudios;</c>
+    /// ⇒ 它就成了<b>另一个类</b> ⇒ 表现是「字段、方法全都找不到」
+    /// （<c>_villageModel</c> / <c>InitEquipmentPanel</c> 之类）⇒ **编译期才发现，白写一片**。
+    /// <br>⇒ 这条守卫把「踩三次」的坑变成一次红。
+    /// </remarks>
+    [TestCase]
+    public void MainPartialFiles_HaveNoNamespaceDeclaration()
+    {
+        var offenders = new List<string>();
+        foreach (var file in CsFiles(SrcDir()).Where(f => Path.GetFileName(f).StartsWith("Main")))
+        {
+            foreach (var line in File.ReadAllLines(file))
+            {
+                var trimmed = line.Trim();
+                if (trimmed.StartsWith("namespace ", StringComparison.Ordinal))
+                {
+                    offenders.Add($"{Path.GetFileName(file)}: {trimmed}");
+                    break;
+                }
+            }
+        }
+
+        Assertions.AssertThat(string.Join(" | ", offenders)).IsEmpty();
+}
 }

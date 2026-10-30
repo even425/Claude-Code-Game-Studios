@@ -174,6 +174,7 @@ public partial class Main : Node2D
     private Button _btnTrialTower = null!;
     private Button _btnSummon = null!;
     private Button _btnMarket = null!;  // R-02：看摊位（正式购买 UI + 摊位库存面板）
+    private Button _btnEquipShop = null!;   // D-127：看装备店（玩家手动买装备）
     private Button _btnSave = null!;    // M7：存盘按钮
     private Button _btnLoad = null!;    // M7：读盘按钮
 
@@ -910,6 +911,7 @@ public partial class Main : Node2D
         if (OS.GetCmdlineUserArgs().Contains("--tier") && !_tierTestDone) RunTierSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--equip") && !_equipTestDone) RunEquipSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--winrate") && !_winRateTestDone) RunWinRateSelfTest();
+        if (OS.GetCmdlineUserArgs().Contains("--equipshop") && !_equipShopTestDone) RunEquipShopSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--event") && !_eventTestDone) RunEventSelfTest();
         if (OS.GetCmdlineUserArgs().Contains("--shop") && !_shopTestDone) RunShoppingSelfTest();
         if (OS.GetCmdlineUserArgs().Any(a => a is "--save" or "--load") && !_saveTestDone)

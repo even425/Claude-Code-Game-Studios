@@ -45,6 +45,9 @@ public partial class Main : Node2D
             ClaudeCodeGameStudios.Application.Stall.StallService.Gold,
             MaterialsId);
         _heroEquipment = new ClaudeCodeGameStudios.Application.HeroEquipmentService(_equipmentShops);
+
+        // D-127：装备店面板（玩家能打开商店、给英雄买装备）。
+        InitEquipmentPanel();
     }
 
     /// <summary>

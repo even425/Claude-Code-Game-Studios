@@ -113,6 +113,8 @@ public partial class Main : Node2D
         _btnTrialTower = MakeButton("进试炼塔", left, OnTrialTower);
         _btnSummon = MakeButton("招募一个人", left, OnSummonPaid);
         _btnMarket = MakeButton("看摊位", left, OnMarket);
+        // D-127：装备店（玩家手动买装备；NPC 那边是自主购买）。
+        _btnEquipShop = MakeButton("看装备店", left, OnEquipShop);
         // D-081：商队面板（商队来访期间才看得到货）。
         _btnCaravan = MakeButton("看看商队", left, OnCaravan);
         _btnSave = MakeButton("存盘", left, OnSave);

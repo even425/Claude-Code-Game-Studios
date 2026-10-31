@@ -163,8 +163,13 @@ public partial class Main : Node2D
             if (!_buildingService.IsCompleted(c.Id)) pending.Add(c);
         }
 
-        // 两间都盖好了 ⇒ 本轮不盖 ⇒ **也让出升级的钱**（商店不再是唯一出口）。
-        if (pending.Count == 0) return true;
+        // ⚠️ **D-129：这里必须返回 false**（不是 true）——
+        // 「两间都盖好了」= **本轮没有在施工** ⇒ **不该挡住村庄升级**。
+        // ⚠️ 原来的写法（return true）把「都盖好了」当成「在施工」⇒
+        // ⇒ 商店一盖好，采集器就**永远跳过升级** ⇒ **村庄被永久卡在第 1 级**
+        // ⇒ 实测 1000 天只升 1 级（村库现金长期在 111~200，就是攒不到第二级）。
+        // ⇒ 语义只有一句：**返回 true = 本轮真的在施工（互斥）**。
+        if (pending.Count == 0) return false;
 
         // 已经盖了几栋（同一种建筑只能有一栋 ⇒ 计数只可能是 0 或 1）。
         var existing = new Dictionary<string, int>(StringComparer.Ordinal);

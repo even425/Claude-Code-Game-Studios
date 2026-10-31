@@ -943,6 +943,7 @@ public partial class Main : Node2D
         }
         if (rate <= 0f) return;                 // 没人手，停工
 
+
         _buildProgress += rate * dt;
         _village.BuildProgress = MathF.Min(1f, _buildProgress);
         if (_buildProgress >= 1f)

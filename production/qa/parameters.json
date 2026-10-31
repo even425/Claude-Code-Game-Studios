@@ -541,9 +541,9 @@
       "file": "Application/VillageUpkeepService.cs",
       "name": "UpkeepStepPerTier",
       "kind": "参数",
-      "status": "【建议值】D-130",
-      "note": "村庄每升一级，日常开销多多少（金）：D-130 建议 2 金/级 ⇒ 高层级村庄的开销会超过它的毛收入 ⇒ 闲钱被压住（判据②收敛）",
-      "value": "2"
+      "status": "【默认关闭】D-130",
+      "note": "村庄每升一级，日常开销多多少（金）：D-130 试过递增，**反而让分布判据变红**（村库被抽干 ⇒ 收购站没预算 ⇒ 村民变穷）⇒ 默认 0（不递增），机制保留待重议",
+      "value": "0"
     }
   ],
   "nonParameters": [

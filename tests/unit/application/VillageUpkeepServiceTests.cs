@@ -100,16 +100,23 @@ public class VillageUpkeepServiceTests
         Assertions.AssertThat(VillageUpkeepService.DefaultUpkeepPerDay).IsEqual(8L);
     }
 
-    /// <summary>⑦ <b>维护费随村庄层级递增</b>（D-130）：村庄越大，维护越贵。</summary>
+    /// <summary>
+    /// ⑦ 维护费<b>可以</b>随村庄层级递增（D-130 的机制）—— 但<b>默认不递增</b>。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **为什么默认是 0（不递增）**：D-130 实测递增（每级 +2）**反而让分布判据变红** ——
+    /// 村库被抽干 ⇒ 收购站没有预算 ⇒ 村民卖不掉货 ⇒ 中位只剩 9 金、最富 441 金（6 倍集中）。
+    /// ⇒ 机制保留（要开就改 <c>UpkeepStepPerTier</c> 一个常量），但**默认关闭**。
+    /// </remarks>
     [TestCase]
-    public void UpkeepGrowsWithTheVillageTier()
+    public void TheUpkeepCanGrowWithTheVillageTier_ButIsOffByDefault()
     {
+        // 默认：所有层级都一样（D-126 拍板的固定 8 金）。
+        Assertions.AssertThat(VillageUpkeepService.UpkeepStepPerTier).IsEqual(0L);
         Assertions.AssertThat(VillageUpkeepService.UpkeepForTier(0))
             .IsEqual(VillageUpkeepService.DefaultUpkeepPerDay);
-        Assertions.AssertThat(VillageUpkeepService.UpkeepForTier(1))
-            .IsEqual(VillageUpkeepService.DefaultUpkeepPerDay + VillageUpkeepService.UpkeepStepPerTier);
         Assertions.AssertThat(VillageUpkeepService.UpkeepForTier(5))
-            .IsGreater(VillageUpkeepService.UpkeepForTier(1));
+            .IsEqual(VillageUpkeepService.DefaultUpkeepPerDay);
     }
 
     /// <summary>⑧ 层级为负 ⇒ 按 0 级算（不倒扣钱）。</summary>

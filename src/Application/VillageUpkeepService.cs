@@ -43,7 +43,7 @@ public static class VillageUpkeepService
     /// ⇒ 语义上正确的做法：**村庄越大，维护越贵**。
     /// <br>⚠️ **数值是建议值**（D-126 拍板的 8 金 = 0 级村庄的开销）⇒ 可改（改这一个常量即可）。
     /// </remarks>
-    public const long UpkeepStepPerTier = 2L;
+    public const long UpkeepStepPerTier = 0L;
 
     /// <summary>
     /// 某个层级的村庄每天要付多少日常开销。
@@ -51,8 +51,10 @@ public static class VillageUpkeepService
     /// <param name="tier">村庄层级（0 起）。</param>
     /// <returns>每天的开销（金）。</returns>
     /// <remarks>
-    /// 公式：<c>0 级 8 金，每升一级 +2 金</c> ⇒ 5 级村 18 金
-    /// ⇒ 与 5 级村约 12.6 金/天的毛收入相比 ⇒ **能把闲钱压住**。
+    /// 公式：<c>0 级 8 金，每升一级 +增量</c>。
+    /// ⚠️ **D-130 实测：增量设为 2 反而让判据①变红**（把村库抽干 ⇒ 收购站没预算
+    /// ⇒ 村民卖不掉货 ⇒ 中位只剩 9 金、最富 441 ⇒ 6 倍集中）⇒ **默认回退为 0（不递增）**，
+    /// 机制保留（要开就改这一个常量）。
     /// </remarks>
     public static long UpkeepForTier(int tier)
     {

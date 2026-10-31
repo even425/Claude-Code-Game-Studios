@@ -15,15 +15,15 @@ using System.Linq;
 public partial class Main : Node2D
 {
     /// <summary>每天扣多少日常开销（0 = 不扣）；可用 <c>--upkeep=</c> 覆盖。</summary>
-    private long _upkeepPerDay = ClaudeCodeGameStudios.Application.VillageUpkeepService.DefaultUpkeepPerDay;
+    private long? _upkeepOverride;   // 命令行 `--upkeep=N` 的覆盖值（null = 按层级取）
 
     /// <summary>解析 <c>--upkeep=N</c>（每天的村庄日常开销，金）。</summary>
     /// <returns>开销金额（0 = 不扣）。</returns>
-    private static long ParseUpkeepPerDay()
+    private static long? ParseUpkeepPerDay()
     {
         var arg = OS.GetCmdlineUserArgs()
             .FirstOrDefault(a => a.StartsWith("--upkeep=", StringComparison.Ordinal));
-        if (arg is null) return ClaudeCodeGameStudios.Application.VillageUpkeepService.DefaultUpkeepPerDay;
+        if (arg is null) return null;   // 没给 ⇒ 按村庄层级取值（D-130）
 
         var raw = arg.Substring("--upkeep=".Length);
         if (!long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out long value) || value < 0)
@@ -40,7 +40,9 @@ public partial class Main : Node2D
     /// </summary>
     private void VillageUpkeepRound()
     {
-        if (_upkeepPerDay <= 0) return;
+        // ⚠️ **D-130：默认按村庄层级取**（村庄越大维护越贵）⇒ 显式给了 `--upkeep=N` 才覆盖。
+        long upkeep = _upkeepOverride ?? ClaudeCodeGameStudios.Application.VillageUpkeepService.UpkeepForTier(_tier);
+        if (upkeep <= 0) return;
 
         long reserve = _tier < ClaudeCodeGameStudios.Application.VillageUpgradeService.MaxTier
             ? _upgradeService.CostFor(_tier).Gold
@@ -50,7 +52,7 @@ public partial class Main : Node2D
             _villageModel,
             ClaudeCodeGameStudios.Application.Stall.StallService.Gold,
             reserve,
-            _upkeepPerDay);
+            upkeep);
 
         if (charged > 0)
         {

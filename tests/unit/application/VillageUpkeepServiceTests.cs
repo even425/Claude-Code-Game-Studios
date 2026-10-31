@@ -99,4 +99,24 @@ public class VillageUpkeepServiceTests
     {
         Assertions.AssertThat(VillageUpkeepService.DefaultUpkeepPerDay).IsEqual(8L);
     }
+
+    /// <summary>⑦ <b>维护费随村庄层级递增</b>（D-130）：村庄越大，维护越贵。</summary>
+    [TestCase]
+    public void UpkeepGrowsWithTheVillageTier()
+    {
+        Assertions.AssertThat(VillageUpkeepService.UpkeepForTier(0))
+            .IsEqual(VillageUpkeepService.DefaultUpkeepPerDay);
+        Assertions.AssertThat(VillageUpkeepService.UpkeepForTier(1))
+            .IsEqual(VillageUpkeepService.DefaultUpkeepPerDay + VillageUpkeepService.UpkeepStepPerTier);
+        Assertions.AssertThat(VillageUpkeepService.UpkeepForTier(5))
+            .IsGreater(VillageUpkeepService.UpkeepForTier(1));
+    }
+
+    /// <summary>⑧ 层级为负 ⇒ 按 0 级算（不倒扣钱）。</summary>
+    [TestCase]
+    public void ANegativeTier_IsTreatedAsTierZero()
+    {
+        Assertions.AssertThat(VillageUpkeepService.UpkeepForTier(-3))
+            .IsEqual(VillageUpkeepService.UpkeepForTier(0));
+    }
 }

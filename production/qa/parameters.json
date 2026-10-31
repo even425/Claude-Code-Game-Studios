@@ -533,9 +533,17 @@
       "file": "Application/VillageUpkeepService.cs",
       "name": "DefaultUpkeepPerDay",
       "kind": "参数",
-      "status": "【已确认】D-126",
-      "note": "村庄每天的日常开销（金）：**开发者拍板 8 金/天**（D-126；标定 = 真实游戏，两边都扣）。机制：只扣闲钱（不动下一级村庄升级的储备）、扣不动就不扣、每笔都记进守恒律的「已销毁」。实测见 `07` 的 D-125 / D-126。",
+      "status": "【已确认】D-126 / 【建议值】D-130",
+      "note": "0 级村庄每天的日常开销（金）：D-126 拍板 8 金。D-130 起它也是「维护费随层级递增」的**基数**（公式：基数 + 每级增量 × 层级）",
       "value": "8"
+    },
+    {
+      "file": "Application/VillageUpkeepService.cs",
+      "name": "UpkeepStepPerTier",
+      "kind": "参数",
+      "status": "【建议值】D-130",
+      "note": "村庄每升一级，日常开销多多少（金）：D-130 建议 2 金/级 ⇒ 高层级村庄的开销会超过它的毛收入 ⇒ 闲钱被压住（判据②收敛）",
+      "value": "2"
     }
   ],
   "nonParameters": [

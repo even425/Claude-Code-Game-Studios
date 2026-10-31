@@ -34,6 +34,33 @@ public static class VillageUpkeepService
     public const long DefaultUpkeepPerDay = 8L;
 
     /// <summary>
+    /// 村庄每升一级，<b>日常开销多多少</b>（D-130 建议值：2 金/级）。
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ **为什么要有它**（D-130 的实测依据）：村庄**长大 ⇒ 收入变大**
+    /// （井 + 铁匠铺 ⇒ 采集每天多 2 份 ⇒ 副本产出 ↑ ⇒ 村库毛收入 ≈ 12.6 金/天）
+    /// ⇒ 而维护费若是**固定** 8 金 ⇒ **抵不住** ⇒ 又开始囤（判据②退回 ⚠️）。
+    /// ⇒ 语义上正确的做法：**村庄越大，维护越贵**。
+    /// <br>⚠️ **数值是建议值**（D-126 拍板的 8 金 = 0 级村庄的开销）⇒ 可改（改这一个常量即可）。
+    /// </remarks>
+    public const long UpkeepStepPerTier = 2L;
+
+    /// <summary>
+    /// 某个层级的村庄每天要付多少日常开销。
+    /// </summary>
+    /// <param name="tier">村庄层级（0 起）。</param>
+    /// <returns>每天的开销（金）。</returns>
+    /// <remarks>
+    /// 公式：<c>0 级 8 金，每升一级 +2 金</c> ⇒ 5 级村 18 金
+    /// ⇒ 与 5 级村约 12.6 金/天的毛收入相比 ⇒ **能把闲钱压住**。
+    /// </remarks>
+    public static long UpkeepForTier(int tier)
+    {
+        if (tier <= 0) return DefaultUpkeepPerDay;
+        return DefaultUpkeepPerDay + UpkeepStepPerTier * tier;
+    }
+
+    /// <summary>
     /// 累计已收的日常开销（金）—— <b>那笔钱流出村庄</b> ⇒ 属于守恒律的「已销毁」。
     /// </summary>
     /// <remarks>

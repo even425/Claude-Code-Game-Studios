@@ -634,7 +634,7 @@ public partial class Main : Node2D
         _goldRewardUnits = goldUnits.Value;
 
         // D-125：村庄日常开销（默认 0 = 不扣；`--upkeep=N` 可覆盖 ⇒ 用来跑标定实验）。
-        _upkeepPerDay = ParseUpkeepPerDay();
+        _upkeepOverride = ParseUpkeepPerDay();
 
         _walletWriter = new ClaudeCodeGameStudios.Application.WalletGrantService(
             id => _heroes.FirstOrDefault(h => h.Id == id),

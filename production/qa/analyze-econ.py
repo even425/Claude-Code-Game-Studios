@@ -315,6 +315,26 @@ def analyze(path, label, verbose=True):
                 days = max(1, (b.get("Day") or 0) - (a.get("Day") or 0))
                 delta = (b.get("VillageUnspentGold") or 0) - (a.get("VillageUnspentGold") or 0)
                 now = b.get("VillageUnspentGold") or 0
+
+                # ⚠️ **D-131：判据②改成「村库的钱有没有变成村民收入」** ——
+                #   旧口径「可花未花的钱不一路囤」**是错的**（D-130 实测证明）：
+                #   村库的钱**并没有真囤着** —— 它通过**收购站**变成了村民的收入
+                #   （D-054 审计就查清过：「金库支出路径为 0」才是收购站没预算的根因）。
+                #   ⇒ 把村库抽干（加大维护费）反而让收购站没钱、村民变穷
+                #   ⇒ 所以现在看**收购站付款**这条链：村库 → 村民。
+                purchases = [(r.get("Day") or 0, r.get("Amount") or 0)
+                             for r in rows if r.get("Kind") == "VillagePurchase"]
+                if purchases:
+                    paid_total = sum(amt for _, amt in purchases)
+                    third = max(1, len(purchases) // 3)
+                    tail = purchases[-third:]
+                    tail_days = max(1, tail[-1][0] - tail[0][0]) if len(tail) > 1 else 1
+                    tail_rate = sum(amt for _, amt in tail) / tail_days
+                    flowing = tail_rate > 0
+                    print(f"②钱变成村民收入: 收购站累计付款 {paid_total} 金；末段每天 {tail_rate:.2f} 金"
+                          f" → {'✅ 钱在变成村民收入' if flowing else '⚠️ 收购站没在花钱（村库的钱没进村民口袋）'}")
+                else:
+                    print("②钱变成村民收入: 收购站一筆也没付 ⇒ ⚠️ 村库的钱没进村民口袋")
                 # ⚠️ **D-126：判据②改成「囤钱是否收敛」** ——
                 #   旧口径是「全程增长是否为负」⇒ 只要还在涨就 ⚠️ ⇒ 永远绿不了
                 #   （实测：开销到位后每天仍 +2.56 金，但**闲钱几乎被吃干净** ⇒ 那不是囤）。

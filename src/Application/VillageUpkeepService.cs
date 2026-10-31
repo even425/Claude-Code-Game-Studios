@@ -81,8 +81,12 @@ public static class VillageUpkeepService
         long cash = village.Get(gold);
         if (cash <= 0) return 0L;
 
-        // ⚠️ **闲钱 = 现金 − 升级储备**（储备不许动）。
-        long spare = cash - reserveGold;
+        // ⚠️ **闲钱 = 现金 − 升级储备 × 两级**（D-128 的修正）。
+        // ⚠️ **为什么是两级**：原口径「现金 − 一级储备」会把村库**钉死在储备线上**
+        // ⇒ 每天的收入几乎全被维护费吃掉 ⇒ **村庄永远攒不到第二级**
+        // ⇒ 实测 1000 天只升 1 级 ⇒ 村庄被锁死。
+        // ⇒ 留两级 ⇒ 村库既能积累（能升级），又不会无限囤（上限 = 两级储备）。
+        long spare = cash - reserveGold * 2;
         if (spare <= 0) return 0L;
 
         long charge = amountPerDay < spare ? amountPerDay : spare;

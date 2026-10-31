@@ -28,32 +28,32 @@ public class VillageUpkeepServiceTests
         return village;
     }
 
-    /// <summary>① 只扣闲钱：<b>升级储备不许动</b>。</summary>
+    /// <summary>① 只扣闲钱：<b>两级升级储备不许动</b>（D-128）。</summary>
     [TestCase]
     public void OnlyTheSpareMoneyIsCharged()
     {
-        var village = MakeVillage(100L);
+        var village = MakeVillage(200L);
 
         long charged = VillageUpkeepService.Charge(village, Gold, reserveGold: 60L, amountPerDay: 10L);
 
-        // 闲钱 = 100 − 60 = 40 ⇒ 扣 10 ⇒ 剩 90（其中 60 仍是升级储备）。
+        // 闲钱 = 200 − 60×2 = 80 ⇒ 扣 10 ⇒ 剩 190（其中 120 是两级储备）。
         Assertions.AssertThat(charged).IsEqual(10L);
-        Assertions.AssertThat(village.Get(Gold)).IsEqual(90L);
+        Assertions.AssertThat(village.Get(Gold)).IsEqual(190L);
     }
 
-    /// <summary>② 闲钱不足 ⇒ <b>只扣闲钱</b>（升级储备不动）。</summary>
+    /// <summary>② 闲钱不足 ⇒ <b>只扣闲钱</b>（两级储备不动）。</summary>
     [TestCase]
     public void WhenTheSpareIsNotEnough_ItOnlyTakesTheSpare()
     {
-        var village = MakeVillage(70L);
+        var village = MakeVillage(130L);
 
         long charged = VillageUpkeepService.Charge(village, Gold, reserveGold: 60L, amountPerDay: 20L);
 
-        Assertions.AssertThat(charged).IsEqual(10L);   // 只扣 100-60 之外的那 10
-        Assertions.AssertThat(village.Get(Gold)).IsEqual(60L);   // 储备分文未动
+        Assertions.AssertThat(charged).IsEqual(10L);   // 闲钱 = 130 − 120 = 10
+        Assertions.AssertThat(village.Get(Gold)).IsEqual(120L);   // 两级储备分文未动
     }
 
-    /// <summary>③ <b>扣不动就不扣</b>（不欠账）：现金 ≤ 储备 ⇒ 一分不扣。</summary>
+    /// <summary>③ <b>扣不动就不扣</b>（不欠账）：现金 ≤ 两级储备 ⇒ 一分不扣。</summary>
     [TestCase]
     public void WhenThereIsNoSpareAtAll_ItChargesNothing()
     {
